@@ -111,13 +111,4 @@ Este projeto está licenciado sob a **MIT License**. Veja o arquivo [LICENSE](LI
 
 ---
 
-## 🏁 Contribuições
-
-Pull requests são bem-vindos. Para contribuir:
-
-1. Fork este repositório
-2. Crie uma branch: `git checkout -b minha-feature`
-3. Faça seus commits: `git commit -m 'Minha nova feature'`
-4. Envie um push: `git push origin minha-feature`
-5. Abra um pull request!
 
