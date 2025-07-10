@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
+import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 80;
@@ -17,7 +19,21 @@ const MAX_HEIGHT = SCREEN_HEIGHT * 0.5;
 
 export default function TelaInicialMap() {
   const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
+  const router = useRouter();
   let lastHeight = MIN_HEIGHT;
+
+  // Verifica se chegou ao destino
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      const chegou = await AsyncStorage.getItem('chegouNoDestino');
+      if (chegou === 'true') {
+        await AsyncStorage.removeItem('chegouNoDestino');
+        router.push('/confirmacaoEntrega'); // ou replace
+      }
+    }, 3000); // verifica a cada 3 segundos
+
+    return () => clearInterval(interval);
+  }, []);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -80,18 +96,49 @@ export default function TelaInicialMap() {
 
       {/* Painel inferior animado */}
       <Animated.View style={[styles.panel, { height: animatedHeight }]}>
-  <View style={styles.handle} {...panResponder.panHandlers}>
-    <View style={styles.indicator} />
-  </View>
+        <View style={styles.handle} {...panResponder.panHandlers}>
+          <View style={styles.indicator} />
+        </View>
 
-  <View style={styles.sheetRow}>
-    <Ionicons name="options" size={22} color="#fff" />
-    <Text style={styles.bottomText}>Você está offline</Text>
-    <Ionicons name="menu" size={22} color="#fff" />
-  </View>
+        <View style={styles.sheetRow}>
+          <Ionicons name="options" size={22} color="#fff" />
+          <Text style={styles.bottomText}>Você está offline</Text>
+          <Ionicons name="menu" size={22} color="#fff" />
+        </View>
+      </Animated.View>
 
+      <TouchableOpacity
+        style={{
+          position: 'absolute',
+          bottom: 40,
+          right: 20,
+          backgroundColor: '#6c47ff',
+          padding: 12,
+          borderRadius: 30,
+          elevation: 5,
+          zIndex: 20,
+        }}
+        onPress={async () => {
+          // Corrigindo: Location.hasStartedLocationUpdatesAsync não existe diretamente em Location
+          // Importar corretamente do expo-location
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const Location = require('expo-location');
+          let isRunning = false;
+          try {
+            isRunning = await Location.hasStartedLocationUpdatesAsync
+              ? await Location.hasStartedLocationUpdatesAsync('background-location-task')
+              : false;
+          } catch (e) {
+            console.log('[DEBUG] Erro ao verificar task:', e);
+          }
+          console.log('[DEBUG] Task está rodando?', isRunning);
 
-</Animated.View>
+    await AsyncStorage.setItem('chegouNoDestino', 'true');
+    console.log('[DEBUG] Flag "chegouNoDestino" setada manualmente.');
+  }}
+>
+  <Text style={{ color: '#fff' }}>DEBUG</Text>
+</TouchableOpacity>
 
     </View>
   );
@@ -197,7 +244,7 @@ const styles = StyleSheet.create({
   attachedIcon: {
     position: 'absolute',
     right: 20,
-    bottom: 10, // 👈 relativo à barra, não à tela
+    bottom: 10,
     backgroundColor: '#fff',
     padding: 10,
     borderRadius: 25,
@@ -208,6 +255,5 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 20,
     paddingBottom: 10,
-  }
-  
+  },
 });

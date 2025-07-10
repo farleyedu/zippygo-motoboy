@@ -16,26 +16,26 @@ export default function Mapa() {
     })();
   }, []);
 
-  if (!location) return null; // Ou um loader aqui se quiser
-
   return (
-    <MapView
-      style={StyleSheet.absoluteFillObject}
-      initialRegion={{
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      }}
-      showsUserLocation
-    >
-      {/* <Marker
+<MapView
+  style={StyleSheet.absoluteFillObject}
+  initialRegion={{
+    latitude: -18.91899,
+    longitude: -48.24674,
+    latitudeDelta: 0.003, // 🔍 Mais zoom
+    longitudeDelta: 0.003,
+  }}
+  showsUserLocation
+>
+
+      <Marker
         coordinate={{
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude: -18.91899,
+          longitude: -48.24674,
         }}
-        title="Você está aqui"
-      /> */}
+        title="Alameda dos Mandarins, 500"
+        description="Uberlândia - MG"
+      />
     </MapView>
   );
 }

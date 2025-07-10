@@ -21,23 +21,30 @@
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE"
+      ],
+      "package": "com.farleyedu.zippygomotoboy"
     },
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
-"plugins": [
-  "expo-router",
-  [
-    "expo-location",
-    {
-      "locationAlwaysAndWhenInUsePermission": "Permitir que o app use sua localização para rastrear entregas.",
-      "locationWhenInUsePermission": "Permitir que o app use sua localização enquanto estiver em uso."
-    }
-  ]
-],
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Permitir que o app use sua localização para rastrear entregas.",
+          "locationWhenInUsePermission": "Permitir que o app use sua localização enquanto estiver em uso."
+        }
+      ]
+    ],
     "experiments": {
       "typedRoutes": true
     },
