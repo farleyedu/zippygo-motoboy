@@ -43,7 +43,8 @@
           "locationAlwaysAndWhenInUsePermission": "Permitir que o app use sua localização para rastrear entregas.",
           "locationWhenInUsePermission": "Permitir que o app use sua localização enquanto estiver em uso."
         }
-      ]
+      ],
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

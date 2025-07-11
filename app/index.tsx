@@ -3,6 +3,7 @@ import TelaInicialMap from '../components/TelaInicialMap';
 import 'react-native-gesture-handler';
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as Notifications from 'expo-notifications';
 import '../components/locationTask';
 
 const LOCATION_TASK_NAME = 'background-location-task';
@@ -13,6 +14,29 @@ export default function Index() {
   useEffect(() => {
     if (jaInicializado.current) return;
     jaInicializado.current = true;
+
+    // 🔔 Configura canal de notificação
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
+    const configurarCanal = async () => {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'ZippyGo Notificações',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2C79FF',
+      });
+    };
+
+    configurarCanal(); // executa criação do canal
 
     const iniciarMonitoramento = async () => {
       console.log('[ZIPPY] Solicitando permissões...');

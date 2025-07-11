@@ -11,7 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+import * as Location from 'expo-location';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 80;
@@ -22,15 +23,14 @@ export default function TelaInicialMap() {
   const router = useRouter();
   let lastHeight = MIN_HEIGHT;
 
-  // Verifica se chegou ao destino
   useEffect(() => {
     const interval = setInterval(async () => {
-      const chegou = await AsyncStorage.getItem('chegouNoDestino');
+      const chegou = await SecureStore.getItemAsync('chegouNoDestino');
       if (chegou === 'true') {
-        await AsyncStorage.removeItem('chegouNoDestino');
-        router.push('/confirmacaoEntrega'); // ou replace
+        await SecureStore.deleteItemAsync('chegouNoDestino');
+        router.push('/confirmacaoEntrega');
       }
-    }, 3000); // verifica a cada 3 segundos
+    }, 3000);
 
     return () => clearInterval(interval);
   }, []);
@@ -75,26 +75,21 @@ export default function TelaInicialMap() {
 
   return (
     <View style={styles.container}>
-      {/* Mapa de fundo */}
       <Mapa />
 
-      {/* Menu superior esquerdo */}
       <TouchableOpacity style={styles.menuButton}>
         <Ionicons name="menu" size={24} color="#000" />
         <View style={styles.badge} />
       </TouchableOpacity>
 
-      {/* Valor no topo */}
       <TouchableOpacity style={styles.valorPainel}>
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
-      {/* Botão flutuante INICIAR */}
       <TouchableOpacity style={styles.floatingStartButton}>
         <Text style={styles.startButtonText}>INICIAR</Text>
       </TouchableOpacity>
 
-      {/* Painel inferior animado */}
       <Animated.View style={[styles.panel, { height: animatedHeight }]}>
         <View style={styles.handle} {...panResponder.panHandlers}>
           <View style={styles.indicator} />
@@ -107,6 +102,7 @@ export default function TelaInicialMap() {
         </View>
       </Animated.View>
 
+      {/* Botão de debug */}
       <TouchableOpacity
         style={{
           position: 'absolute',
@@ -119,27 +115,21 @@ export default function TelaInicialMap() {
           zIndex: 20,
         }}
         onPress={async () => {
-          // Corrigindo: Location.hasStartedLocationUpdatesAsync não existe diretamente em Location
-          // Importar corretamente do expo-location
-          // eslint-disable-next-line @typescript-eslint/no-var-requires
-          const Location = require('expo-location');
-          let isRunning = false;
           try {
-            isRunning = await Location.hasStartedLocationUpdatesAsync
-              ? await Location.hasStartedLocationUpdatesAsync('background-location-task')
-              : false;
+            const isRunning = await Location.hasStartedLocationUpdatesAsync(
+              'background-location-task'
+            );
+            console.log('[DEBUG] Task está rodando?', isRunning);
           } catch (e) {
             console.log('[DEBUG] Erro ao verificar task:', e);
           }
-          console.log('[DEBUG] Task está rodando?', isRunning);
 
-    await AsyncStorage.setItem('chegouNoDestino', 'true');
-    console.log('[DEBUG] Flag "chegouNoDestino" setada manualmente.');
-  }}
->
-  <Text style={{ color: '#fff' }}>DEBUG</Text>
-</TouchableOpacity>
-
+          await SecureStore.setItemAsync('chegouNoDestino', 'true');
+          console.log('[DEBUG] Flag "chegouNoDestino" setada manualmente.');
+        }}
+      >
+        <Text style={{ color: '#fff' }}>DEBUG</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -181,14 +171,6 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
-  },
-  iconCircle: {
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 25,
-    elevation: 3,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   floatingStartButton: {
     position: 'absolute',
@@ -240,20 +222,5 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
-  },
-  attachedIcon: {
-    position: 'absolute',
-    right: 20,
-    bottom: 10,
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 25,
-    elevation: 3,
-    zIndex: 10,
-  },
-  bottomButtonWrapper: {
-    alignItems: 'flex-end',
-    paddingHorizontal: 20,
-    paddingBottom: 10,
   },
 });
