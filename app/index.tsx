@@ -15,7 +15,7 @@ export default function Index() {
     if (jaInicializado.current) return;
     jaInicializado.current = true;
 
-    // 🔔 Configura canal de notificação
+    // 🔔 Configura handler para notificações recebidas
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -26,7 +26,14 @@ export default function Index() {
       }),
     });
 
-    const configurarCanal = async () => {
+    const configurarNotificacoes = async () => {
+      // 1. Solicita permissão de notificação (obrigatório no Android 13+)
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('[ZIPPY] Notificações não permitidas');
+      }
+
+      // 2. Cria canal com antecedência
       await Notifications.setNotificationChannelAsync('default', {
         name: 'ZippyGo Notificações',
         importance: Notifications.AndroidImportance.HIGH,
@@ -36,7 +43,7 @@ export default function Index() {
       });
     };
 
-    configurarCanal(); // executa criação do canal
+    configurarNotificacoes();
 
     const iniciarMonitoramento = async () => {
       console.log('[ZIPPY] Solicitando permissões...');
@@ -75,7 +82,7 @@ export default function Index() {
           console.log('[ZIPPY] Task já registrada.');
         }
       } else {
-        console.warn('[ZIPPY] Permissões não concedidas.');
+        console.warn('[ZIPPY] Permissões de localização não concedidas.');
       }
     };
 

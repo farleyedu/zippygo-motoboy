@@ -60,6 +60,9 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
           data: {
             url: Linking.createURL('confirmacao-entrega'),
           },
+          sound: 'default',
+          vibrate: [0, 250, 250, 250],
+          color: '#2C79FF',
         },
         trigger: null,
       });
