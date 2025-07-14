@@ -25,11 +25,11 @@ export default function TelaInicialMap() {
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      const chegou = await SecureStore.getItemAsync('chegouNoDestino');
-      if (chegou === 'true') {
-        await SecureStore.deleteItemAsync('chegouNoDestino');
-        router.push('/confirmacaoEntrega');
-      }
+      // const chegou = await SecureStore.getItemAsync('chegouNoDestino');
+      // if (chegou === 'true') {
+      //   await SecureStore.deleteItemAsync('chegouNoDestino');
+      //   router.push('/confirmacaoEntrega');
+      // }
     }, 3000);
 
     return () => clearInterval(interval);

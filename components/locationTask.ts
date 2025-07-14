@@ -58,7 +58,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
           title: 'Você chegou ao destino!',
           body: 'Toque para confirmar a entrega.',
           data: {
-            url: Linking.createURL('confirmacao-entrega'),
+            url: Linking.createURL('confirmacaoEntrega'),
           },
           sound: 'default',
           vibrate: [0, 250, 250, 250],
