@@ -3,13 +3,9 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Linking from 'expo-linking';
+import { AppState } from 'react-native'; // 👈 necessário para saber se app está aberto
 
 const LOCATION_TASK_NAME = 'background-location-task';
-
-const DESTINO = {
-  latitude: -18.91899,
-  longitude: -48.24674,
-};
 
 function calcularDistancia(coord1: any, coord2: any) {
   const toRad = (value: number) => (value * Math.PI) / 180;
@@ -44,30 +40,57 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
   const location = locations[0];
   console.log('[TASK] Local atual recebido:', location.coords);
 
-  const distancia = calcularDistancia(location.coords, DESTINO);
-  console.log(`[TASK] Verificação: distância até o destino = ${distancia.toFixed(2)} metros`);
+  // 🔄 Buscar lista de destinos e índice atual
+  const rawDestinos = await SecureStore.getItemAsync('destinos');
+  const indiceAtual = parseInt(await SecureStore.getItemAsync('indiceAtual') || '0', 10);
+
+  if (!rawDestinos) {
+    console.log('[TASK] Nenhum destino encontrado no SecureStore.');
+    return;
+  }
+
+  const destinos = JSON.parse(rawDestinos);
+  const destinoAtual = destinos[indiceAtual];
+
+  if (!destinoAtual) {
+    console.log('[TASK] Nenhum destino ativo no índice atual.');
+    return;
+  }
+
+  const distancia = calcularDistancia(location.coords, destinoAtual);
+  console.log(`[TASK] Verificação: distância até destino[${indiceAtual}] = ${distancia.toFixed(2)} metros`);
 
   if (distancia <= 100) {
-    console.log('[TASK] Dentro do raio! Enviando notificação e salvando...');
+    console.log('[TASK] Dentro do raio!');
 
     await SecureStore.setItemAsync('chegouNoDestino', 'true');
 
-    try {
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: 'Você chegou ao destino!',
-          body: 'Toque para confirmar a entrega.',
-          data: {
-            url: Linking.createURL('confirmacaoEntrega'),
+    const appState = AppState.currentState;
+    const isForeground = appState === 'active';
+
+    if (isForeground) {
+      console.log('[TASK] App em foreground - navegando direto.');
+      await SecureStore.setItemAsync('abrirConfirmacaoImediata', 'true');
+    } else {
+      console.log('[TASK] App em background - enviando notificação.');
+
+      try {
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: 'Você chegou ao destino!',
+            body: 'Toque para confirmar a entrega.',
+            data: {
+              url: Linking.createURL('confirmacaoEntrega'),
+            },
+            sound: 'default',
+            vibrate: [0, 250, 250, 250],
+            color: '#2C79FF',
           },
-          sound: 'default',
-          vibrate: [0, 250, 250, 250],
-          color: '#2C79FF',
-        },
-        trigger: null,
-      });
-    } catch (err) {
-      console.error('[TASK] Erro ao enviar notificação:', err);
+          trigger: null,
+        });
+      } catch (err) {
+        console.error('[TASK] Erro ao enviar notificação:', err);
+      }
     }
   }
 });

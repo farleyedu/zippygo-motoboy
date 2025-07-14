@@ -7,6 +7,7 @@ import {
   Animated,
   PanResponder,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
@@ -25,12 +26,12 @@ export default function TelaInicialMap() {
 
   useEffect(() => {
     const interval = setInterval(async () => {
-      // const chegou = await SecureStore.getItemAsync('chegouNoDestino');
-      // if (chegou === 'true') {
-      //   await SecureStore.deleteItemAsync('chegouNoDestino');
-      //   router.push('/confirmacaoEntrega');
-      // }
-    }, 3000);
+      const abrir = await SecureStore.getItemAsync('abrirConfirmacaoImediata');
+      if (abrir === 'true') {
+        await SecureStore.deleteItemAsync('abrirConfirmacaoImediata');
+        router.push('/confirmacaoEntrega');
+      }
+    }, 2000);
 
     return () => clearInterval(interval);
   }, []);
@@ -86,7 +87,26 @@ export default function TelaInicialMap() {
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.floatingStartButton}>
+      <TouchableOpacity
+        style={styles.floatingStartButton}
+        onPress={async () => {
+          const DESTINOS = [
+            { latitude: -18.90634530461159, longitude: -48.21510163215173 },
+            { latitude: -18.908488035066984, longitude: -48.2158833365095 },
+            { latitude: -18.910364455064727, longitude: -48.21749894463129 },
+            { latitude: -18.908455370640972, longitude: -48.21931968828666 },
+            { latitude: -18.90546969116638, longitude: -48.218424489322764 },
+          ];
+
+          await SecureStore.setItemAsync('destinos', JSON.stringify(DESTINOS));
+          await SecureStore.setItemAsync('indiceAtual', '0');
+          console.log('[INICIAR] Lista de destinos e índice inicial salvos.');
+          Alert.alert('Entregas iniciadas!', 'Boa rota!');
+
+          // Iniciar a task se desejar
+          // await Location.startLocationUpdatesAsync('background-location-task', { ... });
+        }}
+      >
         <Text style={styles.startButtonText}>INICIAR</Text>
       </TouchableOpacity>
 
@@ -102,34 +122,6 @@ export default function TelaInicialMap() {
         </View>
       </Animated.View>
 
-      {/* Botão de debug */}
-      <TouchableOpacity
-        style={{
-          position: 'absolute',
-          bottom: 40,
-          right: 20,
-          backgroundColor: '#6c47ff',
-          padding: 12,
-          borderRadius: 30,
-          elevation: 5,
-          zIndex: 20,
-        }}
-        onPress={async () => {
-          try {
-            const isRunning = await Location.hasStartedLocationUpdatesAsync(
-              'background-location-task'
-            );
-            console.log('[DEBUG] Task está rodando?', isRunning);
-          } catch (e) {
-            console.log('[DEBUG] Erro ao verificar task:', e);
-          }
-
-          await SecureStore.setItemAsync('chegouNoDestino', 'true');
-          console.log('[DEBUG] Flag "chegouNoDestino" setada manualmente.');
-        }}
-      >
-        <Text style={{ color: '#fff' }}>DEBUG</Text>
-      </TouchableOpacity>
     </View>
   );
 }
