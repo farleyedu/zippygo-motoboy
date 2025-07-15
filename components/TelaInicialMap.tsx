@@ -90,21 +90,82 @@ export default function TelaInicialMap() {
       <TouchableOpacity
         style={styles.floatingStartButton}
         onPress={async () => {
-          const DESTINOS = [
-            { latitude: -18.90634530461159, longitude: -48.21510163215173 },
-            { latitude: -18.908488035066984, longitude: -48.2158833365095 },
-            { latitude: -18.910364455064727, longitude: -48.21749894463129 },
-            { latitude: -18.908455370640972, longitude: -48.21931968828666 },
-            { latitude: -18.90546969116638, longitude: -48.218424489322764 },
+          const PEDIDOS_COMPLETOS = [
+            {
+              id_ifood: '2502',
+              nome: 'Rafael Andrade',
+              endereco: 'Rua Tenente Virmondes, 100',
+              bairro: 'Centro',
+              telefone: '34 98312-8494',
+              valor: 30.0,
+              itens: ['Esfirra de Carne'],
+              coordenadas: { latitude: -18.90634530461159, longitude: -48.21510163215173 },
+              previsaoEntrega: '18:45',
+              localizador: '',
+              horarioEntrega: '00:00',
+            },
+            {
+              id_ifood: '6905',
+              nome: 'Farley Eduardo',
+              endereco: 'Alameda dos Mandarins, 500',
+              bairro: 'Gran Ville',
+              telefone: '0800 705 2030',
+              valor: 0.05,
+              itens: ['Molho de alho'],
+              coordenadas: { latitude: -18.908488035066984, longitude: -48.2158833365095 },
+              previsaoEntrega: '',
+              localizador: '98587969',
+              horarioEntrega: '',
+            },
+            {
+              id_ifood: '2520',
+              nome: 'Cliente20',
+              endereco: 'Av. João Naves de Ávila, 2121',
+              bairro: 'Santa Mônica',
+              telefone: '34 99399-8355',
+              valor: 50.0,
+              itens: ['Pizza Calabresa'],
+              coordenadas: { latitude: -18.910364455064727, longitude: -48.21749894463129 },
+              previsaoEntrega: '18:40',
+              localizador: '',
+              horarioEntrega: '',
+            },
+            {
+              id_ifood: '2517',
+              nome: 'Cliente17',
+              endereco: 'Av. Sucupira, 662',
+              bairro: 'Res. Integração',
+              telefone: '34 98869-7955',
+              valor: 40.0,
+              itens: ['Macarrão à Bolonhesa'],
+              coordenadas: { latitude: -18.908455370640972, longitude: -48.21931968828666 },
+              previsaoEntrega: '19:15',
+              localizador: '',
+              horarioEntrega: '',
+            },
+            {
+              id_ifood: '2506',
+              nome: 'Cliente06',
+              endereco: 'R. Marceli Manoel Barcelos, 328',
+              bairro: 'Jardim Ipanema',
+              telefone: '34 98287-1378',
+              valor: 55.0,
+              itens: ['Feijoada Completa'],
+              coordenadas: { latitude: -18.90546969116638, longitude: -48.218424489322764 },
+              previsaoEntrega: '19:10',
+              localizador: '',
+              horarioEntrega: '',
+            },
           ];
 
-          await SecureStore.setItemAsync('destinos', JSON.stringify(DESTINOS));
+          await SecureStore.setItemAsync('pedidosCompletos', JSON.stringify(PEDIDOS_COMPLETOS));
+          await SecureStore.setItemAsync(
+            'destinos',
+            JSON.stringify(PEDIDOS_COMPLETOS.map((p) => p.coordenadas))
+          );
           await SecureStore.setItemAsync('indiceAtual', '0');
-          console.log('[INICIAR] Lista de destinos e índice inicial salvos.');
-          Alert.alert('Entregas iniciadas!', 'Boa rota!');
 
-          // Iniciar a task se desejar
-          // await Location.startLocationUpdatesAsync('background-location-task', { ... });
+          Alert.alert('Entregas iniciadas!', 'Boa rota!');
         }}
       >
         <Text style={styles.startButtonText}>INICIAR</Text>
@@ -121,15 +182,12 @@ export default function TelaInicialMap() {
           <Ionicons name="menu" size={22} color="#fff" />
         </View>
       </Animated.View>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+  container: { flex: 1 },
   menuButton: {
     position: 'absolute',
     top: 50,

@@ -11,6 +11,7 @@ export default function ConfirmacaoEntregaScreen() {
   const [pago, setPago] = useState(false);
   const [modalPagamentoVisivel, setModalPagamentoVisivel] = useState(false);
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
+  const [detalhesVisiveis, setDetalhesVisiveis] = useState(false);
 
   const validarCodigo = () => {
     if (codigoDigitado === '1234') {
@@ -67,69 +68,76 @@ export default function ConfirmacaoEntregaScreen() {
       )}
 
       <View style={styles.cardCliente}>
-        <View style={styles.cardTopo}>
-          <View>
-            <Text style={styles.nomeCliente}>Cristine Alencar</Text>
-            <Text style={styles.bairroCliente}>Dom Pedro I</Text>
-            <View style={styles.statusLinha}>
-              <Text style={styles.statusTextoCinza}>1 pedido</Text>
-              <Text style={styles.statusTextoVermelho}>validar</Text>
-              <Text style={styles.statusTextoVerde}>pago</Text>
+        <TouchableOpacity onPress={() => setDetalhesVisiveis(!detalhesVisiveis)}>
+          <View style={styles.cardTopo}>
+            <View>
+              <Text style={styles.nomeCliente}>Cristine Alencar</Text>
+              <Text style={styles.bairroCliente}>Dom Pedro I</Text>
+              <View style={styles.statusLinha}>
+                <Text style={styles.statusTextoCinza}>1 pedido</Text>
+                <Text style={styles.statusTextoVermelho}>validar</Text>
+                <Text style={styles.statusTextoVerde}>pago</Text>
+              </View>
             </View>
+            <Ionicons name={detalhesVisiveis ? 'chevron-up' : 'chevron-down'} size={20} color="gray" />
           </View>
-          <Ionicons name="chevron-down" size={20} color="gray" />
-        </View>
+        </TouchableOpacity>
 
         <Text style={styles.pedidoId}>Pedido 0355</Text>
 
-        {codigoConfirmado ? (
+        {!codigoConfirmado ? (
+          <TouchableOpacity onPress={() => setModalCodigoVisivel(true)} style={styles.botaoCodigo}>
+            <Text style={styles.botaoCodigoTexto}>Digitar código do cliente</Text>
+          </TouchableOpacity>
+        ) : (
           <TextInput
             value={codigoDigitado}
             editable={false}
             style={[styles.inputCodigoDesabilitado, { color: 'green' }]}
           />
+        )}
+
+        {pago ? (
+          <View style={styles.botaoPago}>
+            <Text style={styles.botaoPagoTexto}>Pago</Text>
+          </View>
         ) : (
-          <TouchableOpacity onPress={() => setModalCodigoVisivel(true)} style={styles.botaoCodigo}>
-            <Text style={styles.botaoCodigoTexto}>Digitar código do cliente</Text>
+          <TouchableOpacity onPress={() => setModalPagamentoVisivel(true)} style={styles.botaoCobrar}>
+            <Text style={styles.botaoCobrarTexto}>Cobrar</Text>
           </TouchableOpacity>
         )}
 
-        <TouchableOpacity
-          onPress={() => setModalPagamentoVisivel(true)}
-          style={[styles.botaoCobrar, { backgroundColor: '#B00020' }]}
-        >
-          <Text style={[styles.botaoCobrarTexto, { color: '#fff' }]}>
-            {pago ? 'Pago' : 'Cobrar'}
-          </Text>
-        </TouchableOpacity>
+        {/* 🔽 Detalhes Expansíveis */}
+        {detalhesVisiveis && (
+          <View style={{ marginTop: 16 }}>
+            <Text>Telefone: (92) 99111-2222</Text>
+            <Text>Endereço: Rua Da Casa Do Reforço</Text>
+            <Text>Previsão de entrega: 12:45</Text>
+            <Text>Forma de pagamento: {formaPagamento}</Text>
+            <Text>Itens:</Text>
+            <Text>- Pizza Calabresa</Text>
+            <Text>- Coca 2L</Text>
+          </View>
+        )}
       </View>
 
       <View style={styles.botoesFinais}>
-        <TouchableOpacity
-          style={[
-            styles.botaoProximaEntrega,
-            !(codigoConfirmado && pago) && { backgroundColor: '#ccc' },
-          ]}
-          onPress={irParaProximoPedido}
-          disabled={!(codigoConfirmado && pago)}
-        >
-          <Text style={styles.botaoProximaEntregaTexto}>Próxima entrega</Text>
-        </TouchableOpacity>
+        {codigoConfirmado && (
+          <TouchableOpacity style={styles.botaoProximaEntrega} onPress={irParaProximoPedido}>
+            <Text style={styles.botaoProximaEntregaTexto}>Próxima entrega</Text>
+          </TouchableOpacity>
+        )}
         <TouchableOpacity style={styles.botaoSairEntrega}>
           <Text style={styles.botaoSairEntregaTexto}>Sair da entrega</Text>
         </TouchableOpacity>
       </View>
 
-      {/* Modal Codigo */}
+      {/* Modal Código */}
       <Modal visible={modalCodigoVisivel} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text>Digite o código do cliente:</Text>
-            <TextInput
-              value={codigoDigitado}
-              onChangeText={setCodigoDigitado}
-              style={styles.inputCodigo}
-            />
+            <TextInput value={codigoDigitado} onChangeText={setCodigoDigitado} style={styles.inputCodigo} />
             <TouchableOpacity onPress={validarCodigo} style={styles.botaoConfirmarCodigo}>
               <Text style={styles.botaoConfirmarCodigoTexto}>Validar</Text>
             </TouchableOpacity>
@@ -154,9 +162,6 @@ export default function ConfirmacaoEntregaScreen() {
             <TouchableOpacity onPress={confirmarPagamento} style={styles.botaoConfirmarCodigo}>
               <Text style={styles.botaoConfirmarCodigoTexto}>Confirmar</Text>
             </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalPagamentoVisivel(false)} style={styles.botaoVoltarCodigo}>
-              <Text style={styles.botaoVoltarCodigoTexto}>Voltar</Text>
-            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -164,8 +169,20 @@ export default function ConfirmacaoEntregaScreen() {
   );
 }
 
+
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#fff' },
+  toggleContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#E8F5E9',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    width: '100%',
+    marginBottom: 10,
+  },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   titulo: { fontSize: 20, fontWeight: 'bold' },
   enderecoContainer: {
@@ -223,27 +240,20 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   botaoCodigoTexto: { color: '#B00020', textAlign: 'center', fontWeight: 'bold' },
-  inputCodigo: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 6,
-    padding: 8,
-    marginTop: 8,
-  },
-  inputCodigoDesabilitado: {
-    borderWidth: 1,
-    borderColor: 'green',
-    borderRadius: 6,
-    padding: 8,
-    marginTop: 8,
-    backgroundColor: '#f0fff0',
-  },
   botaoCobrar: {
+    borderWidth: 1,
+    borderColor: '#388E3C',
     borderRadius: 8,
     padding: 12,
-    marginTop: 8,
   },
-  botaoCobrarTexto: { textAlign: 'center', fontWeight: 'bold' },
+  botaoCobrarTexto: { color: '#388E3C', textAlign: 'center', fontWeight: 'bold' },
+  botaoPago: {
+    borderWidth: 1,
+    borderColor: '#BDBDBD',
+    borderRadius: 8,
+    padding: 12,
+  },
+  botaoPagoTexto: { color: '#4F4F4F', textAlign: 'center', fontWeight: 'bold' },
   botoesFinais: { marginTop: 24, alignItems: 'center' },
   botaoProximaEntrega: {
     backgroundColor: '#388E3C',
@@ -257,12 +267,27 @@ const styles = StyleSheet.create({
   botaoSairEntregaTexto: { color: '#999' },
   modalOverlay: { flex: 1, justifyContent: 'center', backgroundColor: '#000000aa', padding: 20 },
   modalContainer: { backgroundColor: '#fff', borderRadius: 10, padding: 20 },
+  inputCodigo: {
+    borderWidth: 1,
+    borderColor: '#ccc',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 8,
+  },
   botaoConfirmarCodigo: {
     marginTop: 10,
     backgroundColor: 'green',
     padding: 10,
     borderRadius: 6,
     alignItems: 'center',
+  },
+  inputCodigoDesabilitado: {
+    borderWidth: 1,
+    borderColor: 'green',
+    borderRadius: 6,
+    padding: 8,
+    marginTop: 8,
+    backgroundColor: '#f0fff0',
   },
   botaoConfirmarCodigoTexto: { color: '#fff', fontWeight: 'bold' },
   botaoVoltarCodigo: { marginTop: 10, padding: 10, alignItems: 'center' },
