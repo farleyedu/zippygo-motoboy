@@ -3,7 +3,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Linking from 'expo-linking';
-import { AppState } from 'react-native'; // 👈 necessário para saber se app está aberto
+import { AppState } from 'react-native';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
@@ -40,12 +40,12 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
   const location = locations[0];
   console.log('[TASK] Local atual recebido:', location.coords);
 
-  // 🔄 Buscar lista de destinos e índice atual
   const rawDestinos = await SecureStore.getItemAsync('destinos');
+  const rawPedidos = await SecureStore.getItemAsync('pedidosCompletos');
   const indiceAtual = parseInt(await SecureStore.getItemAsync('indiceAtual') || '0', 10);
 
-  if (!rawDestinos) {
-    console.log('[TASK] Nenhum destino encontrado no SecureStore.');
+  if (!rawDestinos || !rawPedidos) {
+    console.warn('[TASK] Dados necessários ainda não foram carregados. Ignorando verificação de destino.');
     return;
   }
 

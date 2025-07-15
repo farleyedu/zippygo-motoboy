@@ -13,7 +13,6 @@ import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
-import * as Location from 'expo-location';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 80;
@@ -28,8 +27,15 @@ export default function TelaInicialMap() {
     const interval = setInterval(async () => {
       const abrir = await SecureStore.getItemAsync('abrirConfirmacaoImediata');
       if (abrir === 'true') {
-        await SecureStore.deleteItemAsync('abrirConfirmacaoImediata');
-        router.push('/confirmacaoEntrega');
+        const lista = await SecureStore.getItemAsync('pedidosCompletos');
+        const destinos = await SecureStore.getItemAsync('destinos');
+
+        if (lista && destinos) {
+          await SecureStore.deleteItemAsync('abrirConfirmacaoImediata');
+          router.push('/confirmacaoEntrega');
+        } else {
+          console.warn('[ROTA] Dados ainda não foram carregados. Ignorando navegação prematura.');
+        }
       }
     }, 2000);
 

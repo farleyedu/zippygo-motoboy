@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, Modal, TextInput, ScrollView, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import * as Linking from 'expo-linking';
 
-export default function ConfirmacaoEntregaScreen() {
+export default function ConfirmacaoEntrega() {
   const [codigoDigitado, setCodigoDigitado] = useState('');
   const [modalCodigoVisivel, setModalCodigoVisivel] = useState(false);
   const [codigoConfirmado, setCodigoConfirmado] = useState(false);
@@ -12,6 +12,36 @@ export default function ConfirmacaoEntregaScreen() {
   const [modalPagamentoVisivel, setModalPagamentoVisivel] = useState(false);
   const [formaPagamento, setFormaPagamento] = useState('Dinheiro');
   const [detalhesVisiveis, setDetalhesVisiveis] = useState(false);
+  const [pedido, setPedido] = useState<any>(null);
+  const [erroCarregamento, setErroCarregamento] = useState<string | null>(null);
+
+  useEffect(() => {
+    const carregarPedido = async () => {
+      try {
+        const indice = parseInt(await SecureStore.getItemAsync('indiceAtual') || '0', 10);
+        const lista = await SecureStore.getItemAsync('pedidosCompletos');
+        if (!lista) {
+          setErroCarregamento('Nenhum pedido foi carregado. Verifique se a entrega foi iniciada.');
+          return;
+        }
+
+        const pedidos = JSON.parse(lista);
+        const selecionado = pedidos[indice];
+
+        if (!selecionado) {
+          setErroCarregamento(`Não foi possível encontrar o pedido no índice ${indice}.`);
+          return;
+        }
+
+        setPedido(selecionado);
+      } catch (err) {
+        console.error('Erro ao carregar pedido:', err);
+        setErroCarregamento('Erro ao carregar o pedido.');
+      }
+    };
+
+    carregarPedido();
+  }, []);
 
   const validarCodigo = () => {
     if (codigoDigitado === '1234') {
@@ -45,6 +75,22 @@ export default function ConfirmacaoEntregaScreen() {
     }
   };
 
+  if (erroCarregamento) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+        <Text style={{ color: 'red', fontWeight: 'bold', textAlign: 'center' }}>{erroCarregamento}</Text>
+      </View>
+    );
+  }
+
+  if (!pedido) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <Text>Carregando pedido...</Text>
+      </View>
+    );
+  }
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -54,8 +100,8 @@ export default function ConfirmacaoEntregaScreen() {
 
       <View style={styles.enderecoContainer}>
         <Text style={styles.enderecoTitulo}>Endereço de entrega</Text>
-        <Text style={styles.enderecoTexto}>R. Padre José De Anchieta, 574, Dom Pedro, Manaus, Brazil - Dom Pedro I</Text>
-        <Text style={styles.complementoTexto}>Rua Da Casa Do Reforço</Text>
+        <Text style={styles.enderecoTexto}>{pedido.endereco}</Text>
+        <Text style={styles.complementoTexto}>{pedido.bairro}</Text>
         <TouchableOpacity style={styles.botaoMapa}>
           <Text style={styles.botaoMapaTexto}>Mapa</Text>
         </TouchableOpacity>
@@ -71,8 +117,8 @@ export default function ConfirmacaoEntregaScreen() {
         <TouchableOpacity onPress={() => setDetalhesVisiveis(!detalhesVisiveis)}>
           <View style={styles.cardTopo}>
             <View>
-              <Text style={styles.nomeCliente}>Cristine Alencar</Text>
-              <Text style={styles.bairroCliente}>Dom Pedro I</Text>
+              <Text style={styles.nomeCliente}>{pedido.nome}</Text>
+              <Text style={styles.bairroCliente}>{pedido.bairro}</Text>
               <View style={styles.statusLinha}>
                 <Text style={styles.statusTextoCinza}>1 pedido</Text>
                 <Text style={styles.statusTextoVermelho}>validar</Text>
@@ -83,7 +129,7 @@ export default function ConfirmacaoEntregaScreen() {
           </View>
         </TouchableOpacity>
 
-        <Text style={styles.pedidoId}>Pedido 0355</Text>
+        <Text style={styles.pedidoId}>Pedido {pedido.id_ifood}</Text>
 
         {!codigoConfirmado ? (
           <TouchableOpacity onPress={() => setModalCodigoVisivel(true)} style={styles.botaoCodigo}>
@@ -107,16 +153,16 @@ export default function ConfirmacaoEntregaScreen() {
           </TouchableOpacity>
         )}
 
-        {/* 🔽 Detalhes Expansíveis */}
         {detalhesVisiveis && (
-          <View style={{ marginTop: 16 }}>
-            <Text>Telefone: (92) 99111-2222</Text>
-            <Text>Endereço: Rua Da Casa Do Reforço</Text>
-            <Text>Previsão de entrega: 12:45</Text>
+          <View style={{ marginBottom: 12 }}>
+            <Text>Telefone: {pedido.telefone}</Text>
+            <Text>Endereço: {pedido.endereco}</Text>
+            <Text>Previsão de entrega: {pedido.previsaoEntrega || '---'}</Text>
             <Text>Forma de pagamento: {formaPagamento}</Text>
             <Text>Itens:</Text>
-            <Text>- Pizza Calabresa</Text>
-            <Text>- Coca 2L</Text>
+            {pedido.itens.map((item: string, idx: number) => (
+              <Text key={idx}>- {item}</Text>
+            ))}
           </View>
         )}
       </View>
@@ -153,8 +199,9 @@ export default function ConfirmacaoEntregaScreen() {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <Text>Pagamento</Text>
-            <Text>Pizza Calabresa - R$39,90</Text>
-            <Text>Coca 2L - R$10,00</Text>
+            {pedido.itens.map((item: string, idx: number) => (
+              <Text key={idx}>{item}</Text>
+            ))}
             <Text style={{ marginTop: 10 }}>Forma de pagamento: {formaPagamento}</Text>
             <TouchableOpacity onPress={() => setFormaPagamento(formaPagamento === 'Dinheiro' ? 'Pix' : 'Dinheiro')}>
               <Text style={{ color: 'blue', marginTop: 5 }}>Editar forma de pagamento</Text>
@@ -168,6 +215,8 @@ export default function ConfirmacaoEntregaScreen() {
     </ScrollView>
   );
 }
+
+
 
 
 const styles = StyleSheet.create({
