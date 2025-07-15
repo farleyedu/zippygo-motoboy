@@ -63,6 +63,16 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
   if (distancia <= 100) {
     console.log('[TASK] Dentro do raio!');
 
+    const destinosNotificadosRaw = await SecureStore.getItemAsync('destinosNotificados');
+    const destinosNotificados = destinosNotificadosRaw ? JSON.parse(destinosNotificadosRaw) : [];
+
+    if (destinosNotificados.includes(indiceAtual)) {
+      console.log(`[TASK] Destino ${indiceAtual} já foi notificado. Ignorando.`);
+      return;
+    }
+
+    destinosNotificados.push(indiceAtual);
+    await SecureStore.setItemAsync('destinosNotificados', JSON.stringify(destinosNotificados));
     await SecureStore.setItemAsync('chegouNoDestino', 'true');
 
     const appState = AppState.currentState;

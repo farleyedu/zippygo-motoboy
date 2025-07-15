@@ -1,4 +1,6 @@
 import React, { useRef, useEffect } from 'react';
+import { iniciarMonitoramentoLocalizacao } from './locationSetup';
+
 import {
   View,
   Text,
@@ -163,16 +165,20 @@ export default function TelaInicialMap() {
               horarioEntrega: '',
             },
           ];
-
+        
           await SecureStore.setItemAsync('pedidosCompletos', JSON.stringify(PEDIDOS_COMPLETOS));
           await SecureStore.setItemAsync(
             'destinos',
             JSON.stringify(PEDIDOS_COMPLETOS.map((p) => p.coordenadas))
           );
           await SecureStore.setItemAsync('indiceAtual', '0');
-
+          await SecureStore.deleteItemAsync('destinosNotificados'); // ⬅️ Correção aqui
+        
           Alert.alert('Entregas iniciadas!', 'Boa rota!');
+          await iniciarMonitoramentoLocalizacao();
+          console.log('TASK', 'Monitoramento iniciado!', 'Boa rota!');
         }}
+        
       >
         <Text style={styles.startButtonText}>INICIAR</Text>
       </TouchableOpacity>
