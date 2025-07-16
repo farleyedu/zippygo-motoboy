@@ -83,8 +83,15 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
       await SecureStore.setItemAsync('abrirConfirmacaoImediata', 'true');
     } else {
       console.log('[TASK] App em background - enviando notificação.');
-
+    
       try {
+        // Garante que o canal exista dentro do contexto da task
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'ZippyGo Notificações',
+          importance: Notifications.AndroidImportance.HIGH,
+          sound: 'default',
+        });
+    
         await Notifications.scheduleNotificationAsync({
           content: {
             title: 'Você chegou ao destino!',
@@ -102,5 +109,6 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
         console.error('[TASK] Erro ao enviar notificação:', err);
       }
     }
+    
   }
 });
