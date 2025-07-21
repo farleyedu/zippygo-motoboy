@@ -12,6 +12,7 @@ import {
 import { CodeField, Cursor, useBlurOnFulfill, useClearByFocusCell } from 'react-native-confirmation-code-field';
 import { Stack } from 'expo-router';
 import { useNavigation, useRoute } from '@react-navigation/native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 const CELL_COUNT = 4;
 const lockIcon = require('../assets/images/lock.png'); // ajuste o caminho se necessário
@@ -33,6 +34,11 @@ export default function VerificationScreen() {
   return (
     <SafeAreaView style={styles.tela}>
       <Stack.Screen options={{ headerShown: false }} />
+      <View style={{ position: 'absolute', top: 40, left: 16, zIndex: 10 }}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back-sharp" size={28} color="#222" />
+        </TouchableOpacity>
+      </View>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}

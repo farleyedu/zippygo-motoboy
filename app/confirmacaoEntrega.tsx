@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,10 +20,16 @@ export default function ConfirmacaoEntrega() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
-  const [codigoConfirmado, setCodigoConfirmado] = useState(false);
-  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(false);
+  const origem = params.origem || 'estabelecimento';
+  const [codigoConfirmado, setCodigoConfirmado] = useState(origem !== 'ifood');
+  const precisaCobrar = String(params.precisaCobrar) === 'true';
+  const pagamentoInicial = String(params.pago) === 'true' || !precisaCobrar;
+  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(pagamentoInicial);
   const [modalCodigo, setModalCodigo] = useState(false);
   const codigoCorreto = '1234';
+  const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
+  const quantidadePedidos = parseInt(params.quantidadePedidos as string, 10) || 1;
+  const [expandido, setExpandido] = useState(false);
 
   // Extrai dados do pedido dos params
   const nomeCliente = params.nome || 'Cliente';
@@ -32,10 +38,42 @@ export default function ConfirmacaoEntrega() {
   const id_ifood = params.id_ifood || '----';
   // Adicione outros campos conforme necessário
 
+  useEffect(() => {
+    (async () => {
+      const lista = await SecureStore.getItemAsync('pedidosCompletos');
+      const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+      if (lista && indiceAtualStr) {
+        const pedidos = JSON.parse(lista);
+        const indiceAtual = parseInt(indiceAtualStr, 10);
+        setIsUltimaEntrega(indiceAtual >= pedidos.length - 1);
+      } else {
+        setIsUltimaEntrega(false);
+      }
+      if (origem !== 'ifood') {
+        setCodigoConfirmado(true);
+      } else {
+        // Checa status de código confirmado individual por pedido
+        const status = await SecureStore.getItemAsync(`codigoConfirmado_${id_ifood}`);
+        console.log('Status código confirmado', id_ifood, status);
+        setCodigoConfirmado(status === 'true');
+      }
+    })();
+    if (!precisaCobrar) setPagamentoConfirmado(true);
+  }, [id_ifood, origem, precisaCobrar]);
+
+  const handleCodigoValidado = async () => {
+    await SecureStore.setItemAsync(`codigoConfirmado_${id_ifood}`, 'true');
+    setCodigoConfirmado(true);
+  };
+
   const abrirWhatsApp = (tipo: 'pizzaria' | 'cliente') => {
     const numero = tipo === 'pizzaria' ? '553499999999' : '553498888888';
     Linking.openURL(`https://wa.me/${numero}`);
     setModalVisible(false);
+  };
+
+  const toggleExpand = () => {
+    setExpandido(!expandido);
   };
 
   // Função para avançar para a próxima entrega
@@ -45,16 +83,31 @@ export default function ConfirmacaoEntrega() {
     if (lista && indiceAtualStr) {
       const pedidos = JSON.parse(lista);
       let indiceAtual = parseInt(indiceAtualStr, 10);
+      // Limpa status do pedido anterior
+      await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
       if (indiceAtual < pedidos.length - 1) {
         indiceAtual += 1;
         await SecureStore.setItemAsync('indiceAtual', indiceAtual.toString());
-        // Volta para o mapa, que já vai mostrar o próximo destino
         router.replace('/');
       } else {
-        // Última entrega, pode exibir mensagem ou voltar para tela inicial
+        // Última entrega, finalize a rota
+        await SecureStore.deleteItemAsync('emEntrega');
+        await SecureStore.deleteItemAsync('indiceAtual');
+        await SecureStore.deleteItemAsync('pedidosCompletos');
+        await SecureStore.deleteItemAsync('destinos');
+        await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
         router.replace('/');
       }
     }
+  };
+
+  const handleFinalizarRota = async () => {
+    await SecureStore.deleteItemAsync('emEntrega');
+    await SecureStore.deleteItemAsync('indiceAtual');
+    await SecureStore.deleteItemAsync('pedidosCompletos');
+    await SecureStore.deleteItemAsync('destinos');
+    await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
+    router.replace('/');
   };
 
   // Renderização do código de entrega
@@ -65,7 +118,7 @@ export default function ConfirmacaoEntrega() {
           style={[styles.botaoOutline, { borderColor: '#b71c1c' }]}
           onPress={() => {
             // @ts-ignore
-            nav.navigate('VerificationScreen', { onSuccess: () => setCodigoConfirmado(true) });
+            nav.navigate('VerificationScreen', { onSuccess: handleCodigoValidado });
           }}
         >
           <Text style={[styles.textoBotaoOutline, { color: '#b71c1c' }]}>Validar</Text>
@@ -114,6 +167,38 @@ export default function ConfirmacaoEntrega() {
     </TouchableOpacity>
   );
 
+  const renderStatusValidar = () => (
+    <View style={styles.statusItem}>
+      <MaterialCommunityIcons
+        name={codigoConfirmado ? 'check-circle' : 'alert-circle'}
+        size={14}
+        color={codigoConfirmado ? '#4caf50' : '#d32f2f'}
+      />
+      <Text style={[
+        styles.statusTexto,
+        { color: codigoConfirmado ? '#4caf50' : '#d32f2f', fontWeight: 'bold' }
+      ]}>
+        {codigoConfirmado ? 'validado' : 'validar'}
+      </Text>
+    </View>
+  );
+
+  const renderStatusPago = () => (
+    <View style={styles.statusItem}>
+      {pagamentoConfirmado ? (
+        <>
+          <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
+          <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>pago</Text>
+        </>
+      ) : (
+        <>
+          <FontAwesome name="times-circle" size={14} color="#d32f2f" />
+          <Text style={[styles.statusTexto, { color: '#d32f2f', fontWeight: 'bold' }]}>Cobrar</Text>
+        </>
+      )}
+    </View>
+  );
+
   return (
     <View style={styles.tela}>
       {/* Cabeçalho */}
@@ -160,13 +245,16 @@ export default function ConfirmacaoEntrega() {
       </View>
 
       {/* Aviso de solicitação de código */}
-      <View style={styles.alertaCodigo}>
-        <Ionicons name="alert-circle-outline" size={18} color="#888" />
-        <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
-      </View>
+      {origem === 'ifood' && (
+        <View style={styles.alertaCodigo}>
+          <Ionicons name="alert-circle-outline" size={18} color="#888" />
+          <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
+        </View>
+      )}
 
       {/* Cliente/Pedido */}
       <View style={styles.cardCliente}>
+
         <View style={styles.linhaTopo}>
           <View>
             <Text style={styles.nomeCliente}>{nomeCliente}</Text>
@@ -174,45 +262,131 @@ export default function ConfirmacaoEntrega() {
             <View style={styles.statusLinha}>
               <View style={styles.statusItem}>
                 <MaterialCommunityIcons name="shopping-outline" size={14} color="#555" />
-                <Text style={styles.statusTexto}>1 pedido</Text>
+                <Text style={styles.statusTexto}>
+                  {quantidadePedidos} pedido{quantidadePedidos > 1 ? 's' : ''}
+                </Text>
               </View>
-              <View style={styles.statusItem}>
-                <MaterialCommunityIcons name="clock-outline" size={14} color="#d32f2f" />
-                <Text style={[styles.statusTexto, { color: '#d32f2f' }]}>validar</Text>
-              </View>
-              <View style={styles.statusItem}>
-                <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
-                <Text style={[styles.statusTexto, { color: '#4caf50' }]}>pago</Text>
-              </View>
+              {origem === 'ifood' ? renderStatusValidar() : (
+                <View style={styles.statusItem}>
+                  <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
+                  <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Validado</Text>
+                </View>
+              )}
+              {precisaCobrar ? renderStatusPago() : (
+                <View style={styles.statusItem}>
+                  <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
+                  <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Pago</Text>
+                </View>
+              )}
             </View>
           </View>
-          <View style={styles.iconeContainer} />
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+            <View style={[
+              styles.badgeOrigem,
+              origem === 'ifood' ? styles.badgeIfood : styles.badgeEstabelecimento,
+              { marginRight: 8, marginTop: 2 }
+            ]}>
+              <Text style={styles.badgeOrigemTexto}>
+                {origem === 'ifood' ? 'iFood' : 'Estabelecimento'}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={toggleExpand} style={[styles.iconeContainer, { marginTop: 2 }]}>
+              <Ionicons name={expandido ? "chevron-up" : "chevron-down"} size={22} color="#888" />
+            </TouchableOpacity>
+          </View>
         </View>
-        <Text style={styles.pedidoId}>Pedido {id_ifood}</Text>
-        {renderCodigoEntrega()}
+        {expandido ? (
+          <View style={styles.detalhesPedido}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+              <FontAwesome name="file-text-o" size={22} color="#333" style={{ marginRight: 8 }} />
+              <Text style={styles.pedidoIdDestaque}>Pedido {id_ifood}</Text>
+            </View>
+            <View style={styles.detalheLinha}>
+              <FontAwesome name="phone" size={16} color="#888" style={{ marginRight: 6 }} />
+              <Text style={styles.detalheLabel}>Telefone: <Text style={styles.detalheValor}>{params.telefone}</Text></Text>
+            </View>
+            <View style={styles.detalheLinha}>
+              <FontAwesome name="money" size={16} color="#888" style={{ marginRight: 6 }} />
+              <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {params.valor}</Text></Text>
+            </View>
+            <View style={styles.detalheLinha}>
+              <FontAwesome name="list" size={16} color="#888" style={{ marginRight: 6 }} />
+              <Text style={styles.detalheLabel}>Itens: <Text style={styles.detalheValor}>{Array.isArray(params.itens) ? params.itens.join(', ') : params.itens}</Text></Text>
+            </View>
+            {params.previsaoEntrega && (
+              <View style={styles.detalheLinha}>
+                <MaterialCommunityIcons name="clock-outline" size={16} color="#888" style={{ marginRight: 6 }} />
+                <Text style={styles.detalheLabel}>Previsão de entrega: <Text style={styles.detalheValor}>{params.previsaoEntrega}</Text></Text>
+              </View>
+            )}
+          </View>
+        ) : (
+          <Text style={styles.pedidoId}>Pedido {id_ifood}</Text>
+        )}
+        {codigoConfirmado && pagamentoConfirmado ? (
+          <View style={styles.tudoLiberadoBox}>
+            <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
+            <Text style={styles.tudoLiberadoTexto}>
+              Tudo liberado! Você pode ir para a próxima entrega.
+            </Text>
+          </View>
+        ) : (
+          origem === 'ifood'
+            ? renderCodigoEntrega()
+            : (
+              <View style={styles.codigoConfirmado}>
+                <Ionicons name="checkmark-circle-outline" size={18} color="#4caf50" />
+                <Text style={styles.codigoConfirmadoTexto}>Não precisa de código</Text>
+              </View>
+            )
+        )}
+        {!pagamentoConfirmado && precisaCobrar && (
+          <TouchableOpacity
+            style={[
+              styles.botaoOutline,
+              { borderColor: '#2e7d32' },
+            ]}
+            disabled={pagamentoConfirmado}
+            onPress={() => setPagamentoConfirmado(true)}
+          >
+            <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Pagar</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Espaço extra para não cobrir conteúdo */}
+      <View style={{ height: 120 }} />
+
+      {/* Rodapé fixo */}
+      <View style={styles.rodapeFixo}>
         <TouchableOpacity
+          disabled={!codigoConfirmado || !pagamentoConfirmado}
           style={[
-            styles.botaoOutline,
-            { borderColor: '#2e7d32' },
+            styles.botaoProximaEntrega,
+            codigoConfirmado && pagamentoConfirmado
+              ? styles.botaoProximaEntregaAtivo
+              : styles.botaoProximaEntregaDesabilitado,
           ]}
-          disabled={!codigoConfirmado || pagamentoConfirmado}
-          onPress={() => setPagamentoConfirmado(true)}
+          onPress={isUltimaEntrega ? handleFinalizarRota : handleProximaEntrega}
         >
-          <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Pago</Text>
+          <Text style={styles.textoProximaEntrega}>
+            {isUltimaEntrega ? 'Finalizar rota' : 'Próxima entrega'}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          onPress={async () => {
+            await SecureStore.deleteItemAsync('emEntrega');
+            await SecureStore.deleteItemAsync('indiceAtual');
+            await SecureStore.deleteItemAsync('pedidosCompletos');
+            await SecureStore.deleteItemAsync('destinos');
+            router.replace('/');
+          }}
+          style={styles.botaoSair}
+          activeOpacity={0.6}
+        >
+          <Text style={styles.textoSair}>Sair da rota</Text>
         </TouchableOpacity>
       </View>
-      <TouchableOpacity
-        disabled={!codigoConfirmado || !pagamentoConfirmado}
-        style={[
-          styles.botaoProximaEntrega,
-          codigoConfirmado && pagamentoConfirmado
-            ? styles.botaoProximaEntregaAtivo
-            : styles.botaoProximaEntregaDesabilitado,
-        ]}
-        onPress={handleProximaEntrega}
-      >
-        <Text style={styles.textoProximaEntrega}>Próxima entrega</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -322,8 +496,8 @@ const styles = StyleSheet.create({
   },
   linhaTopo: {
     flexDirection: 'row',
+    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    alignItems: 'center',
   },
   nomeCliente: { fontSize: 16, fontWeight: 'bold' },
   bairro: { fontSize: 14, color: '#888', marginTop: 2 },
@@ -331,13 +505,13 @@ const styles = StyleSheet.create({
   statusItem: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
   statusTexto: { fontSize: 12, marginLeft: 4 },
   iconeContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    padding: 6,
+    padding: 4,
+  },
+  collapseCircle: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#000',
   },
   pedidoId: { fontWeight: 'bold', fontSize: 14, marginVertical: 12 },
   linhaCodigo: {
@@ -407,7 +581,30 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 15,
   },
-    rodape: {
+  rodapeFixo: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    paddingTop: 12,
+    paddingBottom: 24,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderColor: '#eee',
+  },
+  botaoSair: {
+    marginTop: 10,
+    alignSelf: 'center',
+    padding: 8,
+  },
+  textoSair: {
+    color: '#888',
+    fontSize: 15,
+    textDecorationLine: 'underline',
+    opacity: 0.7,
+  },
+  rodape: {
     padding: 16,
     backgroundColor: '#fff',
     borderTopWidth: 1,
@@ -425,18 +622,65 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
   },
-  botaoSair: {
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#999',
-    borderRadius: 6,
-    paddingVertical: 12,
-    alignItems: 'center',
+  badgeOrigemContainer: {
+    position: 'absolute',
+    top: 8,
+    right: 12,
+    zIndex: 10,
   },
-  textoSair: {
+  badgeOrigem: {
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  badgeIfood: {
+    backgroundColor: '#ff004f',
+  },
+  badgeEstabelecimento: {
+    backgroundColor: '#2c79ff',
+  },
+  badgeOrigemTexto: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 13,
+  },
+  detalhesPedido: {
+    marginTop: 12,
+    backgroundColor: '#f7f7f7',
+    borderRadius: 8,
+    padding: 12,
+  },
+  detalheLabel: {
+    fontWeight: 'bold',
     color: '#333',
-    fontSize: 15,
-    fontWeight: '500',
+    marginBottom: 2,
+  },
+  detalheValor: {
+    fontWeight: 'normal',
+    color: '#222',
+  },
+  pedidoIdDestaque: {
+    fontWeight: 'bold',
+    fontSize: 20,
+    color: '#222',
+  },
+  detalheLinha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  tudoLiberadoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    marginTop: 8,
+  },
+  tudoLiberadoTexto: {
+    color: '#4caf50',
+    fontWeight: 'bold',
+    fontSize: 16,
+    marginLeft: 8,
   },
 
 });

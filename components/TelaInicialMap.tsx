@@ -25,6 +25,8 @@ export default function TelaInicialMap() {
   const iniciarOpacity = useRef(new Animated.Value(1)).current;
   const confirmarOpacity = useRef(new Animated.Value(0)).current;
   const [mostrandoConfirmar, setMostrandoConfirmar] = useState(false);
+  const [emEntrega, setEmEntrega] = useState(false);
+  const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
   let lastHeight = MIN_HEIGHT;
 
   useEffect(() => {
@@ -42,8 +44,9 @@ export default function TelaInicialMap() {
         }
       }
 
-      const emEntrega = await SecureStore.getItemAsync('emEntrega');
-      if (emEntrega === 'true') {
+      const emEntregaStatus = await SecureStore.getItemAsync('emEntrega');
+      setEmEntrega(emEntregaStatus === 'true');
+      if (emEntregaStatus === 'true') {
         setMostrandoConfirmar(true);
         iniciarOpacity.setValue(0);
         confirmarOpacity.setValue(1);
@@ -54,6 +57,32 @@ export default function TelaInicialMap() {
     const interval = setInterval(verificarStatus, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    const checarUltimaEntrega = async () => {
+      const lista = await SecureStore.getItemAsync('pedidosCompletos');
+      const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+      if (lista && indiceAtualStr) {
+        const pedidos = JSON.parse(lista);
+        const indiceAtual = parseInt(indiceAtualStr, 10);
+        setIsUltimaEntrega(indiceAtual >= pedidos.length - 1);
+      } else {
+        setIsUltimaEntrega(false);
+      }
+    };
+    checarUltimaEntrega();
+  }, [mostrandoConfirmar]);
+
+  const finalizarRota = async () => {
+    await SecureStore.deleteItemAsync('emEntrega');
+    await SecureStore.deleteItemAsync('indiceAtual');
+    await SecureStore.deleteItemAsync('pedidosCompletos');
+    await SecureStore.deleteItemAsync('destinos');
+    setMostrandoConfirmar(false);
+    iniciarOpacity.setValue(1);
+    confirmarOpacity.setValue(0);
+    Alert.alert('Rota finalizada!', 'Todas as entregas foram concluídas.');
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -103,6 +132,10 @@ export default function TelaInicialMap() {
         telefone: '34 98312-8494',
         valor: 30.0,
         itens: ['Esfirra de Carne'],
+        quantidadePedidos: 1,
+        pago: false,
+        origem: 'ifood',
+        precisaCobrar: true,
         coordenadas: { latitude: -18.90634530461159, longitude: -48.21510163215173 },
         previsaoEntrega: '18:45',
         localizador: '',
@@ -116,6 +149,10 @@ export default function TelaInicialMap() {
         telefone: '0800 705 2030',
         valor: 0.05,
         itens: ['Molho de alho'],
+        quantidadePedidos: 5,
+        pago: true,
+        origem: 'estabelecimento',
+        precisaCobrar: false,
         coordenadas: { latitude: -18.908488035066984, longitude: -48.2158833365095 },
         previsaoEntrega: '',
         localizador: '98587969',
@@ -129,6 +166,10 @@ export default function TelaInicialMap() {
         telefone: '34 99399-8355',
         valor: 50.0,
         itens: ['Pizza Calabresa'],
+        quantidadePedidos: 10,
+        pago: false,
+        origem: 'ifood',
+        precisaCobrar: true,
         coordenadas: { latitude: -18.910364455064727, longitude: -48.21749894463129 },
         previsaoEntrega: '18:40',
         localizador: '',
@@ -142,6 +183,10 @@ export default function TelaInicialMap() {
         telefone: '34 98869-7955',
         valor: 40.0,
         itens: ['Macarrão à Bolonhesa'],
+        quantidadePedidos: 4,
+        pago: false,
+        origem: 'estabelecimento',
+        precisaCobrar: true,
         coordenadas: { latitude: -18.908455370640972, longitude: -48.21931968828666 },
         previsaoEntrega: '19:15',
         localizador: '',
@@ -155,12 +200,20 @@ export default function TelaInicialMap() {
         telefone: '34 98287-1378',
         valor: 55.0,
         itens: ['Feijoada Completa'],
+        quantidadePedidos: 7,
+        pago: false,
+        origem: 'estabelecimento',
+        precisaCobrar: false,
         coordenadas: { latitude: -18.90546969116638, longitude: -48.218424489322764 },
         previsaoEntrega: '19:10',
         localizador: '',
         horarioEntrega: '',
       },
     ];
+    // Limpa todos os status de código confirmado antes de iniciar
+    for (const pedido of PEDIDOS_COMPLETOS) {
+      await SecureStore.deleteItemAsync(`codigoConfirmado_${pedido.id_ifood}`);
+    }
 
     await SecureStore.setItemAsync('pedidosCompletos', JSON.stringify(PEDIDOS_COMPLETOS));
     await SecureStore.setItemAsync('destinos', JSON.stringify(PEDIDOS_COMPLETOS.map((p) => p.coordenadas)));
@@ -198,7 +251,7 @@ export default function TelaInicialMap() {
     }
     router.push({
       pathname: '/confirmacaoEntrega',
-      params: pedidoAtual ? { ...pedidoAtual } : {},
+      params: pedidoAtual ? { ...pedidoAtual, quantidadePedidos: pedidoAtual.quantidadePedidos } : {},
     });
   };
 
@@ -215,16 +268,16 @@ export default function TelaInicialMap() {
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
-      {!mostrandoConfirmar && (
-        <Animated.View style={[styles.floatingStartButton, { opacity: iniciarOpacity, transform: [{ scale: iniciarOpacity }] }]}>
+      {!emEntrega && (
+        <Animated.View style={[styles.floatingStartButton, { opacity: iniciarOpacity, transform: [{ scale: iniciarOpacity }] }]}> 
           <TouchableOpacity onPress={handleIniciar}>
             <Text style={styles.startButtonText}>INICIAR</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
 
-      {mostrandoConfirmar && (
-        <Animated.View style={[styles.confirmarButton, { opacity: confirmarOpacity, transform: [{ scale: confirmarOpacity }] }]}>
+      {emEntrega && (
+        <Animated.View style={[styles.confirmarButton, { opacity: confirmarOpacity, transform: [{ scale: confirmarOpacity }] }]}> 
           <TouchableOpacity onPress={handleConfirmar}>
             <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
           </TouchableOpacity>
