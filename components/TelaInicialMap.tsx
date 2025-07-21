@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
+import ModalConfirmarRota from './ModalConfirmarRota';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 80;
@@ -27,6 +28,7 @@ export default function TelaInicialMap() {
   const [mostrandoConfirmar, setMostrandoConfirmar] = useState(false);
   const [emEntrega, setEmEntrega] = useState(false);
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
+  const [modalRotaVisible, setModalRotaVisible] = useState(false);
   let lastHeight = MIN_HEIGHT;
 
   useEffect(() => {
@@ -258,6 +260,20 @@ export default function TelaInicialMap() {
   return (
     <View style={styles.container}>
       <Mapa />
+
+      {/* Botão para abrir o modal de confirmação de rota */}
+      <TouchableOpacity
+        style={{ position: 'absolute', top: 40, right: 20, backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, zIndex: 20 }}
+        onPress={() => setModalRotaVisible(true)}
+      >
+        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
+      </TouchableOpacity>
+
+      <ModalConfirmarRota
+        visible={modalRotaVisible}
+        onAceitar={() => setModalRotaVisible(false)}
+        onRecusar={() => setModalRotaVisible(false)}
+      />
 
       <TouchableOpacity style={styles.menuButton}>
         <Ionicons name="menu" size={24} color="#000" />
