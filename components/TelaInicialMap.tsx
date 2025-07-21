@@ -187,6 +187,21 @@ export default function TelaInicialMap() {
     });
   };
 
+  const handleConfirmar = async () => {
+    const lista = await SecureStore.getItemAsync('pedidosCompletos');
+    const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+    let pedidoAtual = null;
+    if (lista && indiceAtualStr) {
+      const pedidos = JSON.parse(lista);
+      const indiceAtual = parseInt(indiceAtualStr, 10);
+      pedidoAtual = pedidos[indiceAtual];
+    }
+    router.push({
+      pathname: '/confirmacaoEntrega',
+      params: pedidoAtual ? { ...pedidoAtual } : {},
+    });
+  };
+
   return (
     <View style={styles.container}>
       <Mapa />
@@ -210,7 +225,7 @@ export default function TelaInicialMap() {
 
       {mostrandoConfirmar && (
         <Animated.View style={[styles.confirmarButton, { opacity: confirmarOpacity, transform: [{ scale: confirmarOpacity }] }]}>
-          <TouchableOpacity onPress={() => router.push('/confirmacaoEntrega')}>
+          <TouchableOpacity onPress={handleConfirmar}>
             <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
           </TouchableOpacity>
         </Animated.View>

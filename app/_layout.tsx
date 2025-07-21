@@ -36,7 +36,6 @@ export default function RootLayout() {
     }
   }, [loaded]);
 
-  // ✅ Cria canal de notificação (Android 8+)
   useEffect(() => {
     Notifications.setNotificationChannelAsync('default', {
       name: 'default',
@@ -44,7 +43,6 @@ export default function RootLayout() {
     });
   }, []);
 
-  // ✅ Listener que abre o app na rota ao tocar na notificação
   useEffect(() => {
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const url = response.notification.request.content.data?.url as string;
@@ -74,6 +72,12 @@ function RootLayoutNav() {
       <Stack>
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+        
+        {/* ✅ Oculta o topo da tela confirmacaoEntrega */}
+        <Stack.Screen name="confirmacaoEntrega" options={{ headerShown: false }} />
+        
+        {/* Aqui você pode adicionar outras rotas normalmente */}
+        {/* <Stack.Screen name="outraTela" options={{ headerShown: true }} /> */}
       </Stack>
     </ThemeProvider>
   );
