@@ -15,10 +15,11 @@ import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
 import * as SecureStore from 'expo-secure-store';
 import ModalConfirmarRota from './ModalConfirmarRota';
+import PedidosDraggableList from './PedidosDraggableList';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MIN_HEIGHT = 80;
-const MAX_HEIGHT = SCREEN_HEIGHT * 0.5;
+const MIN_HEIGHT = 60;
+const MAX_HEIGHT = SCREEN_HEIGHT * 0.85; // 65% da altura da tela
 
 export default function TelaInicialMap() {
   const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
@@ -29,7 +30,16 @@ export default function TelaInicialMap() {
   const [emEntrega, setEmEntrega] = useState(false);
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
   const [modalRotaVisible, setModalRotaVisible] = useState(false);
+  const [painelNoTopo, setPainelNoTopo] = useState(false); // Novo estado
   let lastHeight = MIN_HEIGHT;
+
+  // Listener para saber se o painel está no topo
+  useEffect(() => {
+    const id = animatedHeight.addListener(({ value }) => {
+      setPainelNoTopo(value >= MAX_HEIGHT - 20); // margem de tolerância
+    });
+    return () => animatedHeight.removeListener(id);
+  }, [animatedHeight]);
 
   useEffect(() => {
     const verificarStatus = async () => {
@@ -262,18 +272,39 @@ export default function TelaInicialMap() {
       <Mapa />
 
       {/* Botão para abrir o modal de confirmação de rota */}
-      <TouchableOpacity
-        style={{ position: 'absolute', top: 40, right: 20, backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, zIndex: 20 }}
-        onPress={() => setModalRotaVisible(true)}
-      >
-        <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
-      </TouchableOpacity>
+      <View style={{ flexDirection: 'row', position: 'absolute', top: 40, right: 20, zIndex: 20, alignItems: 'center' }}>
+        {/* Botão INICIAR minimalista para teste */}
+        <TouchableOpacity
+          onPress={handleIniciar}
+          style={{
+            backgroundColor: '#2C79FF',
+            borderRadius: 12,
+            paddingVertical: 6,
+            paddingHorizontal: 10,
+            marginRight: 8,
+            elevation: 2,
+          }}
+        >
+          <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>INICIAR</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18 }}
+          onPress={() => setModalRotaVisible(true)}
+        >
+          <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
+        </TouchableOpacity>
+      </View>
 
-      <ModalConfirmarRota
-        visible={modalRotaVisible}
-        onAceitar={() => setModalRotaVisible(false)}
-        onRecusar={() => setModalRotaVisible(false)}
-      />
+      {modalRotaVisible && (
+  <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}>
+    <ModalConfirmarRota
+      visible={modalRotaVisible}
+      onAceitar={() => setModalRotaVisible(false)}
+      onRecusar={() => setModalRotaVisible(false)}
+    />
+  </View>
+)}
+
 
       <TouchableOpacity style={styles.menuButton}>
         <Ionicons name="menu" size={24} color="#000" />
@@ -284,24 +315,28 @@ export default function TelaInicialMap() {
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
-      {!emEntrega && (
-        <Animated.View style={[styles.floatingStartButton, { opacity: iniciarOpacity, transform: [{ scale: iniciarOpacity }] }]}> 
-          <TouchableOpacity onPress={handleIniciar}>
-            <Text style={styles.startButtonText}>INICIAR</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
+      {/* Botão só aparece quando o painel está no topo */}
       {emEntrega && (
-        <Animated.View style={[styles.confirmarButton, { opacity: confirmarOpacity, transform: [{ scale: confirmarOpacity }] }]}> 
-          <TouchableOpacity onPress={handleConfirmar}>
+        <Animated.View
+          style={[
+            styles.confirmarButton,
+            {
+              opacity: painelNoTopo ? confirmarOpacity : 0,
+              transform: [
+                { scale: painelNoTopo ? confirmarOpacity : 0.8 },
+              ],
+            },
+          ]}
+          pointerEvents={painelNoTopo ? 'auto' : 'none'}
+        >
+          <TouchableOpacity onPress={handleConfirmar} disabled={!painelNoTopo}>
             <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
           </TouchableOpacity>
         </Animated.View>
       )}
 
-      <Animated.View style={[styles.panel, { height: animatedHeight }]}>
-        <View style={styles.handle} {...panResponder.panHandlers}>
+      <Animated.View style={[styles.panel, { height: animatedHeight }]} {...panResponder.panHandlers}>
+        <View style={styles.handle}>
           <View style={styles.indicator} />
         </View>
 
@@ -309,6 +344,14 @@ export default function TelaInicialMap() {
           <Ionicons name="options" size={22} color="#fff" />
           <Text style={styles.bottomText}>Você está offline</Text>
           <Ionicons name="menu" size={22} color="#fff" />
+        </View>
+        {/* Lista de cards de pedidos com drag-and-drop */}
+        <PedidosDraggableList />
+                {/* Botão Iniciar Rota */}
+                <View style={{ padding: 16, backgroundColor: 'transparent', alignItems: 'center', position: 'absolute', bottom: 0, left: 0, right: 0 }}>
+          <TouchableOpacity style={styles.iniciarRotaButton}>
+            <Text style={styles.iniciarRotaButtonText}>Iniciar Rota</Text>
+          </TouchableOpacity>
         </View>
       </Animated.View>
     </View>
@@ -326,6 +369,21 @@ const styles = StyleSheet.create({
     borderRadius: 50,
     elevation: 5,
     zIndex: 10,
+  },
+  iniciarRotaButton: {
+    backgroundColor: '#2C79FF',
+    borderRadius: 24,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    marginTop: 8,
+  },
+  iniciarRotaButtonText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 16,
   },
   badge: {
     width: 8,

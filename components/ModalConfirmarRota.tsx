@@ -39,42 +39,48 @@ export default function ModalConfirmarRota({ visible, onAceitar, onRecusar, rota
   ];
 
   return (
-    <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.modalBox}>
-          {/* Valor principal */}
-          <Text style={styles.valor}>{valor}</Text>
+<Modal visible={visible} transparent animationType="fade">
+  <View style={styles.overlay}>
+    <View style={styles.modalBox}>
+      {/* Valor principal */}
+      <Text style={styles.valor}>{valor}</Text>
 
-          {/* Destinos */}
-          <View style={styles.destinosBox}>
-            {destinos.map((dest: Destino, idx: number) => (
-              <View key={idx} style={styles.destinoLinha}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-                  {dest.numeroPedido && (
-                    <Text style={styles.destinoPedido}>
-                      <MaterialCommunityIcons name="check-circle" size={16} color="#1ecb7b" /> Pedido {dest.numeroPedido}
-                    </Text>
-                  )}
-                  <Text style={[styles.destinoTempo, { color: dest.cor }]}>  {dest.tempo} ({dest.distancia})</Text>
-                  <Text style={styles.destinoBairro}>  • {dest.bairro ? dest.bairro : 'Sem bairro'}</Text>
-                </View>
-                <Text style={styles.destinoEndereco} numberOfLines={1}>{dest.endereco}</Text>
-              </View>
-            ))}
+      {/* Destinos */}
+      <View style={styles.destinosBox}>
+        {destinos.map((dest: Destino, idx: number) => (
+          <View key={idx} style={styles.destinoLinha}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+              {dest.numeroPedido && (
+                <Text style={styles.destinoPedido}>
+                  <MaterialCommunityIcons name="check-circle" size={16} color="#1ecb7b" /> Pedido {dest.numeroPedido}
+                </Text>
+              )}
+              <Text style={[styles.destinoTempo, { color: dest.cor }]}>
+                {'  '}{dest.tempo} ({dest.distancia})
+              </Text>
+              <Text style={styles.destinoBairro}>
+                {'  • '}{dest.bairro || 'Sem bairro'}
+              </Text>
+            </View>
+            <Text style={styles.destinoEndereco} numberOfLines={1}>{dest.endereco}</Text>
           </View>
-
-          {/* Botões */}
-          <View style={styles.botoesRow}>
-            <TouchableOpacity style={styles.botaoRecusar} onPress={onRecusar}>
-              <Text style={styles.textoRecusar}>Recusar</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.botaoAceitar} onPress={onAceitar}>
-              <Text style={styles.textoAceitar}>Aceitar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        ))}
       </View>
-    </Modal>
+
+      {/* Botões */}
+      <View style={styles.botoesRow}>
+        <TouchableOpacity style={styles.botaoRecusar} onPress={onRecusar}>
+          <Text style={styles.textoRecusar}>Recusar</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.botaoAceitar} onPress={onAceitar}>
+          <Text style={styles.textoAceitar}>Aceitar</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </View>
+</Modal>
+
+
   );
 }
 
@@ -82,7 +88,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
+    justifyContent: 'center',   // parte inferior da tela
     alignItems: 'center',
   },
   modalBox: {
@@ -93,6 +99,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 10,
   },
+  
   valor: {
     color: '#fff',
     fontSize: 32,
