@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text,StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 
@@ -7,90 +7,26 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-const pedidosMock = [
-  {
-    id: 123,
-    cliente: 'Rafael Andrade',
-    pagamento: 'Pix',
-    statusPagamento: 'pago', // 'pago' ou 'a_receber'
-    valorTotal: 32.00,
-    endereco: 'R. das Flores, 123',
-    bairro: 'Centro',
-    distanciaKm: 1.8,
-    horario: '20:30',
-    troco: 'R$50',
-    itens: [
-      { nome: 'X-Burguer', tipo: 'comida', quantidade: 1, valor: 18 },
-      { nome: 'Coca 2L', tipo: 'bebida', quantidade: 1, valor: 10 },
-      { nome: 'Batata Frita', tipo: 'comida', quantidade: 1, valor: 4 },
-    ],
-  },
-  {
-    id: 124,
-    cliente: 'Maria Souza',
-    pagamento: 'Dinheiro',
-    statusPagamento: 'a_receber',
-    valorTotal: 15.00,
-    endereco: 'R. Amazonas, 124',
-    bairro: 'Jardim América',
-    distanciaKm: 2.6,
-    horario: '19:22',
-    troco: 'R$10',
-    itens: [
-      { nome: 'Guaraná', tipo: 'bebida', quantidade: 1, valor: 7 },
-      { nome: 'Água', tipo: 'bebida', quantidade: 2, valor: 4 },
-    ],
-  },
-  {
-    id: 125,
-    cliente: 'João Pedro',
-    pagamento: 'Crédito',
-    statusPagamento: 'pago',
-    valorTotal: 8.00,
-    endereco: 'R. Fortaleza, 100',
-    bairro: 'Santa Mônica',
-    distanciaKm: 0.9,
-    horario: '20:00',
-    troco: '',
-    itens: [
-      { nome: 'Sprite', tipo: 'bebida', quantidade: 1, valor: 8 },
-    ],
-  },
-  {
-    id: 126,
-    cliente: 'Ana Paula',
-    pagamento: 'Débito',
-    statusPagamento: 'a_receber',
-    valorTotal: 14.00,
-    endereco: 'R. Angola, 107',
-    bairro: 'Tabajaras',
-    distanciaKm: 3.2,
-    horario: '19:55',
-    troco: '',
-    itens: [
-      { nome: 'Fanta', tipo: 'bebida', quantidade: 1, valor: 8 },
-      { nome: 'Porção de Nuggets', tipo: 'comida', quantidade: 1, valor: 6 },
-    ],
-  },
-  {
-    id: 127,
-    cliente: 'Carlos Lima',
-    pagamento: 'Pix',
-    statusPagamento: 'pago',
-    valorTotal: 12.00,
-    endereco: 'R. das Pedras, 127',
-    bairro: 'Centro',
-    distanciaKm: 2.1,
-    horario: '21:10',
-    troco: '',
-    itens: [
-      { nome: 'Coca L.', tipo: 'bebida', quantidade: 1, valor: 12 },
-    ],
-  },
-];
-
-type Pedido = typeof pedidosMock[0];
 type ItemPedido = { nome: string; tipo: 'comida' | 'bebida'; quantidade: number; valor: number };
+
+type Pedido = {
+  id: number;
+  cliente: string;
+  pagamento: string;
+  statusPagamento: 'pago' | 'a_receber';
+  valorTotal: number;
+  endereco: string;
+  bairro: string;
+  distanciaKm: number;
+  horario: string;
+  troco: string;
+  itens: ItemPedido[];
+};
+
+type Props = {
+  pedidos: Pedido[];
+  onAtualizarPedidosAceitos: (pedidos: Pedido[]) => void;
+};
 
 const getPagamentoColor = (pagamento: string, status: string) => {
   if (status === 'pago') return '#4CAF50';
@@ -118,8 +54,8 @@ const getItemIcon = (tipo: string) => {
   return <MaterialCommunityIcons name="cup" size={16} color="#aaa" style={{ marginRight: 6 }} />;
 };
 
-export default function PedidosDraggableList() {
-  const [data, setData] = useState<Pedido[]>(pedidosMock);
+export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceitos }: Props) {
+  const [data, setData] = useState<Pedido[]>(pedidos);
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   const handleExpand = (id: number) => {
@@ -150,7 +86,6 @@ export default function PedidosDraggableList() {
               <View style={styles.dot} />
               <Ionicons name="person-outline" size={13} color="#999" style={styles.infoIcon} />
               <Text style={styles.cardCliente}>{item.cliente}</Text>
-
               <View style={styles.dot} />
               <Ionicons name="time-outline" size={13} color="#999" style={styles.infoIcon} />
               <Text style={styles.cardHorario}>{item.horario}</Text>
@@ -161,25 +96,23 @@ export default function PedidosDraggableList() {
             <View style={styles.infoRowCompact}>
               <Ionicons name="location-outline" size={15} color="#999" style={styles.infoIcon} />
               <Text style={styles.cardEndereco}>{item.endereco} - {item.bairro}</Text>
-
             </View>
             <View style={styles.infoRowCompact}>
-  {item.troco ? (
-    <>
-      <Ionicons name="cash-outline" size={14} color="#FF7043" style={styles.infoIcon} />
-      <Text style={styles.cardTroco}>Troco {item.troco}</Text>
-      <View style={styles.dot} />
-    </>
-  ) : null}
+              {item.troco ? (
+                <>
+                  <Ionicons name="cash-outline" size={14} color="#FF7043" style={styles.infoIcon} />
+                  <Text style={styles.cardTroco}>Troco {item.troco}</Text>
+                  <View style={styles.dot} />
+                </>
+              ) : null}
 
-  {getPagamentoIcon(item.pagamento)}
-  <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento), marginRight: 6 }]}>
-    {item.pagamento}
-  </Text>
+              {getPagamentoIcon(item.pagamento)}
+              <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento), marginRight: 6 }]}>
+                {item.pagamento}
+              </Text>
 
-  {getStatusSelo(item.statusPagamento)}
-</View>
-
+              {getStatusSelo(item.statusPagamento)}
+            </View>
           </View>
           <View style={styles.iconsRight}>
             <TouchableOpacity>
@@ -188,17 +121,17 @@ export default function PedidosDraggableList() {
             <Ionicons name="reorder-three-outline" size={22} color="#666" style={{ marginLeft: 10 }} />
           </View>
         </View>
-        {/* Detalhes dos itens do pedido */}
+
         {isExpanded && (
-          <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento) }]}> 
+          <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento) }]}>
             <Text style={styles.itensTitle}>Itens do pedido:</Text>
             {item.itens.map((it, idx) => (
               <View key={idx} style={styles.itemLinha}>
-                {getItemIcon((it as ItemPedido).tipo)}
-                <Text style={styles.itemNome}>{(it as ItemPedido).nome}</Text>
-                <Text style={styles.itemQtd}>x{(it as ItemPedido).quantidade}</Text>
+                {getItemIcon(it.tipo)}
+                <Text style={styles.itemNome}>{it.nome}</Text>
+                <Text style={styles.itemQtd}>x{it.quantidade}</Text>
                 <MaterialCommunityIcons name="currency-usd" size={15} color="#4CAF50" style={{ marginLeft: 10, marginRight: 2 }} />
-                <Text style={styles.itemValor}>R${((it as ItemPedido).valor * (it as ItemPedido).quantidade).toFixed(2)}</Text>
+                <Text style={styles.itemValor}>R${(it.valor * it.quantidade).toFixed(2)}</Text>
               </View>
             ))}
           </View>
@@ -210,7 +143,10 @@ export default function PedidosDraggableList() {
   return (
     <DraggableFlatList
       data={data}
-      onDragEnd={({ data }) => setData(data)}
+      onDragEnd={({ data }) => {
+        setData(data);
+        onAtualizarPedidosAceitos(data);
+      }}
       keyExtractor={item => item.id.toString()}
       renderItem={renderItem}
       contentContainerStyle={{ padding: 14, paddingBottom: 60 }}
@@ -218,6 +154,7 @@ export default function PedidosDraggableList() {
     />
   );
 }
+
 
 const styles = StyleSheet.create({
   card: {

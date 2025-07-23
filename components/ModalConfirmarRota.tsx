@@ -1,8 +1,18 @@
-import React from 'react';
 import { View, Text, Modal, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
-import { Ionicons, MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
+import React from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const { width } = Dimensions.get('window');
+
+type Pedido = {
+  id_ifood: string;
+  nome: string;
+  endereco: string;
+  bairro?: string;
+  valor?: number;
+  previsaoEntrega?: string;
+  coordenadas?: { latitude: number; longitude: number };
+};
 
 type Destino = {
   tempo: string;
@@ -16,71 +26,66 @@ type Destino = {
 
 type ModalConfirmarRotaProps = {
   visible: boolean;
-  onAceitar: () => void;
+  onAceitar: (pedidos: Pedido[]) => void;
   onRecusar: () => void;
-  rota?: {
-    valor?: string;
-    valorKm?: string;
-    bonus?: string;
-    taxa?: string;
-    corridas?: string;
-    nota?: string;
-    perfil?: string;
-    destinos?: Destino[];
-  };
+  pedidos: Pedido[];
 };
 
-export default function ModalConfirmarRota({ visible, onAceitar, onRecusar, rota }: ModalConfirmarRotaProps) {
-  // Exemplo de dados mockados, pode receber via props
-  const valor = rota?.valor || 'R$20,00';
-  const destinos: Destino[] = rota?.destinos || [
-    { tempo: '5min', distancia: '1,8km', endereco: 'R Julien Fauvel 145 Nucleo Res Silvio Vilari, Nucleo Residencial Si...', cor: '#1ecb7b', numeroPedido: '2517', bairro: 'Santa Mônica', valor: '7,60' },
-    { tempo: '7min', distancia: '2,6km', endereco: 'R. São Sebastião, 2467 , Santa Monica', cor: '#1ecb7b', numeroPedido: '2518', bairro: 'Santa Monica', valor: '8,20' },
-  ];
+export default function ModalConfirmarRota({ visible, onAceitar, onRecusar, pedidos }: ModalConfirmarRotaProps) {
+  const destinos: Destino[] = pedidos.map((pedido) => ({
+    tempo: pedido.previsaoEntrega || '5min',
+    distancia: '1km',
+    endereco: pedido.endereco,
+    cor: '#1ecb7b',
+    numeroPedido: pedido.id_ifood,
+    bairro: pedido.bairro || 'Sem bairro',
+    valor: pedido.valor?.toFixed(2).replace('.', ',') || '',
+  }));
+
+  const valorTotal = pedidos.reduce((acc, p) => acc + (p.valor || 0), 0);
+  const valorFormatado = `R$${valorTotal.toFixed(2).replace('.', ',')}`;
 
   return (
-<Modal visible={visible} transparent animationType="fade">
-  <View style={styles.overlay}>
-    <View style={styles.modalBox}>
-      {/* Valor principal */}
-      <Text style={styles.valor}>{valor}</Text>
+    <Modal visible={visible} transparent animationType="fade">
+      <View style={styles.overlay}>
+        <View style={styles.modalBox}>
+          {/* Valor principal */}
+          <Text style={styles.valor}>{valorFormatado}</Text>
 
-      {/* Destinos */}
-      <View style={styles.destinosBox}>
-        {destinos.map((dest: Destino, idx: number) => (
-          <View key={idx} style={styles.destinoLinha}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
-              {dest.numeroPedido && (
-                <Text style={styles.destinoPedido}>
-                  <MaterialCommunityIcons name="check-circle" size={16} color="#1ecb7b" /> Pedido {dest.numeroPedido}
-                </Text>
-              )}
-              <Text style={[styles.destinoTempo, { color: dest.cor }]}>
-                {'  '}{dest.tempo} ({dest.distancia})
-              </Text>
-              <Text style={styles.destinoBairro}>
-                {'  • '}{dest.bairro || 'Sem bairro'}
-              </Text>
-            </View>
-            <Text style={styles.destinoEndereco} numberOfLines={1}>{dest.endereco}</Text>
+          {/* Destinos */}
+          <View style={styles.destinosBox}>
+            {destinos.map((dest: Destino, idx: number) => (
+              <View key={idx} style={styles.destinoLinha}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+                  {dest.numeroPedido && (
+                    <Text style={styles.destinoPedido}>
+                      <MaterialCommunityIcons name="check-circle" size={16} color="#1ecb7b" /> Pedido {dest.numeroPedido}
+                    </Text>
+                  )}
+                  <Text style={[styles.destinoTempo, { color: dest.cor }]}>
+                    {'  '}{dest.tempo} ({dest.distancia})
+                  </Text>
+                  <Text style={styles.destinoBairro}>
+                    {'  • '}{dest.bairro}
+                  </Text>
+                </View>
+                <Text style={styles.destinoEndereco} numberOfLines={1}>{dest.endereco}</Text>
+              </View>
+            ))}
           </View>
-        ))}
+
+          {/* Botões */}
+          <View style={styles.botoesRow}>
+            <TouchableOpacity style={styles.botaoRecusar} onPress={onRecusar}>
+              <Text style={styles.textoRecusar}>Recusar</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.botaoAceitar} onPress={() => onAceitar(pedidos)}>
+              <Text style={styles.textoAceitar}>Aceitar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
-
-      {/* Botões */}
-      <View style={styles.botoesRow}>
-        <TouchableOpacity style={styles.botaoRecusar} onPress={onRecusar}>
-          <Text style={styles.textoRecusar}>Recusar</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.botaoAceitar} onPress={onAceitar}>
-          <Text style={styles.textoAceitar}>Aceitar</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  </View>
-</Modal>
-
-
+    </Modal>
   );
 }
 
@@ -88,7 +93,7 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',   // parte inferior da tela
+    justifyContent: 'center',
     alignItems: 'center',
   },
   modalBox: {
@@ -99,67 +104,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 10,
   },
-  
   valor: {
     color: '#fff',
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 2,
-  },
-  valorKm: {
-    color: '#bdbdbd',
-    fontSize: 16,
-    marginBottom: 10,
-  },
-  indicadoresRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-  },
-  indicadorAtivo: {
-    backgroundColor: '#23232b',
-    borderBottomWidth: 2,
-    borderBottomColor: '#ffd600',
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginRight: 8,
-  },
-  indicadorAtivoTexto: {
-    color: '#ffd600',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  indicadorInativo: {
-    backgroundColor: '#23232b',
-    paddingHorizontal: 14,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  indicadorInativoTexto: {
-    color: '#ffb300',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
-  corridasRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  nota: {
-    color: '#fff',
-    fontWeight: 'bold',
-    marginRight: 6,
-    fontSize: 14,
-  },
-  corridas: {
-    color: '#bdbdbd',
-    marginRight: 6,
-    fontSize: 14,
-  },
-  perfil: {
-    color: '#4a90e2',
-    fontWeight: 'bold',
-    fontSize: 14,
   },
   destinosBox: {
     width: '100%',
@@ -169,19 +118,32 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   destinoLinha: {
-    flexDirection: 'column', // Changed to column for stacked layout
+    flexDirection: 'column',
     marginBottom: 2,
     paddingVertical: 2,
+  },
+  destinoPedido: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 15,
+    marginRight: 6,
+    alignItems: 'center',
+    flexDirection: 'row',
   },
   destinoTempo: {
     fontWeight: 'bold',
     fontSize: 14,
     marginRight: 6,
   },
+  destinoBairro: {
+    color: '#bdbdbd',
+    fontSize: 13,
+    marginLeft: 4,
+  },
   destinoEndereco: {
     color: '#fff',
     fontSize: 13,
-    marginTop: 2, // Added margin top for spacing
+    marginTop: 2,
   },
   botoesRow: {
     flexDirection: 'row',
@@ -216,23 +178,4 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 16,
   },
-  destinoPedido: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 15,
-    marginRight: 6,
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-  destinoBairro: {
-    color: '#bdbdbd',
-    fontSize: 13,
-    marginLeft: 4,
-  },
-  destinoValor: {
-    color: '#1ecb7b',
-    fontWeight: 'bold',
-    fontSize: 13,
-    marginLeft: 4,
-  },
-}); 
+});

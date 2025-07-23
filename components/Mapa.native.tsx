@@ -1,93 +1,149 @@
-import React, { useEffect, useRef, useState } from 'react';
-import MapView, { Marker } from 'react-native-maps';
-import * as Location from 'expo-location';
-import * as SecureStore from 'expo-secure-store';
-import { StyleSheet } from 'react-native';
+// components/Mapa.native.tsx
 
-export default function Mapa() {
-  const [destinoAtual, setDestinoAtual] = useState<{ latitude: number; longitude: number } | null>(null);
+import React, { useEffect, useRef, useState } from 'react';
+import MapView, { Marker, Region } from 'react-native-maps';
+import * as SecureStore from 'expo-secure-store';
+import { StyleSheet, Text, View } from 'react-native';
+
+type Pedido = {
+  id: number;
+  id_ifood: number;
+  endereco: string;
+  bairro?: string;
+  cliente: string;
+  distanciaKm: number;
+  horario: string;
+  pagamento: string;
+  statusPagamento: string;
+  valorTotal: number;
+  troco: string;
+  coordinates: {
+    latitude: number;
+    longitude: number;
+  };
+  itens: {
+    nome: string;
+    tipo: string;
+    quantidade: number;
+    valor: number;
+  }[];
+};
+
+type Props = {
+  pedidos: Pedido[];
+  emEntrega: boolean;
+};
+
+export default function Mapa({ pedidos, emEntrega }: Props) {
+  const [destinoCoords, setDestinoCoords] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [indiceAtual, setIndiceAtual] = useState<number>(0);
   const [entregasFinalizadas, setEntregasFinalizadas] = useState(false);
   const mapRef = useRef<MapView>(null);
 
+  // Carrega destino atual e índice da rota
   useEffect(() => {
-    const carregarDestino = async () => {
-      try {
-        const rawDestinos = await SecureStore.getItemAsync('destinos');
-        const indice = parseInt(await SecureStore.getItemAsync('indiceAtual') || '0', 10);
-
-        if (rawDestinos) {
-          const destinos = JSON.parse(rawDestinos);
-          if (indice >= destinos.length) {
-            setEntregasFinalizadas(true); // Todas as entregas foram feitas
-            setDestinoAtual(null); // Limpa marcador
-          } else {
-            setDestinoAtual(destinos[indice]);
-          }
+    async function carregarDestino() {
+      const rawDestinos = await SecureStore.getItemAsync('destinos');
+      const rawIndice = await SecureStore.getItemAsync('indiceAtual');
+      const idx = parseInt(rawIndice || '0', 10);
+      if (rawDestinos) {
+        const destinos: { latitude: number; longitude: number }[] = JSON.parse(rawDestinos);
+        if (idx >= destinos.length) {
+          setEntregasFinalizadas(true);
+          setDestinoCoords(null);
+        } else {
+          setIndiceAtual(idx);
+          setDestinoCoords(destinos[idx]);
         }
-      } catch (e) {
-        console.log('[MAPA] Erro ao carregar destino:', e);
       }
-    };
+    }
 
     carregarDestino();
-    const interval = setInterval(carregarDestino, 5000);
-
-    return () => clearInterval(interval);
+    const iv = setInterval(carregarDestino, 5000);
+    return () => clearInterval(iv);
   }, []);
 
-  const focarNoMotoboy = (location: Location.LocationObject) => {
-    mapRef.current?.animateToRegion({
-      latitude: location.coords.latitude,
-      longitude: location.coords.longitude,
-      latitudeDelta: 0.003,
-      longitudeDelta: 0.003,
-    });
-  };
+  // Quando todas as entregas terminam, limpa o marcador
+  useEffect(() => {
+    if (entregasFinalizadas) {
+      setDestinoCoords(null);
+    }
+  }, [entregasFinalizadas]);
+
+  // Pedido atual pelo índice
+  const pedidoAtual = pedidos[indiceAtual];
 
   return (
     <MapView
       ref={mapRef}
       style={StyleSheet.absoluteFillObject}
       initialRegion={{
-        latitude: destinoAtual?.latitude || -18.91899,
-        longitude: destinoAtual?.longitude || -48.24674,
+        latitude: destinoCoords?.latitude ?? -18.91899,
+        longitude: destinoCoords?.longitude ?? -48.24674,
         latitudeDelta: 0.003,
         longitudeDelta: 0.003,
       }}
       showsUserLocation
-      onUserLocationChange={(event) => {
-        const loc = event.nativeEvent.coordinate;
-        if (!loc) return;
-      
-        const region = {
-          latitude: loc.latitude,
-          longitude: loc.longitude,
+      onUserLocationChange={e => {
+        const coord = e.nativeEvent.coordinate;
+        if (!coord) return;
+        mapRef.current?.animateToRegion({
+          latitude: coord.latitude,
+          longitude: coord.longitude,
           latitudeDelta: 0.003,
           longitudeDelta: 0.003,
-        };
-      
-        mapRef.current?.animateToRegion(region);
-      
-        // Só centraliza no final da rota uma vez
-        if (entregasFinalizadas) {
-          mapRef.current?.animateToRegion(region);
-          setEntregasFinalizadas(false);
-        }
+        });
       }}
-      
-      
-      
     >
-      {destinoAtual && (
+      {/* Antes de iniciar rota: mostra todos os destinos em sequência */}
+      {!emEntrega && pedidos.map((p, i) => (
         <Marker
-          coordinate={{
-            latitude: destinoAtual.latitude,
-            longitude: destinoAtual.longitude,
-          }}
-          title="Próxima Entrega"
-          description="Destino atual"
-        />
+          key={p.id}
+          coordinate={p.coordinates}
+          title={`Pedido #${p.id_ifood}`}
+        >
+          <View style={styles.seqMarker}>
+            <Text style={styles.seqText}>{i + 1}</Text>
+          </View>
+        </Marker>
+      ))}
+
+      {/* Depois de iniciar rota: mostra apenas o próximo destino */}
+      {emEntrega && destinoCoords && pedidoAtual && (
+        <Marker coordinate={destinoCoords}>
+          <View style={styles.markerIdBox}>
+            <Text style={styles.markerIdText}>#{pedidoAtual.id_ifood}</Text>
+          </View>
+        </Marker>
       )}
     </MapView>
   );
 }
+
+const styles = StyleSheet.create({
+  seqMarker: {
+    backgroundColor: '#1ecb7b',
+    padding: 6,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  seqText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  markerIdBox: {
+    backgroundColor: '#1ecb7b',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: '#fff',
+  },
+  markerIdText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+});
