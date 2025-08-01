@@ -130,7 +130,9 @@ export default function TelaInicialMap() {
   const [modalRotaVisible, setModalRotaVisible] = useState(false);
   const [painelNoTopo, setPainelNoTopo] = useState(false);
   const [online, setOnline] = useState(false);
-  const [pedidosAceitos, setPedidosAceitos] = useState<any[]>(pedidosMock);
+  const [pedidosAceitos, setPedidosAceitos] = useState<any[]>([]);
+  const [organizandoRota, setOrganizandoRota] = useState(false);
+
   let lastHeight = MIN_HEIGHT;
 
   const handleIniciarRota = async () => {
@@ -153,6 +155,8 @@ export default function TelaInicialMap() {
     setMostrandoConfirmar(true);
     iniciarOpacity.setValue(0);       // <<-- esconde o botão início
     confirmarOpacity.setValue(1);     // <<-- mostra o botão confirmar entrega
+    setOrganizandoRota(false);
+
 
     Alert.alert('Rota iniciada', 'Agora você está em rota de entrega!');
   };
@@ -219,6 +223,9 @@ export default function TelaInicialMap() {
     setMostrandoConfirmar(false);
     iniciarOpacity.setValue(1);
     confirmarOpacity.setValue(0);
+    if ((Location as any).stopLocationUpdatesAsync) {
+      await (Location as any).stopLocationUpdatesAsync('background-location-task');
+    }
     Alert.alert('Rota finalizada!', 'Todas as entregas foram concluídas.');
   };
 
@@ -265,11 +272,13 @@ export default function TelaInicialMap() {
     setOnline(true);
     Alert.alert('Você está online!', 'Agora pode receber pedidos.');
   };
-  const handleAceitarPedido = (pedido: any) => {
-    const novosPedidos = [...pedidosAceitos, pedido];
+  const handleAceitarPedido = (pedidosRecebidos: any[]) => {
+    const novosPedidos = [...pedidosRecebidos]; // sobrescreve a lista
     setPedidosAceitos(novosPedidos);
     setModalRotaVisible(false);
+    setOrganizandoRota(true);
   };
+
 
   const handleRecusar = () => {
     setModalRotaVisible(false);
@@ -290,13 +299,14 @@ export default function TelaInicialMap() {
       params: pedidoAtual ? { ...pedidoAtual, quantidadePedidos: pedidoAtual.quantidadePedidos } : {},
     });
   };
+  console.log("tamano do s pedidos ", pedidosAceitos.length)
 
   return (
     <View style={styles.container}>
-      <Mapa
-        pedidos={pedidosAceitos}
-        emEntrega={emEntrega}
-      />
+      <Mapa pedidos={pedidosAceitos.length > 0 && (emEntrega || organizandoRota) ? pedidosAceitos : []} emEntrega={emEntrega} />
+
+
+
 
       <View style={{ flexDirection: 'row', position: 'absolute', top: 40, right: 20, zIndex: 20, alignItems: 'center' }}>
         {!online && (
@@ -315,12 +325,25 @@ export default function TelaInicialMap() {
           </TouchableOpacity>
         )}
         {online && (
-          <TouchableOpacity
-            style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18 }}
-            onPress={() => setModalRotaVisible(true)}
-          >
-            <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
-          </TouchableOpacity>
+          <>
+            <TouchableOpacity
+              style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, marginRight: 10 }}
+              onPress={() => setModalRotaVisible(true)}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{ backgroundColor: '#ff4444', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18 }}
+              onPress={async () => {
+                await SecureStore.setItemAsync('online', 'false');
+                setOnline(false);
+                Alert.alert('Status atualizado', 'Você está agora offline.');
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Ficar Offline</Text>
+            </TouchableOpacity>
+          </>
         )}
       </View>
 
@@ -330,9 +353,8 @@ export default function TelaInicialMap() {
             visible={true}
             onAceitar={handleAceitarPedido}
             onRecusar={handleRecusar}
-            pedidos={pedidosAceitos}
+            pedidos={pedidosMock}
           />
-
         </View>
       )}
 
@@ -345,27 +367,26 @@ export default function TelaInicialMap() {
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
-{/* botão “CONFIRMAR PEDIDO” animado acima da barra */}
-{emEntrega && (
-  <Animated.View
-    style={[
-      styles.confirmarButton,
-      {
-        bottom: animatedHeight,              // acompanha a altura da barra
-        opacity: animatedHeight.interpolate({
-          inputRange: [MIN_HEIGHT, MIN_HEIGHT + 50],
-          outputRange: [1, 0],
-          extrapolate: 'clamp',
-        }),
-      },
-    ]}
-    pointerEvents="auto"
-  >
-    <TouchableOpacity onPress={handleConfirmar}>
-      <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
-    </TouchableOpacity>
-  </Animated.View>
-)}
+      {emEntrega && (
+        <Animated.View
+          style={[
+            styles.confirmarButton,
+            {
+              bottom: animatedHeight,
+              opacity: animatedHeight.interpolate({
+                inputRange: [MIN_HEIGHT, MIN_HEIGHT + 50],
+                outputRange: [1, 0],
+                extrapolate: 'clamp',
+              }),
+            },
+          ]}
+          pointerEvents="auto"
+        >
+          <TouchableOpacity onPress={handleConfirmar}>
+            <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
+          </TouchableOpacity>
+        </Animated.View>
+      )}
 
 
       <Animated.View style={[styles.panel, { height: animatedHeight }]} {...panResponder.panHandlers}>
@@ -375,35 +396,59 @@ export default function TelaInicialMap() {
 
         <View style={styles.sheetRow}>
           <Ionicons name="options" size={22} color="#fff" />
-          <Text style={styles.bottomText}>{online ? 'Disponível para entregas' : 'Você está offline'}</Text>
-          <Ionicons name="menu" size={22} color="#fff" />
+          <Text style={styles.bottomText}>
+            {!online
+              ? 'Você está offline'
+              : organizandoRota
+                ? 'Organize sua rota de entrega'
+                : 'Disponível para entregas'}
+          </Text>
+
+          <TouchableOpacity
+            onPress={() => {
+              const destino = painelNoTopo ? MIN_HEIGHT : MAX_HEIGHT;
+              Animated.spring(animatedHeight, {
+                toValue: destino,
+                useNativeDriver: false,
+              }).start();
+            }}
+          >
+            <Ionicons name="menu" size={22} color="#fff" />
+          </TouchableOpacity>
         </View>
 
-        <PedidosDraggableList
-          pedidos={pedidosAceitos}
-          onAtualizarPedidosAceitos={setPedidosAceitos}
-        />
+        {online && (organizandoRota || emEntrega) && (
+          <PedidosDraggableList
+            pedidos={pedidosAceitos}
+            onAtualizarPedidosAceitos={setPedidosAceitos}
+          />
+        )}
 
-        {pedidosAceitos.length > 0 && (
+
+
+        {organizandoRota && pedidosAceitos.length > 0 && (
           <Animated.View
-            style={{
-              opacity: iniciarOpacity,
-              alignItems: 'center',
-              position: 'absolute',
-              bottom: 16,
-              left: 0,
-              right: 0,
-            }}
+            style={[
+              styles.fixedFooter,
+              {
+                opacity: animatedHeight.interpolate({
+                  inputRange: [MIN_HEIGHT, MIN_HEIGHT + 40],
+                  outputRange: [0, 1],
+                  extrapolate: 'clamp',
+                }),
+              },
+            ]}
+            pointerEvents="auto"
           >
             <TouchableOpacity style={styles.iniciarRotaButton} onPress={handleIniciarRota}>
               <Text style={styles.iniciarRotaButtonText}>Iniciar Rota</Text>
             </TouchableOpacity>
           </Animated.View>
-
         )}
       </Animated.View>
     </View>
   );
+
 
 
 
@@ -421,6 +466,16 @@ const styles = StyleSheet.create({
     elevation: 5,
     zIndex: 10,
   },
+  fixedFooter: {
+    position: 'absolute',
+    bottom: 36,
+    left: 16,
+    right: 16,
+    zIndex: 50,
+    alignItems: 'center',
+  },
+
+
   iniciarRotaButton: {
     backgroundColor: '#2C79FF',
     borderRadius: 24,
@@ -461,18 +516,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   confirmarButton: {
-      position: 'absolute',
-       alignSelf: 'center',
-       backgroundColor: '#4CAF50',
-       width: 160,
-       height: 48,
-       borderRadius: 24,
-       alignItems: 'center',
-       justifyContent: 'center',
-       elevation: 8,
-       zIndex: 10,
-     },
-    
+    position: 'absolute',
+    alignSelf: 'center',
+    backgroundColor: '#4CAF50',
+    width: 160,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 8,
+    zIndex: 10,
+  },
+
   startButtonText: {
     color: '#fff',
     fontWeight: 'bold',

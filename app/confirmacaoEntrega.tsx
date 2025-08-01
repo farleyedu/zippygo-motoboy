@@ -30,6 +30,7 @@ export default function ConfirmacaoEntrega() {
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
   const quantidadePedidos = parseInt(params.quantidadePedidos as string, 10) || 1;
   const [expandido, setExpandido] = useState(false);
+  const podeLiberar = (origem !== 'ifood' || codigoConfirmado) && (!precisaCobrar || pagamentoConfirmado);
 
   // Extrai dados do pedido dos params
   const nomeCliente = params.nome || 'Cliente';
@@ -211,7 +212,7 @@ export default function ConfirmacaoEntrega() {
           <Ionicons name="chatbubble-ellipses-outline" size={24} color="#000" />
         </TouchableOpacity>
       </View>
-
+  
       {/* Modal de chat */}
       <Modal transparent visible={modalVisible} animationType="fade">
         <TouchableOpacity style={styles.overlay} onPress={() => setModalVisible(false)}>
@@ -225,7 +226,7 @@ export default function ConfirmacaoEntrega() {
           </View>
         </TouchableOpacity>
       </Modal>
-
+  
       {/* Endereço */}
       <View style={styles.cardEnderecoNovo}>
         <View style={styles.topoEndereco}>
@@ -243,7 +244,7 @@ export default function ConfirmacaoEntrega() {
           </TouchableOpacity>
         </View>
       </View>
-
+  
       {/* Aviso de solicitação de código */}
       {origem === 'ifood' && (
         <View style={styles.alertaCodigo}>
@@ -251,10 +252,9 @@ export default function ConfirmacaoEntrega() {
           <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
         </View>
       )}
-
+  
       {/* Cliente/Pedido */}
       <View style={styles.cardCliente}>
-
         <View style={styles.linhaTopo}>
           <View>
             <Text style={styles.nomeCliente}>{nomeCliente}</Text>
@@ -295,6 +295,7 @@ export default function ConfirmacaoEntrega() {
             </TouchableOpacity>
           </View>
         </View>
+  
         {expandido ? (
           <View style={styles.detalhesPedido}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
@@ -311,19 +312,33 @@ export default function ConfirmacaoEntrega() {
             </View>
             <View style={styles.detalheLinha}>
               <FontAwesome name="list" size={16} color="#888" style={{ marginRight: 6 }} />
-              <Text style={styles.detalheLabel}>Itens: <Text style={styles.detalheValor}>{Array.isArray(params.itens) ? params.itens.join(', ') : params.itens}</Text></Text>
+              <Text style={styles.detalheLabel}>
+                Itens:{' '}
+                <Text style={styles.detalheValor}>
+                  {Array.isArray(params.itens)
+                    ? params.itens.map((item: any, idx: number) =>
+                        typeof item === 'string'
+                          ? item
+                          : item?.nome || `Item ${idx + 1}`
+                      ).join(', ')
+                    : params.itens}
+                </Text>
+              </Text>
             </View>
             {params.previsaoEntrega && (
               <View style={styles.detalheLinha}>
                 <MaterialCommunityIcons name="clock-outline" size={16} color="#888" style={{ marginRight: 6 }} />
-                <Text style={styles.detalheLabel}>Previsão de entrega: <Text style={styles.detalheValor}>{params.previsaoEntrega}</Text></Text>
+                <Text style={styles.detalheLabel}>
+                  Previsão de entrega: <Text style={styles.detalheValor}>{params.previsaoEntrega}</Text>
+                </Text>
               </View>
             )}
           </View>
         ) : (
           <Text style={styles.pedidoId}>Pedido {id_ifood}</Text>
         )}
-        {codigoConfirmado && pagamentoConfirmado ? (
+  
+        {podeLiberar ? (
           <View style={styles.tudoLiberadoBox}>
             <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
             <Text style={styles.tudoLiberadoTexto}>
@@ -340,32 +355,27 @@ export default function ConfirmacaoEntrega() {
               </View>
             )
         )}
+  
         {!pagamentoConfirmado && precisaCobrar && (
           <TouchableOpacity
-            style={[
-              styles.botaoOutline,
-              { borderColor: '#2e7d32' },
-            ]}
-            disabled={pagamentoConfirmado}
+            style={[styles.botaoOutline, { borderColor: '#2e7d32' }]}
             onPress={() => setPagamentoConfirmado(true)}
           >
             <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Pagar</Text>
           </TouchableOpacity>
         )}
       </View>
-
+  
       {/* Espaço extra para não cobrir conteúdo */}
       <View style={{ height: 120 }} />
-
+  
       {/* Rodapé fixo */}
       <View style={styles.rodapeFixo}>
         <TouchableOpacity
-          disabled={!codigoConfirmado || !pagamentoConfirmado}
+          disabled={!podeLiberar}
           style={[
             styles.botaoProximaEntrega,
-            codigoConfirmado && pagamentoConfirmado
-              ? styles.botaoProximaEntregaAtivo
-              : styles.botaoProximaEntregaDesabilitado,
+            podeLiberar ? styles.botaoProximaEntregaAtivo : styles.botaoProximaEntregaDesabilitado,
           ]}
           onPress={isUltimaEntrega ? handleFinalizarRota : handleProximaEntrega}
         >
@@ -389,6 +399,7 @@ export default function ConfirmacaoEntrega() {
       </View>
     </View>
   );
+  
 }
 
 const styles = StyleSheet.create({

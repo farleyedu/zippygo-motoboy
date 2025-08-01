@@ -1,10 +1,17 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
+import * as SecureStore from 'expo-secure-store';
 import { Alert } from 'react-native';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
 export async function iniciarMonitoramentoLocalizacao() {
+  const emEntrega = await SecureStore.getItemAsync('emEntrega');
+  if (emEntrega !== 'true') {
+    console.log('[ZIPPY] Ignorado - não está em rota.');
+    return;
+  }
+
   console.log('[ZIPPY] Solicitando permissões...');
 
   const { status: foreground } = await Location.requestForegroundPermissionsAsync();
@@ -26,10 +33,10 @@ export async function iniciarMonitoramentoLocalizacao() {
   console.log('[SETUP] Iniciando task de localização...');
 
   await Location.startLocationUpdatesAsync(LOCATION_TASK_NAME, {
-    accuracy: Location.Accuracy.Highest, // usa o máximo disponível
-    distanceInterval: 0,                 // envia sempre que possível
-    timeInterval: 1000,                  // a cada 1 segundo
-    deferredUpdatesInterval: 1000,       // força atualização mínima
+    accuracy: Location.Accuracy.Highest,
+    distanceInterval: 0,
+    timeInterval: 1000,
+    deferredUpdatesInterval: 1000,
     deferredUpdatesDistance: 1,
     showsBackgroundLocationIndicator: true,
     pausesUpdatesAutomatically: false,

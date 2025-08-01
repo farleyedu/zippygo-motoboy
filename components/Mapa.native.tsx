@@ -1,9 +1,8 @@
-// components/Mapa.native.tsx
-
 import React, { useEffect, useRef, useState } from 'react';
-import MapView, { Marker, Region } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import * as SecureStore from 'expo-secure-store';
 import { StyleSheet, Text, View } from 'react-native';
+import * as Location from 'expo-location';
 
 type Pedido = {
   id: number;
@@ -38,9 +37,9 @@ export default function Mapa({ pedidos, emEntrega }: Props) {
   const [destinoCoords, setDestinoCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [indiceAtual, setIndiceAtual] = useState<number>(0);
   const [entregasFinalizadas, setEntregasFinalizadas] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const mapRef = useRef<MapView>(null);
 
-  // Carrega destino atual e índice da rota
   useEffect(() => {
     async function carregarDestino() {
       const rawDestinos = await SecureStore.getItemAsync('destinos');
@@ -63,87 +62,108 @@ export default function Mapa({ pedidos, emEntrega }: Props) {
     return () => clearInterval(iv);
   }, []);
 
-  // Quando todas as entregas terminam, limpa o marcador
   useEffect(() => {
     if (entregasFinalizadas) {
       setDestinoCoords(null);
     }
   }, [entregasFinalizadas]);
 
-  // Pedido atual pelo índice
-  const pedidoAtual = pedidos[indiceAtual];
+  const handleUserLocationChange = (e: any) => {
+    const coord = e.nativeEvent.coordinate;
+    if (!coord) return;
+    setUserLocation({ latitude: coord.latitude, longitude: coord.longitude });
+  };
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (userLocation) {
+        mapRef.current?.animateToRegion({
+          latitude: userLocation.latitude,
+          longitude: userLocation.longitude,
+          latitudeDelta: 0.03,
+          longitudeDelta: 0.03,
+        });
+      }
+    }, 25000);
+
+    return () => clearInterval(interval);
+  }, [userLocation]);
+
+  useEffect(() => {
+    (async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location.coords);
+      }
+    })();
+  }, []);
 
   return (
     <MapView
       ref={mapRef}
       style={StyleSheet.absoluteFillObject}
       initialRegion={{
-        latitude: destinoCoords?.latitude ?? -18.91899,
-        longitude: destinoCoords?.longitude ?? -48.24674,
-        latitudeDelta: 0.003,
-        longitudeDelta: 0.003,
+        latitude: userLocation?.latitude ?? -18.91899,
+        longitude: userLocation?.longitude ?? -48.24674,
+        latitudeDelta: 0.005,
+        longitudeDelta: 0.005,
       }}
       showsUserLocation
-      onUserLocationChange={e => {
-        const coord = e.nativeEvent.coordinate;
-        if (!coord) return;
-        mapRef.current?.animateToRegion({
-          latitude: coord.latitude,
-          longitude: coord.longitude,
-          latitudeDelta: 0.003,
-          longitudeDelta: 0.003,
-        });
-      }}
+      onUserLocationChange={handleUserLocationChange}
     >
-      {/* Antes de iniciar rota: mostra todos os destinos em sequência */}
-      {!emEntrega && pedidos.map((p, i) => (
+      {!emEntrega && pedidos.map((p) => (
         <Marker
           key={p.id}
           coordinate={p.coordinates}
-          title={`Pedido #${p.id_ifood}`}
-        >
-          <View style={styles.seqMarker}>
-            <Text style={styles.seqText}>{i + 1}</Text>
-          </View>
-        </Marker>
+          pinColor="red"
+        />
       ))}
 
-      {/* Depois de iniciar rota: mostra apenas o próximo destino */}
-      {emEntrega && destinoCoords && pedidoAtual && (
-        <Marker coordinate={destinoCoords}>
-          <View style={styles.markerIdBox}>
-            <Text style={styles.markerIdText}>#{pedidoAtual.id_ifood}</Text>
-          </View>
-        </Marker>
-      )}
+      {emEntrega && pedidos.map((p, i) => {
+        const isAtual = i === indiceAtual;
+        const isFuturo = i > indiceAtual;
+
+        if (isAtual) {
+          return (
+            <Marker
+              key={p.id}
+              coordinate={p.coordinates}
+              pinColor="red"
+            />
+          );
+        }
+
+        if (isFuturo) {
+          return (
+            <Marker key={p.id} coordinate={p.coordinates} anchor={{ x: 0.5, y: 0.5 }}>
+              <View style={styles.pinCinza}>
+                <Text style={styles.ordemTexto}>{i + 1}</Text>
+              </View>
+            </Marker>
+          );
+        }
+
+        return null;
+      })}
     </MapView>
   );
 }
 
 const styles = StyleSheet.create({
-  seqMarker: {
-    backgroundColor: '#1ecb7b',
-    padding: 6,
-    borderRadius: 50,
-    borderWidth: 2,
+  pinCinza: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#777',
+    justifyContent: 'center',
+    alignItems: 'center',
     borderColor: '#fff',
+    borderWidth: 1,
   },
-  seqText: {
+  ordemTexto: {
     color: '#fff',
+    fontSize: 10,
     fontWeight: 'bold',
-    fontSize: 12,
-  },
-  markerIdBox: {
-    backgroundColor: '#1ecb7b',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: '#fff',
-  },
-  markerIdText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 12,
   },
 });

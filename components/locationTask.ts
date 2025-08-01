@@ -38,6 +38,12 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
   }
 
   const location = locations[0];
+  const emEntrega = await SecureStore.getItemAsync('emEntrega');
+if (emEntrega !== 'true') {
+  console.log('[TASK] Ignorado pois não está em rota.');
+  return;
+}
+
   console.log('[TASK] Local atual recebido:', location.coords);
 
   const rawDestinos = await SecureStore.getItemAsync('destinos');

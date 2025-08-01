@@ -5,14 +5,26 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 const { width } = Dimensions.get('window');
 
 type Pedido = {
-  id_ifood: string;
-  nome: string;
+  id: number;
+  id_ifood: number;
+  cliente: string;
+  pagamento: string;
+  statusPagamento: string;
+  valorTotal: number;
   endereco: string;
   bairro?: string;
-  valor?: number;
-  previsaoEntrega?: string;
-  coordenadas?: { latitude: number; longitude: number };
+  distanciaKm: number;
+  horario: string;
+  troco: string;
+  coordinates: { latitude: number; longitude: number };
+  itens: {
+    nome: string;
+    tipo: string;
+    quantidade: number;
+    valor: number;
+  }[];
 };
+
 
 type Destino = {
   tempo: string;
@@ -33,16 +45,17 @@ type ModalConfirmarRotaProps = {
 
 export default function ModalConfirmarRota({ visible, onAceitar, onRecusar, pedidos }: ModalConfirmarRotaProps) {
   const destinos: Destino[] = pedidos.map((pedido) => ({
-    tempo: pedido.previsaoEntrega || '5min',
-    distancia: '1km',
+    tempo: pedido.horario || '5min',
+    distancia: `${pedido.distanciaKm.toFixed(1)} km`,
     endereco: pedido.endereco,
     cor: '#1ecb7b',
-    numeroPedido: pedido.id_ifood,
+    numeroPedido: pedido.id_ifood.toString(),
     bairro: pedido.bairro || 'Sem bairro',
-    valor: pedido.valor?.toFixed(2).replace('.', ',') || '',
+    valor: pedido.valorTotal?.toFixed(2).replace('.', ',') || '',
   }));
+  
 
-  const valorTotal = pedidos.reduce((acc, p) => acc + (p.valor || 0), 0);
+  const valorTotal = pedidos.reduce((acc, p) => acc + (p.valorTotal || 0), 0);
   const valorFormatado = `R$${valorTotal.toFixed(2).replace('.', ',')}`;
 
   return (

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { View, Text,StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
+import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle } from 'react-native-reanimated';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 
@@ -57,86 +58,100 @@ const getItemIcon = (tipo: string) => {
 export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceitos }: Props) {
   const [data, setData] = useState<Pedido[]>(pedidos);
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const scrollY = useSharedValue(0);
+
+  const scrollHandler = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+    },
+  });
 
   const handleExpand = (id: number) => {
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setExpandedId(expandedId === id ? null : id);
   };
 
-  const renderItem = ({ item, drag, isActive }: RenderItemParams<Pedido>) => {
+  const renderItem = ({ item, drag, isActive }: RenderItemParams<Pedido>, index: number) => {
     const isExpanded = expandedId === item.id;
+    const animatedStyle = useAnimatedStyle(() => {
+      const listHeight = 160;
+      const screenHeight = 700;
+      const positionY = index * 150;
+      const distanceFromBottom = screenHeight - positionY + scrollY.value;
+      const isBehindButton = distanceFromBottom < listHeight + 40;
+      return { opacity: isBehindButton ? 0.3 : 1 };
+    });
+
     return (
-      <TouchableOpacity
-        style={[
-          styles.card,
-          isActive && { opacity: 0.85, backgroundColor: '#23232b', elevation: 8 },
-          isExpanded && { transform: [{ scale: 1.01 }, { translateY: -2 }], borderColor: '#333', borderWidth: 1 },
-        ]}
-        onLongPress={drag}
-        activeOpacity={0.95}
-        delayLongPress={120}
-        onPress={() => handleExpand(item.id)}
-      >
-        {/* Linha principal */}
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <View style={styles.infoRowCompactOneLine}>
-              <Ionicons name="pricetag-outline" size={13} color="#999" style={styles.infoIcon} />
-              <Text style={styles.cardId}>{item.id}</Text>
-              <View style={styles.dot} />
-              <Ionicons name="person-outline" size={13} color="#999" style={styles.infoIcon} />
-              <Text style={styles.cardCliente}>{item.cliente}</Text>
-              <View style={styles.dot} />
-              <Ionicons name="time-outline" size={13} color="#999" style={styles.infoIcon} />
-              <Text style={styles.cardHorario}>{item.horario}</Text>
-              <View style={styles.dot} />
-              <MaterialCommunityIcons name="map-marker-distance" size={15} color="#999" style={styles.infoIcon} />
-              <Text style={styles.cardDistancia}>{item.distanciaKm} km</Text>
-            </View>
-            <View style={styles.infoRowCompact}>
-              <Ionicons name="location-outline" size={15} color="#999" style={styles.infoIcon} />
-              <Text style={styles.cardEndereco}>{item.endereco} - {item.bairro}</Text>
-            </View>
-            <View style={styles.infoRowCompact}>
-              {item.troco ? (
-                <>
-                  <Ionicons name="cash-outline" size={14} color="#FF7043" style={styles.infoIcon} />
-                  <Text style={styles.cardTroco}>Troco {item.troco}</Text>
-                  <View style={styles.dot} />
-                </>
-              ) : null}
-
-              {getPagamentoIcon(item.pagamento)}
-              <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento), marginRight: 6 }]}>
-                {item.pagamento}
-              </Text>
-
-              {getStatusSelo(item.statusPagamento)}
-            </View>
-          </View>
-          <View style={styles.iconsRight}>
-            <TouchableOpacity>
-              <Ionicons name="map" size={20} color="#999" />
-            </TouchableOpacity>
-            <Ionicons name="reorder-three-outline" size={22} color="#666" style={{ marginLeft: 10 }} />
-          </View>
-        </View>
-
-        {isExpanded && (
-          <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento) }]}>
-            <Text style={styles.itensTitle}>Itens do pedido:</Text>
-            {item.itens.map((it, idx) => (
-              <View key={idx} style={styles.itemLinha}>
-                {getItemIcon(it.tipo)}
-                <Text style={styles.itemNome}>{it.nome}</Text>
-                <Text style={styles.itemQtd}>x{it.quantidade}</Text>
-                <MaterialCommunityIcons name="currency-usd" size={15} color="#4CAF50" style={{ marginLeft: 10, marginRight: 2 }} />
-                <Text style={styles.itemValor}>R${(it.valor * it.quantidade).toFixed(2)}</Text>
+      <Animated.View style={[animatedStyle]}>
+        <TouchableOpacity
+          style={[
+            styles.card,
+            isActive && { opacity: 0.85, backgroundColor: '#23232b', elevation: 8 },
+            isExpanded && { transform: [{ scale: 1.01 }, { translateY: -2 }], borderColor: '#333', borderWidth: 1 },
+          ]}
+          onLongPress={drag}
+          activeOpacity={0.95}
+          delayLongPress={120}
+          onPress={() => handleExpand(item.id)}
+        >
+          <View style={styles.cardHeader}>
+            <View style={{ flex: 1 }}>
+              <View style={styles.infoRowCompactOneLine}>
+                <Ionicons name="pricetag-outline" size={13} color="#999" style={styles.infoIcon} />
+                <Text style={styles.cardId}>{item.id}</Text>
+                <View style={styles.dot} />
+                <Ionicons name="person-outline" size={13} color="#999" style={styles.infoIcon} />
+                <Text style={styles.cardCliente}>{item.cliente}</Text>
+                <View style={styles.dot} />
+                <Ionicons name="time-outline" size={13} color="#999" style={styles.infoIcon} />
+                <Text style={styles.cardHorario}>{item.horario}</Text>
+                <View style={styles.dot} />
+                <MaterialCommunityIcons name="map-marker-distance" size={15} color="#999" style={styles.infoIcon} />
+                <Text style={styles.cardDistancia}>{item.distanciaKm} km</Text>
               </View>
-            ))}
+              <View style={styles.infoRowCompact}>
+                <Ionicons name="location-outline" size={15} color="#999" style={styles.infoIcon} />
+                <Text style={styles.cardEndereco}>{item.endereco} - {item.bairro}</Text>
+              </View>
+              <View style={styles.infoRowCompact}>
+                {item.troco ? (
+                  <>
+                    <Ionicons name="cash-outline" size={14} color="#FF7043" style={styles.infoIcon} />
+                    <Text style={styles.cardTroco}>Troco {item.troco}</Text>
+                    <View style={styles.dot} />
+                  </>
+                ) : null}
+                {getPagamentoIcon(item.pagamento)}
+                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento), marginRight: 6 }]}>
+                  {item.pagamento}
+                </Text>
+                {getStatusSelo(item.statusPagamento)}
+              </View>
+            </View>
+            <View style={styles.iconsRight}>
+              <TouchableOpacity>
+                <Ionicons name="map" size={20} color="#999" />
+              </TouchableOpacity>
+              <Ionicons name="reorder-three-outline" size={22} color="#666" style={{ marginLeft: 10 }} />
+            </View>
           </View>
-        )}
-      </TouchableOpacity>
+          {isExpanded && (
+            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento) }]}>
+              <Text style={styles.itensTitle}>Itens do pedido:</Text>
+              {item.itens.map((it, idx) => (
+                <View key={idx} style={styles.itemLinha}>
+                  {getItemIcon(it.tipo)}
+                  <Text style={styles.itemNome}>{it.nome}</Text>
+                  <Text style={styles.itemQtd}>x{it.quantidade}</Text>
+                  <MaterialCommunityIcons name="currency-usd" size={15} color="#4CAF50" style={{ marginLeft: 10, marginRight: 2 }} />
+                  <Text style={styles.itemValor}>R${(it.valor * it.quantidade).toFixed(2)}</Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </TouchableOpacity>
+      </Animated.View>
     );
   };
 
@@ -147,14 +162,15 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
         setData(data);
         onAtualizarPedidosAceitos(data);
       }}
-      keyExtractor={item => item.id.toString()}
-      renderItem={renderItem}
-      contentContainerStyle={{ padding: 14, paddingBottom: 60 }}
+      keyExtractor={(item) => item.id?.toString() ?? Math.random().toString()}
+      renderItem={(params) => renderItem(params, (params as any).index)}
+      contentContainerStyle={{ padding: 14, paddingBottom: 160 }}
       showsVerticalScrollIndicator={false}
+      onScroll={scrollHandler}
+      scrollEventThrottle={16}
     />
   );
 }
-
 
 const styles = StyleSheet.create({
   card: {
