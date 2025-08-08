@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as SecureStore from 'expo-secure-store';
-import { StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View, Image } from 'react-native';
 import * as Location from 'expo-location';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 type Pedido = {
   id: number;
@@ -206,12 +207,17 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         <Marker
           key={p.id}
           coordinate={p.coordinates}
+          anchor={{ x: 0.5, y: 1 }}
           tracksViewChanges={trackMarkers}
-          flat
-          anchor={{ x: 0.5, y: 0.5 }}
         >
-          <View style={styles.pinCinzaPequeno}>
-            <Text style={styles.ordemPequena}>{i + 1}</Text>
+          <View style={styles.pinContainer} collapsable={false}>
+            <Image
+              source={require('../assets/images/alfinete.png')}
+              style={styles.pinImage}
+            />
+            <View style={[styles.secondaryLabel, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
+              <Text style={styles.secondaryLabelText} allowFontScaling={false}>{i + 1}</Text>
+            </View>
           </View>
         </Marker>
       ))}
@@ -227,11 +233,12 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         coordinate={p.coordinates}
         tracksViewChanges={trackMarkers}
         flat
-        anchor={{ x: 0.5, y: 0.5 }}
+        anchor={{ x: 0.5, y: 1 }}
+        centerOffset={{ x: 0, y: -10 }}
         zIndex={999}
       >
-        <View style={styles.pinVermelhoPequeno}>
-          <Text style={styles.ordemPequena}>{i + 1}</Text>
+        <View style={styles.currentContainer} collapsable={false}>
+          <MaterialCommunityIcons name="map-marker" size={34} color="#d32f2f" />
         </View>
       </Marker>
     );
@@ -242,12 +249,17 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       <Marker
         key={p.id}
         coordinate={p.coordinates}
-        anchor={{ x: 0.5, y: 0.5 }}
+        anchor={{ x: 0.5, y: 1 }}
         tracksViewChanges={trackMarkers}
-        flat
       >
-        <View style={styles.pinCinzaPequeno}>
-          <Text style={styles.ordemPequena}>{i + 1}</Text>
+          <View style={styles.pinContainer} collapsable={false}>
+          <Image
+            source={require('../assets/images/alfinete.png')}
+              style={styles.pinImage}
+          />
+          <View style={[styles.secondaryLabel, { backgroundColor: '#777' }]} pointerEvents="none">
+            <Text style={styles.secondaryLabelText} allowFontScaling={false}>{i + 1}</Text>
+          </View>
         </View>
       </Marker>
     );
@@ -262,29 +274,96 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
 }
 
 const styles = StyleSheet.create({
-  pinCinzaPequeno: {
-    width: 16,
-    height: 16,
+  pinContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 34,
+  },
+  currentContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 28,
+    height: 34,
+  },
+  pinContainerLarge: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 17,
+    height: 21,
+  },
+  pinImage: {
+    width: 24,
+    height: 30,
+    transform: [{ translateY: -0.5 }],
+  },
+  pinImageLarge: {
+    width: 17,
+    height: 21,
+    transform: [{ translateY: -0.5 }],
+  },
+  pinBadge: {
+    position: 'absolute',
+    top: 0,
+    width: 15,
+    height: 15,
     borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pinBadgeText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 9,
+    lineHeight: 10,
+  },
+  pinNumeroLarge: {
+    position: 'absolute',
+    top: 5,
+    textAlign: 'center',
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 11,
+  },
+  secondaryContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 20,
+    height: 24,
+  },
+  secondaryImage: {
+    width: 14,
+    height: 17,
+    transform: [{ translateY: -0.5 }],
+  },
+  secondaryLabel: {
+    position: 'absolute',
+    right: -3,
+    top: 16,
     backgroundColor: '#777',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderColor: '#fff',
-    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
-  pinVermelhoPequeno: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#d32f2f',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderColor: '#fff',
-    borderWidth: 1,
-  },
-  ordemPequena: {
+  secondaryLabelText: {
     color: '#fff',
     fontSize: 9,
     fontWeight: 'bold',
+  },
+  floatingNumber: {
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 3,
+    borderRadius: 8,
+    backgroundColor: '#2C79FF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  floatingNumberText: {
+    color: '#fff',
+    fontWeight: 'bold',
+    fontSize: 10,
+    lineHeight: 12,
   },
 });
