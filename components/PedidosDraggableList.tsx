@@ -29,6 +29,7 @@ type Props = {
   pedidos: Pedido[];
   onAtualizarPedidosAceitos: (pedidos: Pedido[]) => void;
   bottomInset?: number;
+  dragEnabled?: boolean;
 };
 
 const getPagamentoColor = (pagamento: string, status: string) => {
@@ -57,11 +58,16 @@ const getItemIcon = (tipo: string) => {
   return <MaterialCommunityIcons name="cup" size={16} color="#aaa" style={{ marginRight: 6 }} />;
 };
 
-export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceitos, bottomInset = 0 }: Props) {
+export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceitos, bottomInset = 0, dragEnabled = true }: Props) {
   const insets = useSafeAreaInsets();
   const [data, setData] = useState<Pedido[]>(pedidos);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const scrollY = useSharedValue(0);
+
+  // Mantém a lista sincronizada quando os pedidos do pai mudarem (ex: ao voltar da tela de confirmação)
+  React.useEffect(() => {
+    setData(pedidos);
+  }, [pedidos]);
 
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => {
@@ -93,7 +99,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
             isActive && { opacity: 0.85, backgroundColor: '#23232b', elevation: 8 },
             isExpanded && { transform: [{ scale: 1.01 }, { translateY: -2 }], borderColor: '#333', borderWidth: 1 },
           ]}
-          onLongPress={drag}
+          onLongPress={dragEnabled ? drag : undefined}
           activeOpacity={0.95}
           delayLongPress={120}
           onPress={() => handleExpand(item.id)}
@@ -136,7 +142,9 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
               <TouchableOpacity>
                 <Ionicons name="map" size={20} color="#999" />
               </TouchableOpacity>
-              <Ionicons name="reorder-three-outline" size={22} color="#666" style={{ marginLeft: 10 }} />
+              {dragEnabled && (
+                <Ionicons name="reorder-three-outline" size={22} color="#666" style={{ marginLeft: 10 }} />
+              )}
             </View>
           </View>
           {isExpanded && (
@@ -171,6 +179,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
       showsVerticalScrollIndicator={false}
       onScroll={scrollHandler}
       scrollEventThrottle={16}
+      activationDistance={dragEnabled ? 20 : Number.MAX_SAFE_INTEGER}
     />
   );
 }

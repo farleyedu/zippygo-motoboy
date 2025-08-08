@@ -14,6 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
+import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 import ModalConfirmarRota from './ModalConfirmarRota';
 import PedidosDraggableList from './PedidosDraggableList';
@@ -21,14 +22,6 @@ import PedidosDraggableList from './PedidosDraggableList';
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 100;
 const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
-
-const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
-// ⬇️ INSIRA AQUI:
-const buttonOpacity = animatedHeight.interpolate({
-  inputRange: [MIN_HEIGHT, MIN_HEIGHT + 50],
-  outputRange: [1, 0],
-  extrapolate: 'clamp',
-});
 
 const pedidosMock = [
   {
@@ -124,6 +117,8 @@ export default function TelaInicialMap() {
   const insets = useSafeAreaInsets();
   const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
   const router = useRouter();
+  const [recenterToken, setRecenterToken] = useState(0);
+  const [minSnapHeight, setMinSnapHeight] = useState(MIN_HEIGHT);
   const iniciarOpacity = useRef(new Animated.Value(1)).current;
   const confirmarOpacity = useRef(new Animated.Value(0)).current;
   const [mostrandoConfirmar, setMostrandoConfirmar] = useState(false);
@@ -142,6 +137,7 @@ export default function TelaInicialMap() {
     const safeStart = MIN_HEIGHT + insets.bottom + 24; // sobe mais no estado inicial
     animatedHeight.setValue(safeStart);
     lastHeight = safeStart;
+    setMinSnapHeight(safeStart);
   }, [insets.bottom]);
 
   const handleIniciarRota = async () => {
@@ -198,6 +194,12 @@ export default function TelaInicialMap() {
         setMostrandoConfirmar(true);
         iniciarOpacity.setValue(0);
         confirmarOpacity.setValue(1);
+        // Recarrega pedidos no painel ao voltar para a tela
+        const pedidosStr = await SecureStore.getItemAsync('pedidosCompletos');
+        if (pedidosStr) {
+          const pedidos = JSON.parse(pedidosStr);
+          setPedidosAceitos(pedidos);
+        }
       }
 
       const onlineStatus = await SecureStore.getItemAsync('online');
@@ -213,6 +215,14 @@ export default function TelaInicialMap() {
     const interval = setInterval(verificarStatus, 2000);
     return () => clearInterval(interval);
   }, []);
+
+  // Ao focar novamente esta tela (voltar de confirmacaoEntrega), recentraliza no usuário
+  useFocusEffect(
+    React.useCallback(() => {
+      setRecenterToken((t) => t + 1);
+      return () => {};
+    }, [])
+  );
 
   useEffect(() => {
     const checarUltimaEntrega = async () => {
@@ -332,7 +342,7 @@ export default function TelaInicialMap() {
   
   return (
     <View style={styles.container}>
-<Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} />
+<Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} recenterToken={recenterToken} />
 <View style={{ flexDirection: 'row', position: 'absolute', top: insets.top + 8, right: 20, zIndex: 20, alignItems: 'center' }}>
         {!online && (
           <TouchableOpacity
@@ -425,13 +435,15 @@ export default function TelaInicialMap() {
       </TouchableOpacity>
 
       {emEntrega && (
-        <Animated.View
+      <Animated.View
           style={[
             styles.confirmarButton,
             {
-              bottom: Animated.add(animatedHeight, new Animated.Value(insets.bottom + 8)),
+              // Posiciona logo acima da barra, sem duplicar o insets.bottom
+              bottom: Animated.add(animatedHeight, new Animated.Value(6)),
               opacity: animatedHeight.interpolate({
-                inputRange: [MIN_HEIGHT, MIN_HEIGHT + 50],
+                // Visível quando a barra está minimizada (na altura mínima real)
+                inputRange: [minSnapHeight, minSnapHeight + 40],
                 outputRange: [1, 0],
                 extrapolate: 'clamp',
               }),
@@ -479,6 +491,7 @@ export default function TelaInicialMap() {
             pedidos={pedidosAceitos}
             onAtualizarPedidosAceitos={setPedidosAceitos}
             bottomInset={72}
+            dragEnabled={!emEntrega}
           />
         )}
 

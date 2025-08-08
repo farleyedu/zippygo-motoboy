@@ -31,15 +31,17 @@ type Pedido = {
 type Props = {
   pedidos: Pedido[];
   emEntrega: boolean;
+  recenterToken?: number;
 };
 
-export default function Mapa({ pedidos, emEntrega }: Props) {
+export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   const [destinoCoords, setDestinoCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const indiceAtualRef = useRef<number>(0);
   const [entregasFinalizadas, setEntregasFinalizadas] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const mapRef = useRef<MapView>(null);
   const [trackMarkers, setTrackMarkers] = useState(true);
+  const hasCenteredOnceRef = useRef(false);
 
   useEffect(() => {
     async function carregarDestino() {
@@ -76,26 +78,50 @@ export default function Mapa({ pedidos, emEntrega }: Props) {
     }
   }, [entregasFinalizadas]);
 
+  const centerTo = (coords: { latitude: number; longitude: number }) => {
+    mapRef.current?.animateToRegion({
+      latitude: coords.latitude,
+      longitude: coords.longitude,
+      latitudeDelta: 0.03,
+      longitudeDelta: 0.03,
+    });
+  };
+
   const handleUserLocationChange = (e: any) => {
     const coord = e.nativeEvent.coordinate;
     if (!coord) return;
     setUserLocation({ latitude: coord.latitude, longitude: coord.longitude });
+    if (!hasCenteredOnceRef.current) {
+      hasCenteredOnceRef.current = true;
+      centerTo({ latitude: coord.latitude, longitude: coord.longitude });
+    }
   };
 
   useEffect(() => {
     const interval = setInterval(() => {
       if (userLocation) {
-        mapRef.current?.animateToRegion({
-          latitude: userLocation.latitude,
-          longitude: userLocation.longitude,
-          latitudeDelta: 0.03,
-          longitudeDelta: 0.03,
-        });
+        centerTo(userLocation);
       }
     }, 25000);
 
     return () => clearInterval(interval);
   }, [userLocation]);
+
+  // Recentraliza imediatamente quando a tela volta ao foco (token muda)
+  useEffect(() => {
+    if (!recenterToken) return;
+    if (userLocation) {
+      centerTo(userLocation);
+    } else {
+      (async () => {
+        try {
+          const loc = await Location.getCurrentPositionAsync({});
+          setUserLocation(loc.coords);
+          centerTo(loc.coords as any);
+        } catch {}
+      })();
+    }
+  }, [recenterToken]);
 
   useEffect(() => {
     // Ao organizar rota (não emEntrega), enquadra todos os pedidos no mapa
@@ -136,6 +162,11 @@ export default function Mapa({ pedidos, emEntrega }: Props) {
       if (status === 'granted') {
         const location = await Location.getCurrentPositionAsync({});
         setUserLocation(location.coords);
+        // Centraliza assim que obtemos a primeira localização
+        if (!hasCenteredOnceRef.current) {
+          hasCenteredOnceRef.current = true;
+          centerTo(location.coords as any);
+        }
       }
     })();
   }, []);
@@ -151,6 +182,17 @@ export default function Mapa({ pedidos, emEntrega }: Props) {
       zoomEnabled
       pitchEnabled={false}
       rotateEnabled={false}
+      onMapReady={async () => {
+        try {
+          if (userLocation) {
+            centerTo(userLocation);
+          } else {
+            const loc = await Location.getCurrentPositionAsync({});
+            setUserLocation(loc.coords);
+            centerTo(loc.coords as any);
+          }
+        } catch {}
+      }}
       initialRegion={{
         latitude: userLocation?.latitude ?? -18.91899,
         longitude: userLocation?.longitude ?? -48.24674,
