@@ -10,6 +10,7 @@ import {
   Dimensions,
   Alert,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
@@ -18,7 +19,7 @@ import ModalConfirmarRota from './ModalConfirmarRota';
 import PedidosDraggableList from './PedidosDraggableList';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MIN_HEIGHT = 60;
+const MIN_HEIGHT = 100;
 const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
 
 const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
@@ -120,6 +121,7 @@ const pedidosMock = [
   },
 ];
 export default function TelaInicialMap() {
+  const insets = useSafeAreaInsets();
   const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
   const router = useRouter();
   const iniciarOpacity = useRef(new Animated.Value(1)).current;
@@ -134,6 +136,13 @@ export default function TelaInicialMap() {
   const [organizandoRota, setOrganizandoRota] = useState(false);
 
   let lastHeight = MIN_HEIGHT;
+
+  // Eleva a altura inicial do painel para fora da área de gestos do sistema
+  useEffect(() => {
+    const safeStart = MIN_HEIGHT + insets.bottom + 24; // sobe mais no estado inicial
+    animatedHeight.setValue(safeStart);
+    lastHeight = safeStart;
+  }, [insets.bottom]);
 
   const handleIniciarRota = async () => {
     // grava pedidos e destinos no SecureStore
@@ -193,6 +202,11 @@ export default function TelaInicialMap() {
 
       const onlineStatus = await SecureStore.getItemAsync('online');
       setOnline(onlineStatus === 'true');
+
+      // Fecha modal se o estado não permitir mais receber pedidos
+      if ((!online && modalRotaVisible) || (emEntregaStatus === 'true' && modalRotaVisible) || (organizandoRota && modalRotaVisible)) {
+        setModalRotaVisible(false);
+      }
     };
 
     verificarStatus();
@@ -231,8 +245,7 @@ export default function TelaInicialMap() {
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) =>
-        gesture.dy < -10 || gesture.dy > 10,
+      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 5,
 
       onPanResponderMove: (_, gesture) => {
         let newHeight = lastHeight - gesture.dy;
@@ -273,10 +286,12 @@ export default function TelaInicialMap() {
     Alert.alert('Você está online!', 'Agora pode receber pedidos.');
   };
   const handleAceitarPedido = (pedidosRecebidos: any[]) => {
-    const novosPedidos = [...pedidosRecebidos]; // sobrescreve a lista
+    const novosPedidos = [...pedidosRecebidos];
     setPedidosAceitos(novosPedidos);
     setModalRotaVisible(false);
     setOrganizandoRota(true);
+    // Pequeno atraso para garantir layout antes do fit no mapa
+    setTimeout(() => setPedidosAceitos((prev) => [...novosPedidos]), 50);
   };
 
 
@@ -299,16 +314,26 @@ export default function TelaInicialMap() {
       params: pedidoAtual ? { ...pedidoAtual, quantidadePedidos: pedidoAtual.quantidadePedidos } : {},
     });
   };
-  console.log("tamano do s pedidos ", pedidosAceitos.length)
+  useEffect(() => {
+    const atualizarPedidosEmEntrega = async () => {
+      const pedidosStr = await SecureStore.getItemAsync('pedidosCompletos');
+      const indiceStr = await SecureStore.getItemAsync('indiceAtual');
+      if (pedidosStr && indiceStr) {
+        const pedidos = JSON.parse(pedidosStr);
+        // Não usar slice: manter a lista completa e usar indiceAtual no mapa
+        setPedidosAceitos(pedidos);
+      }
+    };
 
+    if (emEntrega) {
+      atualizarPedidosEmEntrega();
+    }
+  }, [emEntrega])
+  
   return (
     <View style={styles.container}>
-      <Mapa pedidos={pedidosAceitos.length > 0 && (emEntrega || organizandoRota) ? pedidosAceitos : []} emEntrega={emEntrega} />
-
-
-
-
-      <View style={{ flexDirection: 'row', position: 'absolute', top: 40, right: 20, zIndex: 20, alignItems: 'center' }}>
+<Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} />
+<View style={{ flexDirection: 'row', position: 'absolute', top: insets.top + 8, right: 20, zIndex: 20, alignItems: 'center' }}>
         {!online && (
           <TouchableOpacity
             onPress={handleIniciar}
@@ -326,16 +351,48 @@ export default function TelaInicialMap() {
         )}
         {online && (
           <>
-            <TouchableOpacity
-              style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, marginRight: 10 }}
-              onPress={() => setModalRotaVisible(true)}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
-            </TouchableOpacity>
+            {(!emEntrega && !organizandoRota) && (
+              <TouchableOpacity
+                style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, marginRight: 10 }}
+                onPress={() => {
+                  if (!online || emEntrega || organizandoRota) {
+                    Alert.alert('Indisponível', 'Você só pode aceitar pedidos quando estiver disponível.');
+                    return;
+                  }
+                  setModalRotaVisible(true);
+                }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={{ backgroundColor: '#ff4444', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18 }}
               onPress={async () => {
+                if (emEntrega) {
+                  Alert.alert('Ação não permitida', 'Você está em rota. Finalize a rota para ficar offline.');
+                  return;
+                }
+                if (organizandoRota && pedidosAceitos.length > 0) {
+                  Alert.alert(
+                    'Cancelar organização de rota',
+                    'Os pedidos serão devolvidos para a pizzaria. Deseja continuar?',
+                    [
+                      { text: 'Não' },
+                      {
+                        text: 'Sim',
+                        onPress: async () => {
+                          setPedidosAceitos([]);
+                          setOrganizandoRota(false);
+                          await SecureStore.setItemAsync('online', 'false');
+                          setOnline(false);
+                          Alert.alert('Status atualizado', 'Você está agora offline.');
+                        },
+                      },
+                    ]
+                  );
+                  return;
+                }
                 await SecureStore.setItemAsync('online', 'false');
                 setOnline(false);
                 Alert.alert('Status atualizado', 'Você está agora offline.');
@@ -347,7 +404,7 @@ export default function TelaInicialMap() {
         )}
       </View>
 
-      {modalRotaVisible && (
+      {modalRotaVisible && online && !emEntrega && !organizandoRota && (
         <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}>
           <ModalConfirmarRota
             visible={true}
@@ -358,12 +415,12 @@ export default function TelaInicialMap() {
         </View>
       )}
 
-      <TouchableOpacity style={styles.menuButton}>
+      <TouchableOpacity style={[styles.menuButton, { top: insets.top + 10 }]}>
         <Ionicons name="menu" size={24} color="#000" />
         <View style={styles.badge} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.valorPainel}>
+      <TouchableOpacity style={[styles.valorPainel, { top: insets.top + 10 }]}>
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
@@ -372,7 +429,7 @@ export default function TelaInicialMap() {
           style={[
             styles.confirmarButton,
             {
-              bottom: animatedHeight,
+              bottom: Animated.add(animatedHeight, new Animated.Value(insets.bottom + 8)),
               opacity: animatedHeight.interpolate({
                 inputRange: [MIN_HEIGHT, MIN_HEIGHT + 50],
                 outputRange: [1, 0],
@@ -381,8 +438,8 @@ export default function TelaInicialMap() {
             },
           ]}
           pointerEvents="auto"
-        >
-          <TouchableOpacity onPress={handleConfirmar}>
+          >
+            <TouchableOpacity onPress={handleConfirmar} disabled={!emEntrega}>
             <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
           </TouchableOpacity>
         </Animated.View>
@@ -421,6 +478,7 @@ export default function TelaInicialMap() {
           <PedidosDraggableList
             pedidos={pedidosAceitos}
             onAtualizarPedidosAceitos={setPedidosAceitos}
+            bottomInset={72}
           />
         )}
 
@@ -436,6 +494,7 @@ export default function TelaInicialMap() {
                   outputRange: [0, 1],
                   extrapolate: 'clamp',
                 }),
+                bottom: 36 + insets.bottom,
               },
             ]}
             pointerEvents="auto"
@@ -448,10 +507,6 @@ export default function TelaInicialMap() {
       </Animated.View>
     </View>
   );
-
-
-
-
 }
 
 const styles = StyleSheet.create({

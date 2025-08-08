@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UI
 import Animated, { useSharedValue, useAnimatedScrollHandler, useAnimatedStyle } from 'react-native-reanimated';
 import DraggableFlatList, { RenderItemParams } from 'react-native-draggable-flatlist';
 import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -27,6 +28,7 @@ type Pedido = {
 type Props = {
   pedidos: Pedido[];
   onAtualizarPedidosAceitos: (pedidos: Pedido[]) => void;
+  bottomInset?: number;
 };
 
 const getPagamentoColor = (pagamento: string, status: string) => {
@@ -55,7 +57,8 @@ const getItemIcon = (tipo: string) => {
   return <MaterialCommunityIcons name="cup" size={16} color="#aaa" style={{ marginRight: 6 }} />;
 };
 
-export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceitos }: Props) {
+export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceitos, bottomInset = 0 }: Props) {
+  const insets = useSafeAreaInsets();
   const [data, setData] = useState<Pedido[]>(pedidos);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const scrollY = useSharedValue(0);
@@ -164,7 +167,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
       }}
       keyExtractor={(item) => item.id?.toString() ?? Math.random().toString()}
       renderItem={(params) => renderItem(params, (params as any).index)}
-      contentContainerStyle={{ padding: 14, paddingBottom: 160 }}
+      contentContainerStyle={{ padding: 14, paddingBottom: 160 + insets.bottom + bottomInset }}
       showsVerticalScrollIndicator={false}
       onScroll={scrollHandler}
       scrollEventThrottle={16}

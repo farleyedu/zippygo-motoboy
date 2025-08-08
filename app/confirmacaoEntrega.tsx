@@ -13,9 +13,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as SecureStore from 'expo-secure-store';
 
 export default function ConfirmacaoEntrega() {
+  const insets = useSafeAreaInsets();
   const nav = useNavigation();
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -370,7 +372,7 @@ export default function ConfirmacaoEntrega() {
       <View style={{ height: 120 }} />
   
       {/* Rodapé fixo */}
-      <View style={styles.rodapeFixo}>
+      <View style={[styles.rodapeFixo, { paddingBottom: 24 + insets.bottom }]}>
         <TouchableOpacity
           disabled={!podeLiberar}
           style={[
@@ -385,16 +387,21 @@ export default function ConfirmacaoEntrega() {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={async () => {
-            await SecureStore.deleteItemAsync('emEntrega');
-            await SecureStore.deleteItemAsync('indiceAtual');
-            await SecureStore.deleteItemAsync('pedidosCompletos');
-            await SecureStore.deleteItemAsync('destinos');
-            router.replace('/');
+            // Finalizar rota manualmente com confirmação
+            // Em produção, aqui podemos pedir um motivo opcional
+            const confirmar = true; // placeholder; poderíamos abrir um Alert antes
+            if (confirmar) {
+              await SecureStore.deleteItemAsync('emEntrega');
+              await SecureStore.deleteItemAsync('indiceAtual');
+              await SecureStore.deleteItemAsync('pedidosCompletos');
+              await SecureStore.deleteItemAsync('destinos');
+              router.replace('/');
+            }
           }}
           style={styles.botaoSair}
           activeOpacity={0.6}
         >
-          <Text style={styles.textoSair}>Sair da rota</Text>
+          <Text style={styles.textoSair}>Finalizar rota</Text>
         </TouchableOpacity>
       </View>
     </View>
