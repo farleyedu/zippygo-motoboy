@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { iniciarMonitoramentoLocalizacao } from './locationSetup';
+import { iniciarMonitoramentoLocalizacao, pararMonitoramentoLocalizacao } from './locationSetup';
 import {
   View,
   Text,
@@ -26,7 +26,7 @@ const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
 const pedidosMock = [
   {
     id: 123,
-    id_ifood: 4545,
+    id_ifood: 0,
     cliente: 'Rafael Andrade',
     pagamento: 'Pix',
     statusPagamento: 'pago',
@@ -63,7 +63,7 @@ const pedidosMock = [
   },
   {
     id: 125,
-    id_ifood: 7425,
+    id_ifood: 0,
     cliente: 'João Pedro',
     pagamento: 'Crédito',
     statusPagamento: 'pago',
@@ -80,7 +80,7 @@ const pedidosMock = [
   },
   {
     id: 126,
-    id_ifood: 6635,
+    id_ifood: 0,
     cliente: 'Ana Paula',
     pagamento: 'Débito',
     statusPagamento: 'a_receber',
@@ -247,9 +247,10 @@ export default function TelaInicialMap() {
     setMostrandoConfirmar(false);
     iniciarOpacity.setValue(1);
     confirmarOpacity.setValue(0);
-    if ((Location as any).stopLocationUpdatesAsync) {
-      await (Location as any).stopLocationUpdatesAsync('background-location-task');
-    }
+    
+    // Para o monitoramento de localização
+    await pararMonitoramentoLocalizacao();
+    
     Alert.alert('Rota finalizada!', 'Todas as entregas foram concluídas.');
   };
 

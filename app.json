@@ -7,15 +7,25 @@
     "icon": "./assets/images/icon.png",
     "scheme": "zippygomotoboy",
     "userInterfaceStyle": "automatic",
+
+    // 🔧 Hermes ligado explicitamente (Expo SDK recente já usa por padrão, mas deixamos explícito)
+    "jsEngine": "hermes",
+
+    // 🔧 Nova arquitetura já está ativa (bom para performance com Hermes)
     "newArchEnabled": true,
+
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
+
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      // 🔧 Garante Hermes no iOS também (quando você fizer build para iOS)
+      "jsEngine": "hermes"
     },
+
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
@@ -29,17 +39,23 @@
         "FOREGROUND_SERVICE"
       ],
       "package": "com.farleyedu.zippygomotoboy",
+
+      // 🔧 Garante Hermes no Android
+      "jsEngine": "hermes",
+
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBGZgGgmNMq6Vew5M6NMS_6DRt5QiGc30U"
         }
       }
     },
+
     "web": {
       "bundler": "metro",
       "output": "static",
       "favicon": "./assets/images/favicon.png"
     },
+
     "plugins": [
       "expo-router",
       [
@@ -50,10 +66,13 @@
         }
       ],
       "expo-secure-store"
+      // Dica: Para dev client você NÃO precisa declarar plugin aqui.
     ],
+
     "experiments": {
       "typedRoutes": true
     },
+
     "extra": {
       "router": {},
       "eas": {

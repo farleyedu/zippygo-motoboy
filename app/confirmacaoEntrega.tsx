@@ -14,6 +14,7 @@ import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
 
 export default function ConfirmacaoEntrega() {
@@ -22,24 +23,38 @@ export default function ConfirmacaoEntrega() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
-  const origem = params.origem || 'estabelecimento';
-  const [codigoConfirmado, setCodigoConfirmado] = useState(origem !== 'ifood');
-  const precisaCobrar = String(params.precisaCobrar) === 'true';
-  const pagamentoInicial = String(params.pago) === 'true' || !precisaCobrar;
-  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(pagamentoInicial);
+  
+  // Extrai dados do pedido dos params
+  const nomeCliente = params.nome || 'Cliente';
+  const bairro = params.bairro || 'Bairro';
+  const endereco = params.endereco || 'Endereço';
+  const id_ifood = parseInt(params.id_ifood as string, 10) || 0;
+  const statusPagamento = params.statusPagamento || 'a_receber';
+  const valorTotal = parseFloat(params.valorTotal as string) || 0;
+  const telefone = params.telefone || '';
+  const valor = params.valor || '';
+  const itens = params.itens || [];
+  const previsaoEntrega = params.previsaoEntrega || '';
+  
+  // Determina se é iFood ou estabelecimento baseado no id_ifood
+  const isIfood = id_ifood > 0;
+  const origem = isIfood ? 'ifood' : 'estabelecimento';
+  
+  // Determina se precisa cobrar baseado no status de pagamento
+  const precisaCobrar = statusPagamento === 'a_receber';
+  const jaFoiPago = statusPagamento === 'pago';
+  
+  // Estados
+  const [codigoConfirmado, setCodigoConfirmado] = useState(!isIfood);
+  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(jaFoiPago || !precisaCobrar);
   const [modalCodigo, setModalCodigo] = useState(false);
   const codigoCorreto = '1234';
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
   const quantidadePedidos = parseInt(params.quantidadePedidos as string, 10) || 1;
   const [expandido, setExpandido] = useState(false);
-  const podeLiberar = (origem !== 'ifood' || codigoConfirmado) && (!precisaCobrar || pagamentoConfirmado);
-
-  // Extrai dados do pedido dos params
-  const nomeCliente = params.nome || 'Cliente';
-  const bairro = params.bairro || 'Bairro';
-  const endereco = params.endereco || 'Endereço';
-  const id_ifood = params.id_ifood || '----';
-  // Adicione outros campos conforme necessário
+  
+  // Determina se pode liberar para próxima entrega
+  const podeLiberar = (!isIfood || codigoConfirmado) && (!precisaCobrar || pagamentoConfirmado);
 
   useEffect(() => {
     (async () => {
@@ -52,7 +67,9 @@ export default function ConfirmacaoEntrega() {
       } else {
         setIsUltimaEntrega(false);
       }
-      if (origem !== 'ifood') {
+      
+      // Se não for iFood, código já está confirmado
+      if (!isIfood) {
         setCodigoConfirmado(true);
       } else {
         // Checa status de código confirmado individual por pedido
@@ -60,9 +77,31 @@ export default function ConfirmacaoEntrega() {
         console.log('Status código confirmado', id_ifood, status);
         setCodigoConfirmado(status === 'true');
       }
+      
+      // Se já foi pago ou não precisa cobrar, marca como pago
+      if (jaFoiPago || !precisaCobrar) {
+        setPagamentoConfirmado(true);
+      }
     })();
-    if (!precisaCobrar) setPagamentoConfirmado(true);
-  }, [id_ifood, origem, precisaCobrar]);
+  }, [id_ifood, isIfood, jaFoiPago, precisaCobrar]);
+
+  // Monitora quando a tela volta ao foco para verificar se o código foi validado
+  useFocusEffect(
+    React.useCallback(() => {
+      const verificarCodigoValidado = async () => {
+        if (isIfood) {
+          const codigoValidado = await SecureStore.getItemAsync('codigoValidado');
+          if (codigoValidado === 'true') {
+            await SecureStore.setItemAsync(`codigoConfirmado_${id_ifood}`, 'true');
+            await SecureStore.deleteItemAsync('codigoValidado');
+            setCodigoConfirmado(true);
+          }
+        }
+      };
+      
+      verificarCodigoValidado();
+    }, [isIfood, id_ifood])
+  );
 
   const handleCodigoValidado = async () => {
     await SecureStore.setItemAsync(`codigoConfirmado_${id_ifood}`, 'true');
@@ -81,6 +120,19 @@ export default function ConfirmacaoEntrega() {
 
   // Função para avançar para a próxima entrega
   const handleProximaEntrega = async () => {
+    // Verifica se pode avançar
+    if (!podeLiberar) {
+      if (isIfood && !codigoConfirmado) {
+        alert('Você precisa validar o código do iFood primeiro!');
+        return;
+      }
+      if (precisaCobrar && !pagamentoConfirmado) {
+        alert('Você precisa confirmar o pagamento primeiro!');
+        return;
+      }
+      return;
+    }
+
     const lista = await SecureStore.getItemAsync('pedidosCompletos');
     const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
     if (lista && indiceAtualStr) {
@@ -120,8 +172,9 @@ export default function ConfirmacaoEntrega() {
         <TouchableOpacity
           style={[styles.botaoOutline, { borderColor: '#b71c1c' }]}
           onPress={() => {
-            // @ts-ignore
-            nav.navigate('VerificationScreen', { onSuccess: handleCodigoValidado });
+            // Salva o callback no SecureStore para ser usado na tela de verificação
+            SecureStore.setItemAsync('codigoCallback', 'true');
+            router.push('/VerificationScreen');
           }}
         >
           <Text style={[styles.textoBotaoOutline, { color: '#b71c1c' }]}>Validar</Text>
@@ -157,10 +210,10 @@ export default function ConfirmacaoEntrega() {
   // Renderização do botão próxima entrega
   const renderBotaoProximaEntrega = () => (
     <TouchableOpacity
-      disabled={!codigoConfirmado || !pagamentoConfirmado}
+      disabled={!podeLiberar}
       style={[
         styles.botaoProximaEntrega,
-        codigoConfirmado && pagamentoConfirmado
+        podeLiberar
           ? styles.botaoProximaEntregaAtivo
           : styles.botaoProximaEntregaDesabilitado,
       ]}
@@ -248,7 +301,7 @@ export default function ConfirmacaoEntrega() {
       </View>
   
       {/* Aviso de solicitação de código */}
-      {origem === 'ifood' && (
+      {isIfood && (
         <View style={styles.alertaCodigo}>
           <Ionicons name="alert-circle-outline" size={18} color="#888" />
           <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
@@ -268,7 +321,7 @@ export default function ConfirmacaoEntrega() {
                   {quantidadePedidos} pedido{quantidadePedidos > 1 ? 's' : ''}
                 </Text>
               </View>
-              {origem === 'ifood' ? renderStatusValidar() : (
+              {isIfood ? renderStatusValidar() : (
                 <View style={styles.statusItem}>
                   <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
                   <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Validado</Text>
@@ -285,11 +338,11 @@ export default function ConfirmacaoEntrega() {
           <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
             <View style={[
               styles.badgeOrigem,
-              origem === 'ifood' ? styles.badgeIfood : styles.badgeEstabelecimento,
+              isIfood ? styles.badgeIfood : styles.badgeEstabelecimento,
               { marginRight: 8, marginTop: 2 }
             ]}>
               <Text style={styles.badgeOrigemTexto}>
-                {origem === 'ifood' ? 'iFood' : 'Estabelecimento'}
+                {isIfood ? 'iFood' : 'Estabelecimento'}
               </Text>
             </View>
             <TouchableOpacity onPress={toggleExpand} style={[styles.iconeContainer, { marginTop: 2 }]}>
@@ -302,42 +355,46 @@ export default function ConfirmacaoEntrega() {
           <View style={styles.detalhesPedido}>
             <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
               <FontAwesome name="file-text-o" size={22} color="#333" style={{ marginRight: 8 }} />
-              <Text style={styles.pedidoIdDestaque}>Pedido {id_ifood}</Text>
+              <Text style={styles.pedidoIdDestaque}>
+                Pedido {isIfood ? id_ifood : 'Estabelecimento'}
+              </Text>
             </View>
             <View style={styles.detalheLinha}>
               <FontAwesome name="phone" size={16} color="#888" style={{ marginRight: 6 }} />
-              <Text style={styles.detalheLabel}>Telefone: <Text style={styles.detalheValor}>{params.telefone}</Text></Text>
+              <Text style={styles.detalheLabel}>Telefone: <Text style={styles.detalheValor}>{telefone}</Text></Text>
             </View>
             <View style={styles.detalheLinha}>
               <FontAwesome name="money" size={16} color="#888" style={{ marginRight: 6 }} />
-              <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {params.valor}</Text></Text>
+              <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {valorTotal.toFixed(2)}</Text></Text>
             </View>
             <View style={styles.detalheLinha}>
               <FontAwesome name="list" size={16} color="#888" style={{ marginRight: 6 }} />
               <Text style={styles.detalheLabel}>
                 Itens:{' '}
                 <Text style={styles.detalheValor}>
-                  {Array.isArray(params.itens)
-                    ? params.itens.map((item: any, idx: number) =>
+                  {Array.isArray(itens)
+                    ? itens.map((item: any, idx: number) =>
                         typeof item === 'string'
                           ? item
                           : item?.nome || `Item ${idx + 1}`
                       ).join(', ')
-                    : params.itens}
+                    : itens}
                 </Text>
               </Text>
             </View>
-            {params.previsaoEntrega && (
+            {previsaoEntrega && (
               <View style={styles.detalheLinha}>
                 <MaterialCommunityIcons name="clock-outline" size={16} color="#888" style={{ marginRight: 6 }} />
                 <Text style={styles.detalheLabel}>
-                  Previsão de entrega: <Text style={styles.detalheValor}>{params.previsaoEntrega}</Text>
+                  Previsão de entrega: <Text style={styles.detalheValor}>{previsaoEntrega}</Text>
                 </Text>
               </View>
             )}
           </View>
         ) : (
-          <Text style={styles.pedidoId}>Pedido {id_ifood}</Text>
+          <Text style={styles.pedidoId}>
+            Pedido {isIfood ? id_ifood : 'Estabelecimento'}
+          </Text>
         )}
   
         {podeLiberar ? (
@@ -348,7 +405,7 @@ export default function ConfirmacaoEntrega() {
             </Text>
           </View>
         ) : (
-          origem === 'ifood'
+          isIfood
             ? renderCodigoEntrega()
             : (
               <View style={styles.codigoConfirmado}>

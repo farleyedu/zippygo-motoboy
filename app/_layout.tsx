@@ -76,6 +76,9 @@ function RootLayoutNav() {
         {/* ✅ Oculta o topo da tela confirmacaoEntrega */}
         <Stack.Screen name="confirmacaoEntrega" options={{ headerShown: false }} />
         
+        {/* Tela de verificação de código */}
+        <Stack.Screen name="VerificationScreen" options={{ headerShown: false }} />
+        
         {/* Aqui você pode adicionar outras rotas normalmente */}
         {/* <Stack.Screen name="outraTela" options={{ headerShown: true }} /> */}
       </Stack>

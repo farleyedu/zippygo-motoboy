@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import * as SecureStore from 'expo-secure-store';
 import { StyleSheet, Text, View, Image } from 'react-native';
@@ -43,27 +43,52 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   const mapRef = useRef<MapView>(null);
   const [trackMarkers, setTrackMarkers] = useState(true);
   const hasCenteredOnceRef = useRef(false);
+  const intervalsRef = useRef<number[]>([]);
+
+  // Cleanup function para limpar todos os intervals
+  const cleanupIntervals = useCallback(() => {
+    intervalsRef.current.forEach(interval => clearInterval(interval));
+    intervalsRef.current = [];
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      cleanupIntervals();
+    };
+  }, [cleanupIntervals]);
 
   useEffect(() => {
     async function carregarDestino() {
-      const rawDestinos = await SecureStore.getItemAsync('destinos');
-      const rawIndice = await SecureStore.getItemAsync('indiceAtual');
-      const idx = parseInt(rawIndice || '0', 10);
-      if (rawDestinos) {
-        const destinos: { latitude: number; longitude: number }[] = JSON.parse(rawDestinos);
-        if (idx >= destinos.length) {
-          setEntregasFinalizadas(true);
-          setDestinoCoords(null);
-        } else {
-          indiceAtualRef.current = idx;
-          setDestinoCoords(destinos[idx]);
+      try {
+        const rawDestinos = await SecureStore.getItemAsync('destinos');
+        const rawIndice = await SecureStore.getItemAsync('indiceAtual');
+        const idx = parseInt(rawIndice || '0', 10);
+        if (rawDestinos) {
+          const destinos: { latitude: number; longitude: number }[] = JSON.parse(rawDestinos);
+          if (idx >= destinos.length) {
+            setEntregasFinalizadas(true);
+            setDestinoCoords(null);
+          } else {
+            indiceAtualRef.current = idx;
+            setDestinoCoords(destinos[idx]);
+          }
         }
+      } catch (error) {
+        console.error('[MAPA] Erro ao carregar destino:', error);
       }
     }
 
     carregarDestino();
     const iv = setInterval(carregarDestino, 5000);
-    return () => clearInterval(iv);
+    intervalsRef.current.push(iv);
+    
+    return () => {
+      clearInterval(iv);
+      const index = intervalsRef.current.indexOf(iv);
+      if (index > -1) {
+        intervalsRef.current.splice(index, 1);
+      }
+    };
   }, []);
 
   // Garante que marcadores customizados renderizem imediatamente no Android
@@ -79,16 +104,18 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
     }
   }, [entregasFinalizadas]);
 
-  const centerTo = (coords: { latitude: number; longitude: number }) => {
-    mapRef.current?.animateToRegion({
-      latitude: coords.latitude,
-      longitude: coords.longitude,
-      latitudeDelta: 0.03,
-      longitudeDelta: 0.03,
-    });
-  };
+  const centerTo = useCallback((coords: { latitude: number; longitude: number }) => {
+    if (mapRef.current) {
+      mapRef.current.animateToRegion({
+        latitude: coords.latitude,
+        longitude: coords.longitude,
+        latitudeDelta: 0.03,
+        longitudeDelta: 0.03,
+      });
+    }
+  }, []);
 
-  const handleUserLocationChange = (e: any) => {
+  const handleUserLocationChange = useCallback((e: any) => {
     const coord = e.nativeEvent.coordinate;
     if (!coord) return;
     setUserLocation({ latitude: coord.latitude, longitude: coord.longitude });
@@ -96,7 +123,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       hasCenteredOnceRef.current = true;
       centerTo({ latitude: coord.latitude, longitude: coord.longitude });
     }
-  };
+  }, [centerTo]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -105,8 +132,16 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       }
     }, 25000);
 
-    return () => clearInterval(interval);
-  }, [userLocation]);
+    intervalsRef.current.push(interval);
+    
+    return () => {
+      clearInterval(interval);
+      const index = intervalsRef.current.indexOf(interval);
+      if (index > -1) {
+        intervalsRef.current.splice(index, 1);
+      }
+    };
+  }, [userLocation, centerTo]);
 
   // Recentraliza imediatamente quando a tela volta ao foco (token muda)
   useEffect(() => {
@@ -119,10 +154,12 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
           const loc = await Location.getCurrentPositionAsync({});
           setUserLocation(loc.coords);
           centerTo(loc.coords as any);
-        } catch {}
+        } catch (error) {
+          console.error('[MAPA] Erro ao obter localização:', error);
+        }
       })();
     }
-  }, [recenterToken]);
+  }, [recenterToken, userLocation, centerTo]);
 
   useEffect(() => {
     // Ao organizar rota (não emEntrega), enquadra todos os pedidos no mapa
@@ -132,10 +169,12 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         .map((p) => ({ latitude: p.coordinates.latitude, longitude: p.coordinates.longitude }));
       if (coords.length > 0) {
         // 1) Tentativa com fitToCoordinates
-        mapRef.current?.fitToCoordinates(coords as any, {
-          edgePadding: { top: 80, bottom: 80, left: 80, right: 80 },
-          animated: true,
-        });
+        if (mapRef.current) {
+          mapRef.current.fitToCoordinates(coords as any, {
+            edgePadding: { top: 80, bottom: 80, left: 80, right: 80 },
+            animated: true,
+          });
+        }
         // 2) Fallback com animateToRegion (em alguns devices o fit falha antes do layout)
         const minLat = Math.min(...coords.map((c) => c.latitude));
         const maxLat = Math.max(...coords.map((c) => c.latitude));
@@ -146,12 +185,14 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         const latDelta = Math.max(0.005, (maxLat - minLat) * 1.4);
         const lngDelta = Math.max(0.005, (maxLng - minLng) * 1.4);
         setTimeout(() => {
-          mapRef.current?.animateToRegion({
-            latitude: centerLat,
-            longitude: centerLng,
-            latitudeDelta: latDelta,
-            longitudeDelta: lngDelta,
-          });
+          if (mapRef.current) {
+            mapRef.current.animateToRegion({
+              latitude: centerLat,
+              longitude: centerLng,
+              latitudeDelta: latDelta,
+              longitudeDelta: lngDelta,
+            });
+          }
         }, 150);
       }
     }
@@ -159,18 +200,91 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
 
   useEffect(() => {
     (async () => {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === 'granted') {
-        const location = await Location.getCurrentPositionAsync({});
-        setUserLocation(location.coords);
-        // Centraliza assim que obtemos a primeira localização
-        if (!hasCenteredOnceRef.current) {
-          hasCenteredOnceRef.current = true;
-          centerTo(location.coords as any);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+          const location = await Location.getCurrentPositionAsync({});
+          setUserLocation(location.coords);
+          // Centraliza assim que obtemos a primeira localização
+          if (!hasCenteredOnceRef.current) {
+            hasCenteredOnceRef.current = true;
+            centerTo(location.coords as any);
+          }
         }
+      } catch (error) {
+        console.error('[MAPA] Erro ao obter permissões de localização:', error);
       }
     })();
-  }, []);
+  }, [centerTo]);
+
+  // Memoize os marcadores para evitar re-renders desnecessários
+  const markers = useMemo(() => {
+    if (!emEntrega) {
+      return pedidos.map((p, i) => (
+        <React.Fragment key={`${p.id}-${i}`}>
+          <Marker
+            coordinate={p.coordinates}
+            anchor={{ x: 0.5, y: 1 }}
+            image={require('../assets/images/alfinete_85x85.png')}
+            tracksViewChanges={false}
+          />
+          <Marker
+            coordinate={p.coordinates}
+            anchor={{ x: 0, y: 0.5 }}
+            centerOffset={{ x: 8, y: 6 }}
+            tracksViewChanges={trackMarkers}
+          >
+            <View style={[styles.floatingNumber, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
+              <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
+            </View>
+          </Marker>
+        </React.Fragment>
+      ));
+    }
+
+    return pedidos.map((p, i) => {
+      const isAtual = i === indiceAtualRef.current;
+      const isFuturo = i > indiceAtualRef.current;
+
+      if (isAtual) {
+        return (
+          <Marker
+            key={`${p.id}-atual`}
+            coordinate={p.coordinates}
+            anchor={{ x: 0.5, y: 1 }}
+            pinColor="#d32f2f"
+            tracksViewChanges={false}
+            zIndex={999}
+          />
+        );
+      }
+
+      if (isFuturo) {
+        return (
+          <React.Fragment key={`${p.id}-${i}`}>
+            <Marker
+              coordinate={p.coordinates}
+              anchor={{ x: 0.5, y: 1 }}
+              image={require('../assets/images/alfinete_32x23.png')}
+              tracksViewChanges={false}
+            />
+            <Marker
+              coordinate={p.coordinates}
+              anchor={{ x: 0, y: 0.5 }}
+              centerOffset={{ x: 8, y: 6 }}
+              tracksViewChanges={trackMarkers}
+            >
+              <View style={[styles.floatingNumber, { backgroundColor: '#777' }]} pointerEvents="none">
+                <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
+              </View>
+            </Marker>
+          </React.Fragment>
+        );
+      }
+
+      return null;
+    });
+  }, [pedidos, emEntrega, trackMarkers]);
 
   return (
     <MapView
@@ -192,7 +306,9 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
             setUserLocation(loc.coords);
             centerTo(loc.coords as any);
           }
-        } catch {}
+        } catch (error) {
+          console.error('[MAPA] Erro no onMapReady:', error);
+        }
       }}
       initialRegion={{
         latitude: userLocation?.latitude ?? -18.91899,
@@ -203,71 +319,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       showsUserLocation
       onUserLocationChange={handleUserLocationChange}
     >
-      {!emEntrega && pedidos.map((p, i) => (
-        <React.Fragment key={p.id}>
-          <Marker
-            coordinate={p.coordinates}
-            anchor={{ x: 0.5, y: 1 }}
-            image={require('../assets/images/alfinete_85x85.png')}
-            tracksViewChanges={false}
-          />
-          <Marker
-            coordinate={p.coordinates}
-            anchor={{ x: 0, y: 0.5 }}
-            centerOffset={{ x: 8, y: 6 }}
-            tracksViewChanges={trackMarkers}
-          >
-            <View style={[styles.floatingNumber, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
-              <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
-            </View>
-          </Marker>
-        </React.Fragment>
-      ))}
-
-      {emEntrega && pedidos.map((p, i) => {
-  const isAtual = i === indiceAtualRef.current;
-  const isFuturo = i > indiceAtualRef.current;
-
-  if (isAtual) {
-    return (
-      <Marker
-        key={p.id}
-        coordinate={p.coordinates}
-        anchor={{ x: 0.5, y: 1 }}
-        pinColor="#d32f2f"
-        tracksViewChanges={false}
-        zIndex={999}
-      />
-    );
-  }
-
-  if (isFuturo) {
-    return (
-      <React.Fragment key={p.id}>
-        <Marker
-          coordinate={p.coordinates}
-          anchor={{ x: 0.5, y: 1 }}
-          image={require('../assets/images/alfinete_32x23.png')}
-          tracksViewChanges={false}
-        />
-        <Marker
-          coordinate={p.coordinates}
-          anchor={{ x: 0, y: 0.5 }}
-          centerOffset={{ x: 8, y: 6 }}
-          tracksViewChanges={trackMarkers}
-        >
-          <View style={[styles.floatingNumber, { backgroundColor: '#777' }]} pointerEvents="none">
-            <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
-          </View>
-        </Marker>
-      </React.Fragment>
-    );
-  }
-
-  return null;
-      })}
-
-
+      {markers}
     </MapView>
   );
 }

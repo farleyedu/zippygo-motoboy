@@ -10,9 +10,10 @@ import {
   Platform,
 } from 'react-native';
 import { CodeField, Cursor, useBlurOnFulfill, useClearByFocusCell } from 'react-native-confirmation-code-field';
-import { Stack } from 'expo-router';
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { Stack, useRouter } from 'expo-router';
+import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import * as SecureStore from 'expo-secure-store';
 
 const CELL_COUNT = 4;
 const lockIcon = require('../assets/images/lock.png'); // ajuste o caminho se necessário
@@ -22,20 +23,22 @@ export default function VerificationScreen() {
   const ref = useBlurOnFulfill({ value, cellCount: CELL_COUNT });
   const [props, getCellOnLayoutHandler] = useClearByFocusCell({ value, setValue });
   const navigation = useNavigation();
-  const route = useRoute();
-  // @ts-ignore
-  const onSuccess = route.params?.onSuccess;
+  const router = useRouter();
 
-  const handleValidar = () => {
-    if (onSuccess) onSuccess();
-    navigation.goBack();
+  const handleValidar = async () => {
+    // Marca que o código foi validado
+    await SecureStore.setItemAsync('codigoValidado', 'true');
+    // Remove o flag de callback
+    await SecureStore.deleteItemAsync('codigoCallback');
+    // Volta para a tela anterior
+    router.back();
   };
 
   return (
     <SafeAreaView style={styles.tela}>
       <Stack.Screen options={{ headerShown: false }} />
       <View style={{ position: 'absolute', top: 40, left: 16, zIndex: 10 }}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
+        <TouchableOpacity onPress={() => router.back()}>
           <Ionicons name="arrow-back-sharp" size={28} color="#222" />
         </TouchableOpacity>
       </View>
