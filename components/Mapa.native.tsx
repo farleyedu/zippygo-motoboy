@@ -204,22 +204,24 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       onUserLocationChange={handleUserLocationChange}
     >
       {!emEntrega && pedidos.map((p, i) => (
-        <Marker
-          key={p.id}
-          coordinate={p.coordinates}
-          anchor={{ x: 0.5, y: 1 }}
-          tracksViewChanges={trackMarkers}
-        >
-          <View style={styles.pinContainer} collapsable={false}>
-            <Image
-              source={require('../assets/images/alfinete.png')}
-              style={styles.pinImage}
-            />
-            <View style={[styles.secondaryLabel, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
-              <Text style={styles.secondaryLabelText} allowFontScaling={false}>{i + 1}</Text>
+        <React.Fragment key={p.id}>
+          <Marker
+            coordinate={p.coordinates}
+            anchor={{ x: 0.5, y: 1 }}
+            image={require('../assets/images/alfinete_85x85.png')}
+            tracksViewChanges={false}
+          />
+          <Marker
+            coordinate={p.coordinates}
+            anchor={{ x: 0, y: 0.5 }}
+            centerOffset={{ x: 8, y: 6 }}
+            tracksViewChanges={trackMarkers}
+          >
+            <View style={[styles.floatingNumber, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
+              <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
             </View>
-          </View>
-        </Marker>
+          </Marker>
+        </React.Fragment>
       ))}
 
       {emEntrega && pedidos.map((p, i) => {
@@ -231,37 +233,34 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       <Marker
         key={p.id}
         coordinate={p.coordinates}
-        tracksViewChanges={trackMarkers}
-        flat
         anchor={{ x: 0.5, y: 1 }}
-        centerOffset={{ x: 0, y: -10 }}
+        pinColor="#d32f2f"
+        tracksViewChanges={false}
         zIndex={999}
-      >
-        <View style={styles.currentContainer} collapsable={false}>
-          <MaterialCommunityIcons name="map-marker" size={34} color="#d32f2f" />
-        </View>
-      </Marker>
+      />
     );
   }
 
   if (isFuturo) {
     return (
-      <Marker
-        key={p.id}
-        coordinate={p.coordinates}
-        anchor={{ x: 0.5, y: 1 }}
-        tracksViewChanges={trackMarkers}
-      >
-          <View style={styles.pinContainer} collapsable={false}>
-          <Image
-            source={require('../assets/images/alfinete.png')}
-              style={styles.pinImage}
-          />
-          <View style={[styles.secondaryLabel, { backgroundColor: '#777' }]} pointerEvents="none">
-            <Text style={styles.secondaryLabelText} allowFontScaling={false}>{i + 1}</Text>
+      <React.Fragment key={p.id}>
+        <Marker
+          coordinate={p.coordinates}
+          anchor={{ x: 0.5, y: 1 }}
+          image={require('../assets/images/alfinete_32x23.png')}
+          tracksViewChanges={false}
+        />
+        <Marker
+          coordinate={p.coordinates}
+          anchor={{ x: 0, y: 0.5 }}
+          centerOffset={{ x: 8, y: 6 }}
+          tracksViewChanges={trackMarkers}
+        >
+          <View style={[styles.floatingNumber, { backgroundColor: '#777' }]} pointerEvents="none">
+            <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
           </View>
-        </View>
-      </Marker>
+        </Marker>
+      </React.Fragment>
     );
   }
 
@@ -276,13 +275,13 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
 const styles = StyleSheet.create({
   pinContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
-    width: 28,
-    height: 34,
+    justifyContent: 'flex-end',
+    width: 14,
+    height: 18,
   },
   currentContainer: {
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-end',
     width: 28,
     height: 34,
   },
@@ -293,9 +292,8 @@ const styles = StyleSheet.create({
     height: 21,
   },
   pinImage: {
-    width: 24,
-    height: 30,
-    transform: [{ translateY: -0.5 }],
+    width: 14,
+    height: 18,
   },
   pinImageLarge: {
     width: 17,
@@ -339,8 +337,8 @@ const styles = StyleSheet.create({
   },
   secondaryLabel: {
     position: 'absolute',
-    right: -3,
-    top: 16,
+    right: -6,
+    top: 12,
     backgroundColor: '#777',
     borderRadius: 10,
     paddingHorizontal: 5,

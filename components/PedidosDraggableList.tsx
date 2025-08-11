@@ -101,7 +101,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
           ]}
           onLongPress={dragEnabled ? drag : undefined}
           activeOpacity={0.95}
-          delayLongPress={120}
+          delayLongPress={80}
           onPress={() => handleExpand(item.id)}
         >
           <View style={styles.cardHeader}>
@@ -179,7 +179,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
       showsVerticalScrollIndicator={false}
       onScroll={scrollHandler}
       scrollEventThrottle={16}
-      activationDistance={dragEnabled ? 20 : Number.MAX_SAFE_INTEGER}
+      activationDistance={dragEnabled ? 8 : Number.MAX_SAFE_INTEGER}
     />
   );
 }
