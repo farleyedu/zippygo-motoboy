@@ -49,7 +49,7 @@ export default function ConfirmacaoEntrega() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
-  
+
   // Extrai dados do pedido dos params
   const nomeCliente = params.nome || 'Cliente';
   const bairro = params.bairro || 'Bairro';
@@ -61,15 +61,15 @@ export default function ConfirmacaoEntrega() {
   const valor = params.valor || '';
   const itens = params.itens || [];
   const previsaoEntrega = params.previsaoEntrega || '';
-  
+
   // Determina se é iFood ou estabelecimento baseado no id_ifood
   const isIfood = id_ifood > 0;
   const origem = isIfood ? 'ifood' : 'estabelecimento';
-  
+
   // Determina se precisa cobrar baseado no status de pagamento
   const precisaCobrar = statusPagamento === 'a_receber';
   const jaFoiPago = statusPagamento === 'pago';
-  
+
   // Estados
   const [codigoStatus, setCodigoStatus] = useState<CodigoStatus>(!isIfood ? 'validado' : 'pendente');
   const [codigoValor, setCodigoValor] = useState('');
@@ -79,17 +79,15 @@ export default function ConfirmacaoEntrega() {
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
   const quantidadePedidos = parseInt(params.quantidadePedidos as string, 10) || 1;
   const [expandido, setExpandido] = useState(false);
-  
+
   // Estados do pagamento simples
   const [pagamentoExpandido, setPagamentoExpandido] = useState(false);
-  const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>('Dinheiro'); // pré-selecionado
-  const [metodoPickerAberto, setMetodoPickerAberto] = useState(false); // toque para trocar
-  const [trocoPara, setTrocoPara] = useState<number | undefined>();
-  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(false); // toggle para PIX/Cartão
+  const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>('Dinheiro');
+
 
   // Animações (reservado)
   const pagamentoAnimacao = useRef(new Animated.Value(0)).current;
-  
+
   // Determina se pode liberar para próxima entrega
   const podeLiberar = codigoStatus === 'validado' && pagamentoStatus === 'confirmado';
 
@@ -104,7 +102,7 @@ export default function ConfirmacaoEntrega() {
       } else {
         setIsUltimaEntrega(false);
       }
-      
+
       // Se não for iFood, código já está confirmado
       if (!isIfood) {
         setCodigoStatus('validado');
@@ -116,7 +114,7 @@ export default function ConfirmacaoEntrega() {
           setCodigoStatus('validado');
         }
       }
-      
+
       // Se já foi pago ou não precisa cobrar, marca como pago
       if (jaFoiPago || !precisaCobrar) {
         setPagamentoStatus('confirmado');
@@ -161,7 +159,7 @@ export default function ConfirmacaoEntrega() {
         if (pagamentoStatusSalvo === 'confirmado') {
           setPagamentoStatus('confirmado');
           setPagamentoExpandido(false);
-          
+
           const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${id_ifood}`);
           if (pagamentoResumoSalvo) {
             setPagamentoResumo(JSON.parse(pagamentoResumoSalvo));
@@ -177,38 +175,25 @@ export default function ConfirmacaoEntrega() {
     setCodigoStatus('validado');
   };
 
-  // Validações de pagamento simples (valor fixo = valorTotal)
-  const podeConfirmarPagamentoSimples = () => {
-    if (valorTotal < 0.5) return false; // Valor mínimo R$ 0,50
-    if ((metodoPagamento === 'PIX' || metodoPagamento === 'Débito' || metodoPagamento === 'Crédito') && !pagamentoConfirmado) return false;
-    if (metodoPagamento === 'Dinheiro' && trocoPara && trocoPara < valorTotal) return false;
-    return true;
-  };
+
 
   const handleConfirmarPagamentoSimples = async () => {
-    if (!podeConfirmarPagamentoSimples()) {
-      alert('Verifique se todos os campos estão preenchidos corretamente.');
-      return;
-    }
-
     const resumo: PagamentoResumo = {
       tipo: 'simples',
       metodo: metodoPagamento,
-      valor: valorTotal,   // valor fixo e destacado
-      trocoPara,
+      valor: valorTotal, // valor fixo e destacado
     };
 
-    // Salva o resumo do pagamento
     await SecureStore.setItemAsync(`pagamentoResumo_${id_ifood}`, JSON.stringify(resumo));
     await SecureStore.setItemAsync(`pagamentoStatus_${id_ifood}`, 'confirmado');
-    
+
     setPagamentoStatus('confirmado');
     setPagamentoResumo(resumo);
     setPagamentoExpandido(false);
-    setMetodoPickerAberto(false);
 
     alert('Pagamento confirmado!');
   };
+
 
   const abrirWhatsApp = (tipo: 'pizzaria' | 'cliente') => {
     const numero = tipo === 'pizzaria' ? '553499999999' : '553498888888';
@@ -305,388 +290,325 @@ export default function ConfirmacaoEntrega() {
     </View>
   );
   // Helper para exibir "validado/validar" (iFood)
-const renderStatusValidar = () => (
-  <View style={styles.statusItem}>
-    <MaterialCommunityIcons
-      name={codigoStatus === 'validado' ? 'check-circle' : 'alert-circle'}
-      size={14}
-      color={codigoStatus === 'validado' ? '#4caf50' : '#d32f2f'}
-    />
-    <Text
-      style={[
-        styles.statusTexto,
-        {
-          color: codigoStatus === 'validado' ? '#4caf50' : '#d32f2f',
-          fontWeight: 'bold',
-        },
-      ]}
+  const renderStatusValidar = () => (
+    <View style={styles.statusItem}>
+      <MaterialCommunityIcons
+        name={codigoStatus === 'validado' ? 'check-circle' : 'alert-circle'}
+        size={14}
+        color={codigoStatus === 'validado' ? '#4caf50' : '#d32f2f'}
+      />
+      <Text
+        style={[
+          styles.statusTexto,
+          {
+            color: codigoStatus === 'validado' ? '#4caf50' : '#d32f2f',
+            fontWeight: 'bold',
+          },
+        ]}
+      >
+        {codigoStatus === 'validado' ? 'validado' : 'validar'}
+      </Text>
+    </View>
+  );
+  // Ícone por método (MaterialCommunityIcons)
+  const metodoIconName: Record<MetodoPagamento, string> = {
+    Dinheiro: 'cash-multiple',
+    PIX: 'qrcode',
+    Débito: 'credit-card-outline',
+    Crédito: 'credit-card-outline',
+    Outros: 'dots-horizontal-circle-outline',
+  };
+
+
+  return (
+    <KeyboardAvoidingView
+      style={styles.tela}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      {codigoStatus === 'validado' ? 'validado' : 'validar'}
-    </Text>
-  </View>
-);
+      {/* CONTEÚDO PRINCIPAL (sem scroll) */}
+      <View style={styles.conteudo}>
 
 
-return (
-  <KeyboardAvoidingView
-    style={styles.tela}
-    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-  >
-    <ScrollView
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ paddingBottom: 160 + insets.bottom }}
-      showsVerticalScrollIndicator
-    >
 
-      {/* Cabeçalho */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.leftButton} onPress={() => nav.goBack()}>
-          <Ionicons name="arrow-back-sharp" size={24} color="#000" />
-        </TouchableOpacity>
-        <Text style={styles.titulo}>ENTREGA</Text>
-        <TouchableOpacity style={styles.rightButton} onPress={() => setModalVisible(true)}>
-          <Ionicons name="chatbubble-ellipses-outline" size={24} color="#000" />
-        </TouchableOpacity>
-      </View>
-  
-      {/* Modal de chat */}
-      <Modal transparent visible={modalVisible} animationType="fade">
-        <TouchableOpacity style={styles.overlay} onPress={() => setModalVisible(false)}>
-          <View style={styles.modal}>
-            <TouchableOpacity style={styles.opcao} onPress={() => abrirWhatsApp('pizzaria')}>
-              <Text style={styles.opcaoTexto}>Falar com a pizzaria</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.opcao} onPress={() => abrirWhatsApp('cliente')}>
-              <Text style={styles.opcaoTexto}>Falar com o cliente</Text>
-            </TouchableOpacity>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-  
-      {/* Endereço */}
-      <View style={styles.cardEnderecoNovo}>
-        <View style={styles.topoEndereco}>
-          <View style={styles.blocoTextoEndereco}>
-            <Text style={styles.tituloEndereco}>Endereço de entrega</Text>
-            <Text style={styles.enderecoLinha1}>{endereco}</Text>
-            <Text style={styles.enderecoLinha2}>{bairro}</Text>
-          </View>
-          <TouchableOpacity style={styles.botaoMapa}>
-            <Image
-              source={require('../assets/images/mapa.png')}
-              style={styles.iconeMapa}
-            />
-            <Text style={styles.textoMapa}>Mapa</Text>
+
+        {/* Cabeçalho */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.leftButton} onPress={() => nav.goBack()}>
+            <Ionicons name="arrow-back-sharp" size={24} color="#000" />
+          </TouchableOpacity>
+          <Text style={styles.titulo}>ENTREGA</Text>
+          <TouchableOpacity style={styles.rightButton} onPress={() => setModalVisible(true)}>
+            <Ionicons name="chatbubble-ellipses-outline" size={24} color="#000" />
           </TouchableOpacity>
         </View>
-      </View>
-  
-      {/* Aviso de solicitação de código */}
-      {isIfood && (
-        <View style={styles.alertaCodigo}>
-          <Ionicons name="alert-circle-outline" size={18} color="#888" />
-          <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
-        </View>
-      )}
-  
-      {/* Cliente/Pedido */}
-      <View style={styles.cardCliente}>
-        <View style={styles.linhaTopo}>
-          <View>
-            <Text style={styles.nomeCliente}>{nomeCliente}</Text>
-            <Text style={styles.bairro}>{bairro}</Text>
-            <View style={styles.statusLinha}>
-              <View style={styles.statusItem}>
-                <MaterialCommunityIcons name="shopping-outline" size={14} color="#555" />
-                <Text style={styles.statusTexto}>
-                  {quantidadePedidos} pedido{quantidadePedidos > 1 ? 's' : ''}
-                </Text>
-              </View>
-              {isIfood ? renderStatusValidar() : (
-                <View style={styles.statusItem}>
-                  <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
-                  <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Validado</Text>
-                </View>
-              )}
-              {precisaCobrar ? renderStatusPago() : (
-                <View style={styles.statusItem}>
-                  <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
-                  <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Pago</Text>
-                </View>
-              )}
+
+        {/* Modal de chat */}
+        <Modal transparent visible={modalVisible} animationType="fade">
+          <TouchableOpacity style={styles.overlay} onPress={() => setModalVisible(false)}>
+            <View style={styles.modal}>
+              <TouchableOpacity style={styles.opcao} onPress={() => abrirWhatsApp('pizzaria')}>
+                <Text style={styles.opcaoTexto}>Falar com a pizzaria</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.opcao} onPress={() => abrirWhatsApp('cliente')}>
+                <Text style={styles.opcaoTexto}>Falar com o cliente</Text>
+              </TouchableOpacity>
             </View>
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-            <View style={[
-              styles.badgeOrigem,
-              isIfood ? styles.badgeIfood : styles.badgeEstabelecimento,
-              { marginRight: 8, marginTop: 2 }
-            ]}>
-              <Text style={styles.badgeOrigemTexto}>
-                {isIfood ? 'iFood' : 'Estabelecimento'}
-              </Text>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Endereço */}
+        <View style={styles.cardEnderecoNovo}>
+          <View style={styles.topoEndereco}>
+            <View style={styles.blocoTextoEndereco}>
+              <Text style={styles.tituloEndereco}>Endereço de entrega</Text>
+              <Text style={styles.enderecoLinha1}>{endereco}</Text>
+              <Text style={styles.enderecoLinha2}>{bairro}</Text>
             </View>
-            <TouchableOpacity onPress={toggleExpand} style={[styles.iconeContainer, { marginTop: 2 }]}>
-              <Ionicons name={expandido ? "chevron-up" : "chevron-down"} size={22} color="#888" />
+            <TouchableOpacity style={styles.botaoMapa}>
+              <Image
+                source={require('../assets/images/mapa.png')}
+                style={styles.iconeMapa}
+              />
+              <Text style={styles.textoMapa}>Mapa</Text>
             </TouchableOpacity>
           </View>
         </View>
-  
-        {expandido ? (
-          <View style={styles.detalhesPedido}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
-              <FontAwesome name="file-text-o" size={22} color="#333" style={{ marginRight: 8 }} />
-              <Text style={styles.pedidoIdDestaque}>
-                Pedido {isIfood ? id_ifood : 'Estabelecimento'}
-              </Text>
+
+        {/* Aviso de solicitação de código */}
+        {isIfood && (
+          <View style={styles.alertaCodigo}>
+            <Ionicons name="alert-circle-outline" size={18} color="#888" />
+            <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
+          </View>
+        )}
+
+        {/* Cliente/Pedido */}
+        <View style={styles.cardCliente}>
+          <View style={styles.linhaTopo}>
+            <View>
+              <Text style={styles.nomeCliente}>{nomeCliente}</Text>
+              <Text style={styles.bairro}>{bairro}</Text>
+              <View style={styles.statusLinha}>
+                <View style={styles.statusItem}>
+                  <MaterialCommunityIcons name="shopping-outline" size={14} color="#555" />
+                  <Text style={styles.statusTexto}>
+                    {quantidadePedidos} pedido{quantidadePedidos > 1 ? 's' : ''}
+                  </Text>
+                </View>
+                {isIfood ? renderStatusValidar() : (
+                  <View style={styles.statusItem}>
+                    <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
+                    <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Validado</Text>
+                  </View>
+                )}
+                {precisaCobrar ? renderStatusPago() : (
+                  <View style={styles.statusItem}>
+                    <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
+                    <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Pago</Text>
+                  </View>
+                )}
+              </View>
             </View>
-            <View style={styles.detalheLinha}>
-              <FontAwesome name="phone" size={16} color="#888" style={{ marginRight: 6 }} />
-              <Text style={styles.detalheLabel}>Telefone: <Text style={styles.detalheValor}>{telefone}</Text></Text>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+              <View style={[
+                styles.badgeOrigem,
+                isIfood ? styles.badgeIfood : styles.badgeEstabelecimento,
+                { marginRight: 8, marginTop: 2 }
+              ]}>
+                <Text style={styles.badgeOrigemTexto}>
+                  {isIfood ? 'iFood' : 'Estabelecimento'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={toggleExpand} style={[styles.iconeContainer, { marginTop: 2 }]}>
+                <Ionicons name={expandido ? "chevron-up" : "chevron-down"} size={22} color="#888" />
+              </TouchableOpacity>
             </View>
-            <View style={styles.detalheLinha}>
-              <FontAwesome name="money" size={16} color="#888" style={{ marginRight: 6 }} />
-              <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {valorTotal.toFixed(2)}</Text></Text>
-            </View>
-            <View style={styles.detalheLinha}>
-              <FontAwesome name="list" size={16} color="#888" style={{ marginRight: 6 }} />
-              <Text style={styles.detalheLabel}>
-                Itens:{' '}
-                <Text style={styles.detalheValor}>
-                  {Array.isArray(itens)
-                    ? itens.map((item: any, idx: number) =>
+          </View>
+
+          {expandido ? (
+            <View style={styles.detalhesPedido}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <FontAwesome name="file-text-o" size={22} color="#333" style={{ marginRight: 8 }} />
+                <Text style={styles.pedidoIdDestaque}>
+                  Pedido {isIfood ? id_ifood : 'Estabelecimento'}
+                </Text>
+              </View>
+              <View style={styles.detalheLinha}>
+                <FontAwesome name="phone" size={16} color="#888" style={{ marginRight: 6 }} />
+                <Text style={styles.detalheLabel}>Telefone: <Text style={styles.detalheValor}>{telefone}</Text></Text>
+              </View>
+              <View style={styles.detalheLinha}>
+                <FontAwesome name="money" size={16} color="#888" style={{ marginRight: 6 }} />
+                <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {valorTotal.toFixed(2)}</Text></Text>
+              </View>
+              <View style={styles.detalheLinha}>
+                <FontAwesome name="list" size={16} color="#888" style={{ marginRight: 6 }} />
+                <Text style={styles.detalheLabel}>
+                  Itens:{' '}
+                  <Text style={styles.detalheValor}>
+                    {Array.isArray(itens)
+                      ? itens.map((item: any, idx: number) =>
                         typeof item === 'string'
                           ? item
                           : item?.nome || `Item ${idx + 1}`
                       ).join(', ')
-                    : itens}
-                </Text>
-              </Text>
-            </View>
-            {previsaoEntrega && (
-              <View style={styles.detalheLinha}>
-                <MaterialCommunityIcons name="clock-outline" size={16} color="#888" style={{ marginRight: 6 }} />
-                <Text style={styles.detalheLabel}>
-                  Previsão de entrega: <Text style={styles.detalheValor}>{previsaoEntrega}</Text>
+                      : itens}
+                  </Text>
                 </Text>
               </View>
-            )}
-          </View>
-        ) : (
-          <Text style={styles.pedidoId}>
-            Pedido {isIfood ? id_ifood : 'Estabelecimento'}
-          </Text>
-        )}
-  
-        {podeLiberar ? (
-          <View style={styles.tudoLiberadoBox}>
-            <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
-            <Text style={styles.tudoLiberadoTexto}>
-              Tudo liberado! Você pode ir para a próxima entrega.
-            </Text>
-          </View>
-        ) : (
-          isIfood
-            ? renderCodigoEntrega()
-            : (
-              <View style={styles.codigoConfirmado}>
-                <Ionicons name="checkmark-circle-outline" size={18} color="#4caf50" />
-                <Text style={styles.codigoConfirmadoTexto}>Não precisa de código</Text>
-              </View>
-            )
-        )}
-
-        {pagamentoStatus !== 'confirmado' && precisaCobrar && (
-          <TouchableOpacity
-            style={[styles.botaoOutline, { borderColor: '#2e7d32' }]}
-            onPress={() => {
-              setPagamentoExpandido(!pagamentoExpandido);
-              setMetodoPickerAberto(false);
-            }}
-          >
-            <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Cobrar</Text>
-          </TouchableOpacity>
-        )}
-
-        {/* Resumo de pagamento confirmado */}
-        {pagamentoStatus === 'confirmado' && pagamentoResumo && (
-          <View style={styles.resumoPagamento}>
-            <View style={styles.resumoPagamentoHeader}>
-              <Ionicons name="checkmark-circle" size={18} color="#4caf50" />
-              <Text style={styles.resumoPagamentoTitulo}>
-                Pagamento: ✅ Confirmado {pagamentoResumo.tipo === 'dividido' ? '(Dividido)' : ''}
-              </Text>
-            </View>
-            {pagamentoResumo.tipo === 'simples' && (
-              <Text style={styles.resumoPagamentoDetalhes}>
-                {pagamentoResumo.metodo} R$ {pagamentoResumo.valor?.toFixed(2).replace('.', ',')}
-                {pagamentoResumo.trocoPara && ` (Troco p/ ${pagamentoResumo.trocoPara.toFixed(2).replace('.', ',')})`}
-              </Text>
-            )}
-            {pagamentoResumo.tipo === 'dividido' && pagamentoResumo.partes && (
-              <Text style={styles.resumoPagamentoDetalhes}>
-                {pagamentoResumo.partes.map((parte, index) => (
-                  `${parte.metodo} R$ ${parte.valor.toFixed(2).replace('.', ',')}${parte.trocoPara ? ` (Troco p/ ${parte.trocoPara.toFixed(2).replace('.', ',')})` : ''}${parte.confirmado ? ' (Confirmado)' : ''}`
-                )).join(' + ')}
-              </Text>
-            )}
-          </View>
-        )}
-
-        {/* Seção de pagamento embutida */}
-        {pagamentoExpandido && (
-          <Animated.View style={styles.secaoPagamento}>
-            <View style={styles.divisor} />
-
-            {/* VALOR EM DESTAQUE (não editável) */}
-            <View style={styles.valorDestaqueContainer}>
-              <Text style={styles.valorDestaqueLabel}>Total a cobrar</Text>
-              <Text style={styles.valorDestaqueValor}>
-                R$ {valorTotal.toFixed(2).replace('.', ',')}
-              </Text>
-            </View>
-            
-            {/* Forma de pagamento (chip atual + toque para trocar) */}
-            <View style={styles.campoContainer}>
-              <Text style={styles.campoLabel}>Forma de pagamento</Text>
-
-              <TouchableOpacity
-                activeOpacity={0.8}
-                style={styles.metodoAtualChip}
-                onPress={() => setMetodoPickerAberto(prev => !prev)}
-              >
-                <Text style={styles.metodoAtualTexto}>{metodoPagamento}</Text>
-                <Ionicons
-                  name={metodoPickerAberto ? 'chevron-up' : 'chevron-down'}
-                  size={18}
-                  color="#2C79FF"
-                />
-                <Text style={styles.metodoHint}>Toque para trocar</Text>
-              </TouchableOpacity>
-
-              {metodoPickerAberto && (
-                <View style={styles.pickerContainer}>
-                  {(['Dinheiro', 'PIX', 'Débito', 'Crédito', 'Outros'] as MetodoPagamento[]).map((metodo) => (
-                    <TouchableOpacity
-                      key={metodo}
-                      style={[
-                        styles.opcaoMetodo,
-                        metodoPagamento === metodo && styles.opcaoMetodoSelecionada
-                      ]}
-                      onPress={() => {
-                        setMetodoPagamento(metodo);
-                        setMetodoPickerAberto(false);
-                        setPagamentoConfirmado(false);
-                        setTrocoPara(undefined);
-                      }}
-                    >
-                      <Text style={[
-                        styles.textoOpcaoMetodo,
-                        metodoPagamento === metodo && styles.textoOpcaoMetodoSelecionada
-                      ]}>
-                        {metodo}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+              {previsaoEntrega && (
+                <View style={styles.detalheLinha}>
+                  <MaterialCommunityIcons name="clock-outline" size={16} color="#888" style={{ marginRight: 6 }} />
+                  <Text style={styles.detalheLabel}>
+                    Previsão de entrega: <Text style={styles.detalheValor}>{previsaoEntrega}</Text>
+                  </Text>
                 </View>
               )}
             </View>
+          ) : (
+            <Text style={styles.pedidoId}>
+              Pedido {isIfood ? id_ifood : 'Estabelecimento'}
+            </Text>
+          )}
 
-            {/* Condicionais baseadas no método */}
-            {metodoPagamento === 'Dinheiro' && (
-              <View style={styles.campoContainer}>
-                <Text style={styles.campoLabel}>Troco para (opcional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="R$ 0,00"
-                  keyboardType="numeric"
-                  value={typeof trocoPara === 'number' ? `R$ ${trocoPara.toFixed(2).replace('.', ',')}` : ''}
-                  onChangeText={(text) => {
-                    const valor = parseFloat(text.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
-                    setTrocoPara(valor);
-                  }}
-                />
-              </View>
-            )}
-
-            {(metodoPagamento === 'PIX') && (
-              <View style={styles.campoContainer}>
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => setPagamentoConfirmado(!pagamentoConfirmado)}
-                >
-                  <Ionicons 
-                    name={pagamentoConfirmado ? "checkbox" : "square-outline"} 
-                    size={20} 
-                    color={pagamentoConfirmado ? "#4caf50" : "#666"} 
-                  />
-                  <Text style={styles.checkboxLabel}>PIX confirmado</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.botaoCopiar}>
-                  <Text style={styles.textoBotaoCopiar}>Copiar chave</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {(metodoPagamento === 'Débito' || metodoPagamento === 'Crédito') && (
-              <View style={styles.campoContainer}>
-                <TouchableOpacity
-                  style={styles.checkboxContainer}
-                  onPress={() => setPagamentoConfirmado(!pagamentoConfirmado)}
-                >
-                  <Ionicons 
-                    name={pagamentoConfirmado ? "checkbox" : "square-outline"} 
-                    size={20} 
-                    color={pagamentoConfirmado ? "#4caf50" : "#666"} 
-                  />
-                  <Text style={styles.checkboxLabel}>Aprovado no POS</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Ações */}
-            <View style={styles.acoesPagamento}>
-              <TouchableOpacity
-                style={styles.botaoCancelarPagamento}
-                onPress={() => {
-                  setPagamentoExpandido(false);
-                  setMetodoPickerAberto(false);
-                }}
-              >
-                <Text style={styles.textoBotaoCancelarPagamento}>Cancelar</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.botaoConfirmarPagamento,
-                  podeConfirmarPagamentoSimples() ? styles.botaoConfirmarPagamentoAtivo : styles.botaoConfirmarPagamentoInativo
-                ]}
-                onPress={handleConfirmarPagamentoSimples}
-                disabled={!podeConfirmarPagamentoSimples()}
-              >
-                <Text style={styles.textoBotaoConfirmarPagamento}>Confirmar pagamento</Text>
-              </TouchableOpacity>
+          {podeLiberar ? (
+            <View style={styles.tudoLiberadoBox}>
+              <Ionicons name="checkmark-circle" size={22} color="#4caf50" />
+              <Text style={styles.tudoLiberadoTexto}>
+                Tudo liberado! Você pode ir para a próxima entrega.
+              </Text>
             </View>
+          ) : (
+            isIfood
+              ? renderCodigoEntrega()
+              : (
+                <View style={styles.codigoConfirmado}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#4caf50" />
+                  <Text style={styles.codigoConfirmadoTexto}>Não precisa de código</Text>
+                </View>
+              )
+          )}
 
-            {/* Botão dividir pagamento */}
+          {pagamentoStatus !== 'confirmado' && precisaCobrar && (
             <TouchableOpacity
-              style={styles.botaoDividirPagamento}
-              onPress={() => router.push({
-                pathname: '/dividirPagamento',
-                params: { total: valorTotal.toString(), pedidoId: id_ifood.toString() }
-              })}
+              style={[styles.botaoOutline, { borderColor: '#2e7d32' }]}
+              onPress={() => setPagamentoExpandido(v => !v)}
             >
-              <Text style={styles.textoBotaoDividirPagamento}>🧮 Dividir pagamento</Text>
+              <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Cobrar</Text>
             </TouchableOpacity>
-          </Animated.View>
-        )}
-      </View>
-  
-      {/* Espaço extra para não cobrir conteúdo */}
-      </ScrollView>
+          )}
 
-{/* Rodapé fixo */}
-<View style={[styles.rodapeFixo, { paddingBottom: 24 + insets.bottom }]}>
+          {/* Resumo de pagamento confirmado */}
+          {pagamentoStatus === 'confirmado' && pagamentoResumo && (
+            <View style={styles.resumoPagamento}>
+              <View style={styles.resumoPagamentoHeader}>
+                <Ionicons name="checkmark-circle" size={18} color="#4caf50" />
+                <Text style={styles.resumoPagamentoTitulo}>
+                  Pagamento: ✅ Confirmado {pagamentoResumo.tipo === 'dividido' ? '(Dividido)' : ''}
+                </Text>
+              </View>
+              {pagamentoResumo.tipo === 'simples' && (
+                <Text style={styles.resumoPagamentoDetalhes}>
+                  {pagamentoResumo.metodo} R$ {pagamentoResumo.valor?.toFixed(2).replace('.', ',')}
+                  {pagamentoResumo.trocoPara && ` (Troco p/ ${pagamentoResumo.trocoPara.toFixed(2).replace('.', ',')})`}
+                </Text>
+              )}
+              {pagamentoResumo.tipo === 'dividido' && pagamentoResumo.partes && (
+                <Text style={styles.resumoPagamentoDetalhes}>
+                  {pagamentoResumo.partes.map((parte, index) => (
+                    `${parte.metodo} R$ ${parte.valor.toFixed(2).replace('.', ',')}${parte.trocoPara ? ` (Troco p/ ${parte.trocoPara.toFixed(2).replace('.', ',')})` : ''}${parte.confirmado ? ' (Confirmado)' : ''}`
+                  )).join(' + ')}
+                </Text>
+              )}
+            </View>
+          )}
+
+
+          {/* Seção de pagamento embutida */}
+          {pagamentoExpandido && (
+            <Animated.View style={styles.secaoPagamento}>
+              <View style={styles.divisor} />
+
+              {/* Forma de pagamento (sempre exposta, com ícones) */}
+              <View style={styles.campoContainer}>
+                <View style={styles.metodosGrid}>
+                  {(['Dinheiro', 'PIX', 'Débito', 'Crédito'] as MetodoPagamento[]).map((metodo) => {
+                    const selecionado = metodoPagamento === metodo;
+                    return (
+                      <TouchableOpacity
+                        key={metodo}
+                        style={[styles.metodoChip, selecionado && styles.metodoChipSelecionado]}
+                        onPress={() => setMetodoPagamento(metodo)}
+                        activeOpacity={0.85}
+                      >
+                        <MaterialCommunityIcons
+                          name={
+                            (metodoIconName[metodo] as React.ComponentProps<
+                              typeof MaterialCommunityIcons
+                            >['name'])
+                          }
+                          size={16}
+                          color={selecionado ? '#fff' : '#2C79FF'}
+                          style={styles.metodoIcon}
+                        />
+                        <Text style={[styles.metodoLabel, selecionado && styles.metodoLabelSelecionado]}>
+                          {metodo}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* VALOR EM DESTAQUE (não editável) */}
+              <View style={styles.valorDestaqueContainer}>
+                <Text style={styles.valorDestaqueLabel}>Total a cobrar</Text>
+                <Text style={styles.valorDestaqueValor}>
+                  R$ {valorTotal.toFixed(2).replace('.', ',')}
+                </Text>
+              </View>
+            </Animated.View>
+          )}
+        </View>
+        {/* Espaço extra para não cobrir conteúdo */}
+      </View>
+
+      {/* Barra fixa de ações de pagamento */}
+      <View style={[styles.barraAcoesFixa, { bottom: 115 + insets.bottom }]}>
+        {/* 🧮 Dividir — pequeno, à esquerda */}
+        <TouchableOpacity
+          style={styles.botaoDividirPequeno}
+          onPress={() =>
+            router.push({
+              pathname: '/dividirPagamento',
+              params: { total: valorTotal.toString(), pedidoId: id_ifood.toString() },
+            })
+          }
+          activeOpacity={0.85}
+        >
+          <MaterialCommunityIcons name="calculator-variant" size={16} color="#2C79FF" style={{ marginRight: 6 }} />
+          <Text style={styles.textoBotaoDividirPequeno}>Dividir</Text>
+        </TouchableOpacity>
+
+        {/* Cancelar */}
+        <TouchableOpacity
+          style={styles.botaoCancelarPagamento}
+          onPress={() => setPagamentoExpandido(false)}
+        >
+          <Text style={styles.textoBotaoCancelarPagamento}>Cancelar</Text>
+        </TouchableOpacity>
+
+        {/* Confirmar */}
+        <TouchableOpacity
+          style={[styles.botaoConfirmarPagamento, styles.botaoConfirmarPagamentoAtivo]}
+          onPress={handleConfirmarPagamentoSimples}
+        >
+          <Text style={styles.textoBotaoConfirmarPagamento}>Confirmar pagamento</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Rodapé fixo */}
+      <View style={[styles.rodapeFixo, { paddingBottom: 24 + insets.bottom }]}>
 
         <TouchableOpacity
           disabled={!podeLiberar}
@@ -717,12 +639,13 @@ return (
           <Text style={styles.textoSair}>Finalizar rota</Text>
         </TouchableOpacity>
       </View>
-      </KeyboardAvoidingView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
   tela: { flex: 1, backgroundColor: '#f2f2f2' },
+
   header: {
     height: 80,
     paddingTop: 40,
@@ -733,6 +656,7 @@ const styles = StyleSheet.create({
   titulo: { fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
   leftButton: { position: 'absolute', left: 16, top: 40, padding: 8 },
   rightButton: { position: 'absolute', right: 16, top: 40, padding: 8 },
+
   overlay: {
     flex: 1,
     backgroundColor: '#00000055',
@@ -748,6 +672,8 @@ const styles = StyleSheet.create({
   },
   opcao: { paddingVertical: 12 },
   opcaoTexto: { fontSize: 16, color: '#333' },
+
+  // Endereço
   cardEnderecoNovo: {
     backgroundColor: '#fff',
     padding: 16,
@@ -759,26 +685,10 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
   },
-  blocoTextoEndereco: {
-    flex: 1,
-    paddingRight: 12,
-  },
-  tituloEndereco: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  enderecoLinha1: {
-    fontSize: 14,
-    color: '#000',
-    flexShrink: 1,
-  },
-  enderecoLinha2: {
-    fontSize: 14,
-    color: '#666',
-    marginTop: 4,
-  },
+  blocoTextoEndereco: { flex: 1, paddingRight: 12 },
+  tituloEndereco: { fontSize: 15, fontWeight: 'bold', color: '#333', marginBottom: 4 },
+  enderecoLinha1: { fontSize: 14, color: '#000', flexShrink: 1 },
+  enderecoLinha2: { fontSize: 14, color: '#666', marginTop: 4 },
   botaoMapa: {
     alignItems: 'center',
     borderColor: '#ddd',
@@ -788,16 +698,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     width: 70,
   },
-  iconeMapa: {
-    width: 28,
-    height: 28,
-    marginBottom: 2,
-  },
-  textoMapa: {
-    fontSize: 12,
-    color: '#d32f2f',
-    fontWeight: 'bold',
-  },
+  iconeMapa: { width: 28, height: 28, marginBottom: 2 },
+  textoMapa: { fontSize: 12, color: '#d32f2f', fontWeight: 'bold' },
+
+  // Alerta código
   alertaCodigo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -808,11 +712,9 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderColor: '#eee',
   },
-  textoAlerta: {
-    fontSize: 14,
-    color: '#555',
-    marginLeft: 8,
-  },
+  textoAlerta: { fontSize: 14, color: '#555', marginLeft: 8 },
+
+  // Card cliente/pedido
   cardCliente: {
     backgroundColor: '#fff',
     marginTop: 12,
@@ -834,16 +736,11 @@ const styles = StyleSheet.create({
   statusLinha: { flexDirection: 'row', alignItems: 'center', marginTop: 6 },
   statusItem: { flexDirection: 'row', alignItems: 'center', marginRight: 12 },
   statusTexto: { fontSize: 12, marginLeft: 4 },
-  iconeContainer: {
-    padding: 4,
-  },
-  collapseCircle: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#000',
-  },
+  iconeContainer: { padding: 4 },
+  collapseCircle: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#000' },
+
   pedidoId: { fontWeight: 'bold', fontSize: 14, marginVertical: 12 },
+
   linhaCodigo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -877,6 +774,8 @@ const styles = StyleSheet.create({
     marginLeft: 6,
     marginTop: -3,
   },
+
+  // Botões gerais / rodapé de rota
   botaoOutline: {
     paddingVertical: 6,
     paddingHorizontal: 18,
@@ -888,29 +787,18 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     width: 350,
   },
-  textoBotaoOutline: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  
+  textoBotaoOutline: { fontSize: 13, fontWeight: '600' },
+
   botaoProximaEntrega: {
     paddingVertical: 10,
     borderRadius: 6,
     alignSelf: 'center',
     width: 350,
   },
-  botaoProximaEntregaDesabilitado: {
-    backgroundColor: '#ccc',
-  },
-  botaoProximaEntregaAtivo: {
-    backgroundColor: '#d32f2f',
-  },
-  textoProximaEntrega: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 15,
-  },
+  botaoProximaEntregaDesabilitado: { backgroundColor: '#ccc' },
+  botaoProximaEntregaAtivo: { backgroundColor: '#d32f2f' },
+  textoProximaEntrega: { color: '#fff', textAlign: 'center', fontWeight: 'bold', fontSize: 15 },
+
   rodapeFixo: {
     position: 'absolute',
     left: 0,
@@ -923,134 +811,44 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#eee',
   },
-  botaoSair: {
-    marginTop: 10,
-    alignSelf: 'center',
-    padding: 8,
-  },
-  textoSair: {
-    color: '#888',
-    fontSize: 15,
-    textDecorationLine: 'underline',
-    opacity: 0.7,
-  },
-  rodape: {
-    padding: 16,
-    backgroundColor: '#fff',
-    borderTopWidth: 1,
-    borderColor: '#eee',
-  },
-  botaoEntrega: {
-    backgroundColor: '#c62828',
-    borderRadius: 6,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  textoEntrega: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  badgeOrigemContainer: {
-    position: 'absolute',
-    top: 8,
-    right: 12,
-    zIndex: 10,
-  },
-  badgeOrigem: {
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  badgeIfood: {
-    backgroundColor: '#ff004f',
-  },
-  badgeEstabelecimento: {
-    backgroundColor: '#2c79ff',
-  },
-  badgeOrigemTexto: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 13,
-  },
-  detalhesPedido: {
-    marginTop: 12,
-    backgroundColor: '#f7f7f7',
-    borderRadius: 8,
-    padding: 12,
-  },
-  detalheLabel: {
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 2,
-  },
-  detalheValor: {
-    fontWeight: 'normal',
-    color: '#222',
-  },
-  pedidoIdDestaque: {
-    fontWeight: 'bold',
-    fontSize: 20,
-    color: '#222',
-  },
-  detalheLinha: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  tudoLiberadoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-    marginTop: 8,
-  },
-  tudoLiberadoTexto: {
-    color: '#4caf50',
-    fontWeight: 'bold',
-    fontSize: 16,
-    marginLeft: 8,
-  },
+  botaoSair: { marginTop: 10, alignSelf: 'center', padding: 8 },
+  textoSair: { color: '#888', fontSize: 15, textDecorationLine: 'underline', opacity: 0.7 },
+  rodape: { padding: 16, backgroundColor: '#fff', borderTopWidth: 1, borderColor: '#eee' },
+  botaoEntrega: { backgroundColor: '#c62828', borderRadius: 6, paddingVertical: 14, alignItems: 'center', marginBottom: 10 },
+  textoEntrega: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+
+  // Badges
+  badgeOrigemContainer: { position: 'absolute', top: 8, right: 12, zIndex: 10 },
+  badgeOrigem: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
+  badgeIfood: { backgroundColor: '#ff004f' },
+  badgeEstabelecimento: { backgroundColor: '#2c79ff' },
+  badgeOrigemTexto: { color: '#fff', fontWeight: 'bold', fontSize: 13 },
+
+  // Detalhes do pedido
+  detalhesPedido: { marginTop: 12, backgroundColor: '#f7f7f7', borderRadius: 8, padding: 12 },
+  detalheLabel: { fontWeight: 'bold', color: '#333', marginBottom: 2 },
+  detalheValor: { fontWeight: 'normal', color: '#222' },
+  pedidoIdDestaque: { fontWeight: 'bold', fontSize: 20, color: '#222' },
+  detalheLinha: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+
+  // Status liberado
+  tudoLiberadoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, marginTop: 8 },
+  tudoLiberadoTexto: { color: '#4caf50', fontWeight: 'bold', fontSize: 16, marginLeft: 8 },
 
   // Seção de pagamento
-  secaoPagamento: {
-    marginTop: 16,
-    paddingTop: 16,
-  },
-  divisor: {
-    height: 1,
-    backgroundColor: '#e0e0e0',
-    marginBottom: 16,
-  },
+  secaoPagamento: { marginTop: 16, paddingTop: 16 },
+  divisor: { height: 1, backgroundColor: '#e0e0e0', marginBottom: 16 },
 
   // Valor destacado
-  valorDestaqueContainer: {
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  valorDestaqueLabel: {
-    fontSize: 13,
-    color: '#777',
-    marginBottom: 4,
-  },
-  valorDestaqueValor: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#222',
-  },
+  valorDestaqueContainer: { alignItems: 'center', marginBottom: 80 },
+  valorDestaqueLabel: { fontSize: 13, color: '#777', marginBottom: 4 },
+  valorDestaqueValor: { fontSize: 60, fontWeight: 'bold', color: '#222' },
 
-  campoContainer: {
-    marginBottom: 16,
-  },
-  campoLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#333',
-    marginBottom: 8,
-  },
+  // Campos
+  campoContainer: { marginBottom: 10 },
+  campoLabel: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 8 },
 
-  // Chip da forma atual
+  // (legado, caso ainda use)
   metodoAtualChip: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1063,23 +861,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 20,
   },
-  metodoAtualTexto: {
-    color: '#2C79FF',
-    fontWeight: '700',
-  },
-  metodoHint: {
-    color: '#2C79FF',
-    fontSize: 12,
-    marginLeft: 4,
-  },
+  metodoAtualTexto: { color: '#2C79FF', fontWeight: '700' },
+  metodoHint: { color: '#2C79FF', fontSize: 12, marginLeft: 4 },
 
-  // Grade de opções (quando aberto)
-  pickerContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
-  },
+  // Picker legado
+  pickerContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   opcaoMetodo: {
     paddingHorizontal: 12,
     paddingVertical: 8,
@@ -1088,18 +874,9 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     backgroundColor: '#f9f9f9',
   },
-  opcaoMetodoSelecionada: {
-    borderColor: '#2C79FF',
-    backgroundColor: '#2C79FF',
-  },
-  textoOpcaoMetodo: {
-    fontSize: 14,
-    color: '#666',
-  },
-  textoOpcaoMetodoSelecionada: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  opcaoMetodoSelecionada: { borderColor: '#2C79FF', backgroundColor: '#2C79FF' },
+  textoOpcaoMetodo: { fontSize: 14, color: '#666' },
+  textoOpcaoMetodoSelecionada: { color: '#fff', fontWeight: '600' },
 
   input: {
     borderWidth: 1,
@@ -1110,34 +887,23 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#fff',
   },
+conteudo: {
+  flex: 1,
+  backgroundColor: '#fff',   // o fundo fica branco até encostar na barra
+  paddingHorizontal: 0,
+  paddingTop: 0,
+  paddingBottom: 0,
+  justifyContent: 'flex-start',
+},
 
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  checkboxLabel: {
-    fontSize: 14,
-    color: '#333',
-    marginLeft: 8,
-  },
-  botaoCopiar: {
-    backgroundColor: '#2C79FF',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 4,
-    alignSelf: 'flex-start',
-  },
-  textoBotaoCopiar: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  acoesPagamento: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 16,
-  },
+
+  checkboxContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+  checkboxLabel: { fontSize: 14, color: '#333', marginLeft: 8 },
+  botaoCopiar: { backgroundColor: '#2C79FF', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 4, alignSelf: 'flex-start' },
+  textoBotaoCopiar: { color: '#fff', fontSize: 12, fontWeight: '600' },
+
+  // Ações (se usar dentro do card — hoje estamos usando barra fixa)
+  acoesPagamento: { flexDirection: 'row', alignItems: 'center', marginTop: 16 },
   botaoCancelarPagamento: {
     flex: 1,
     paddingVertical: 12,
@@ -1149,11 +915,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
     alignItems: 'center',
   },
-  textoBotaoCancelarPagamento: {
-    color: '#666',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  textoBotaoCancelarPagamento: { color: '#666', fontSize: 14, fontWeight: '600' },
   botaoConfirmarPagamento: {
     flex: 1,
     paddingVertical: 12,
@@ -1161,17 +923,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignItems: 'center',
   },
-  botaoConfirmarPagamentoAtivo: {
-    backgroundColor: '#4caf50',
-  },
-  botaoConfirmarPagamentoInativo: {
-    backgroundColor: '#ccc',
-  },
-  textoBotaoConfirmarPagamento: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  botaoConfirmarPagamentoAtivo: { backgroundColor: '#4caf50' },
+  botaoConfirmarPagamentoInativo: { backgroundColor: '#ccc' },
+  textoBotaoConfirmarPagamento: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
+  // Botão dividir (versão antiga — hoje usamos o pequeno na barra fixa)
   botaoDividirPagamento: {
     marginTop: 12,
     paddingVertical: 8,
@@ -1182,11 +938,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     alignItems: 'center',
   },
-  textoBotaoDividirPagamento: {
-    color: '#2C79FF',
-    fontSize: 14,
-    fontWeight: '600',
-  },
+  textoBotaoDividirPagamento: { color: '#2C79FF', fontSize: 14, fontWeight: '600' },
 
   // Resumo pagamento
   resumoPagamento: {
@@ -1197,21 +949,69 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#4caf50',
   },
-  resumoPagamentoHeader: {
+  resumoPagamentoHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 4 },
+  resumoPagamentoTitulo: { fontSize: 14, fontWeight: 'bold', color: '#4caf50', marginLeft: 6 },
+  resumoPagamentoDetalhes: { fontSize: 13, color: '#666', marginLeft: 24 },
+
+  // -------- Métodos de pagamento (chips) --------
+  metodosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  metodosRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 4,
+    paddingVertical: 10,
   },
-  resumoPagamentoTitulo: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#4caf50',
-    marginLeft: 6,
+  metodoChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2C79FF',
+    backgroundColor: '#EAF1FF',
+    paddingVertical: 6,     // menor
+    paddingHorizontal: 10,  // menor
+    borderRadius: 20,
+    marginRight: 8,
+    marginBottom: 8,
   },
-  resumoPagamentoDetalhes: {
-    fontSize: 13,
-    color: '#666',
-    marginLeft: 24,
-  },
+  metodoChipSelecionado: { backgroundColor: '#2C79FF', borderColor: '#2C79FF' },
+  metodoIcon: { marginRight: 4 },
+  metodoLabel: { color: '#2C79FF', fontWeight: '600', fontSize: 13 }, // menor
+  metodoLabelSelecionado: { color: '#fff' },
 
+  // -------- Barra fixa de ações (Dividir / Cancelar / Confirmar) --------
+  barraAcoesFixa: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    // o bottom é definido no JSX para ficar acima do rodapé
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: '#e5e5e5',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: -2 },
+    elevation: 6,
+  },
+  botaoDividirPequeno: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#2C79FF',
+    backgroundColor: '#fff',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  textoBotaoDividirPequeno: { color: '#2C79FF', fontSize: 14, fontWeight: '600' },
 });
+
