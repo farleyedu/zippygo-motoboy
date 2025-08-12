@@ -42,16 +42,11 @@ export default function VerificationScreen() {
           <Ionicons name="arrow-back-sharp" size={28} color="#222" />
         </TouchableOpacity>
       </View>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={32}
-      >
-        <View style={styles.container}>
+      <View style={styles.container}>
           <Image source={lockIcon} style={styles.lockIcon} />
           <Text style={styles.titulo}>Verificação</Text>
           <Text style={styles.instrucao}>
-            Digite o código de verificação que enviamos para seu e-mail
+            Digite o código de verificação do cliente Ifood
           </Text>
           <CodeField
             ref={ref}
@@ -83,7 +78,6 @@ export default function VerificationScreen() {
             <Text style={styles.textoBotao}>Verificar</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -98,6 +92,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 24,
+    paddingBottom: 300,
   },
   lockIcon: {
     width: 80,

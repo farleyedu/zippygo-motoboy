@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,11 @@ import {
   Linking,
   Image,
   TextInput,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
+
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +20,28 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
+import { Animated } from 'react-native';
+
+type MetodoPagamento = 'Dinheiro' | 'PIX' | 'Débito' | 'Crédito' | 'Outros';
+
+type CodigoStatus = 'pendente' | 'validando' | 'validado' | 'invalido';
+type PagamentoStatus = 'nao_iniciado' | 'em_andamento' | 'confirmado';
+
+interface PagamentoResumo {
+  tipo: 'simples' | 'dividido';
+  metodo?: MetodoPagamento;
+  valor?: number;
+  trocoPara?: number;
+  observacao?: string; // mantido opcionalmente no tipo, mas UI removida
+  total?: number;
+  partes?: Array<{
+    metodo: MetodoPagamento;
+    valor: number;
+    confirmado?: boolean;
+    trocoPara?: number;
+    observacao?: string;
+  }>;
+}
 
 export default function ConfirmacaoEntrega() {
   const insets = useSafeAreaInsets();
@@ -45,16 +71,27 @@ export default function ConfirmacaoEntrega() {
   const jaFoiPago = statusPagamento === 'pago';
   
   // Estados
-  const [codigoConfirmado, setCodigoConfirmado] = useState(!isIfood);
-  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(jaFoiPago || !precisaCobrar);
+  const [codigoStatus, setCodigoStatus] = useState<CodigoStatus>(!isIfood ? 'validado' : 'pendente');
+  const [codigoValor, setCodigoValor] = useState('');
+  const [pagamentoStatus, setPagamentoStatus] = useState<PagamentoStatus>(jaFoiPago ? 'confirmado' : 'nao_iniciado');
+  const [pagamentoResumo, setPagamentoResumo] = useState<PagamentoResumo | null>(null);
   const [modalCodigo, setModalCodigo] = useState(false);
-  const codigoCorreto = '1234';
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
   const quantidadePedidos = parseInt(params.quantidadePedidos as string, 10) || 1;
   const [expandido, setExpandido] = useState(false);
   
+  // Estados do pagamento simples
+  const [pagamentoExpandido, setPagamentoExpandido] = useState(false);
+  const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>('Dinheiro'); // pré-selecionado
+  const [metodoPickerAberto, setMetodoPickerAberto] = useState(false); // toque para trocar
+  const [trocoPara, setTrocoPara] = useState<number | undefined>();
+  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(false); // toggle para PIX/Cartão
+
+  // Animações (reservado)
+  const pagamentoAnimacao = useRef(new Animated.Value(0)).current;
+  
   // Determina se pode liberar para próxima entrega
-  const podeLiberar = (!isIfood || codigoConfirmado) && (!precisaCobrar || pagamentoConfirmado);
+  const podeLiberar = codigoStatus === 'validado' && pagamentoStatus === 'confirmado';
 
   useEffect(() => {
     (async () => {
@@ -70,17 +107,31 @@ export default function ConfirmacaoEntrega() {
       
       // Se não for iFood, código já está confirmado
       if (!isIfood) {
-        setCodigoConfirmado(true);
+        setCodigoStatus('validado');
       } else {
         // Checa status de código confirmado individual por pedido
         const status = await SecureStore.getItemAsync(`codigoConfirmado_${id_ifood}`);
         console.log('Status código confirmado', id_ifood, status);
-        setCodigoConfirmado(status === 'true');
+        if (status === 'true') {
+          setCodigoStatus('validado');
+        }
       }
       
       // Se já foi pago ou não precisa cobrar, marca como pago
       if (jaFoiPago || !precisaCobrar) {
-        setPagamentoConfirmado(true);
+        setPagamentoStatus('confirmado');
+      }
+
+      // Carrega status de pagamento salvo
+      const pagamentoStatusSalvo = await SecureStore.getItemAsync(`pagamentoStatus_${id_ifood}`);
+      if (pagamentoStatusSalvo) {
+        setPagamentoStatus(pagamentoStatusSalvo as PagamentoStatus);
+      }
+
+      // Carrega resumo de pagamento salvo
+      const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${id_ifood}`);
+      if (pagamentoResumoSalvo) {
+        setPagamentoResumo(JSON.parse(pagamentoResumoSalvo));
       }
     })();
   }, [id_ifood, isIfood, jaFoiPago, precisaCobrar]);
@@ -94,18 +145,69 @@ export default function ConfirmacaoEntrega() {
           if (codigoValidado === 'true') {
             await SecureStore.setItemAsync(`codigoConfirmado_${id_ifood}`, 'true');
             await SecureStore.deleteItemAsync('codigoValidado');
-            setCodigoConfirmado(true);
+            setCodigoStatus('validado');
           }
         }
       };
-      
       verificarCodigoValidado();
     }, [isIfood, id_ifood])
   );
 
+  // Monitora quando volta da tela de divisão de pagamento
+  useFocusEffect(
+    React.useCallback(() => {
+      const verificarPagamentoDividido = async () => {
+        const pagamentoStatusSalvo = await SecureStore.getItemAsync(`pagamentoStatus_${id_ifood}`);
+        if (pagamentoStatusSalvo === 'confirmado') {
+          setPagamentoStatus('confirmado');
+          setPagamentoExpandido(false);
+          
+          const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${id_ifood}`);
+          if (pagamentoResumoSalvo) {
+            setPagamentoResumo(JSON.parse(pagamentoResumoSalvo));
+          }
+        }
+      };
+      verificarPagamentoDividido();
+    }, [id_ifood])
+  );
+
   const handleCodigoValidado = async () => {
     await SecureStore.setItemAsync(`codigoConfirmado_${id_ifood}`, 'true');
-    setCodigoConfirmado(true);
+    setCodigoStatus('validado');
+  };
+
+  // Validações de pagamento simples (valor fixo = valorTotal)
+  const podeConfirmarPagamentoSimples = () => {
+    if (valorTotal < 0.5) return false; // Valor mínimo R$ 0,50
+    if ((metodoPagamento === 'PIX' || metodoPagamento === 'Débito' || metodoPagamento === 'Crédito') && !pagamentoConfirmado) return false;
+    if (metodoPagamento === 'Dinheiro' && trocoPara && trocoPara < valorTotal) return false;
+    return true;
+  };
+
+  const handleConfirmarPagamentoSimples = async () => {
+    if (!podeConfirmarPagamentoSimples()) {
+      alert('Verifique se todos os campos estão preenchidos corretamente.');
+      return;
+    }
+
+    const resumo: PagamentoResumo = {
+      tipo: 'simples',
+      metodo: metodoPagamento,
+      valor: valorTotal,   // valor fixo e destacado
+      trocoPara,
+    };
+
+    // Salva o resumo do pagamento
+    await SecureStore.setItemAsync(`pagamentoResumo_${id_ifood}`, JSON.stringify(resumo));
+    await SecureStore.setItemAsync(`pagamentoStatus_${id_ifood}`, 'confirmado');
+    
+    setPagamentoStatus('confirmado');
+    setPagamentoResumo(resumo);
+    setPagamentoExpandido(false);
+    setMetodoPickerAberto(false);
+
+    alert('Pagamento confirmado!');
   };
 
   const abrirWhatsApp = (tipo: 'pizzaria' | 'cliente') => {
@@ -120,13 +222,12 @@ export default function ConfirmacaoEntrega() {
 
   // Função para avançar para a próxima entrega
   const handleProximaEntrega = async () => {
-    // Verifica se pode avançar
     if (!podeLiberar) {
-      if (isIfood && !codigoConfirmado) {
+      if (isIfood && codigoStatus !== 'validado') {
         alert('Você precisa validar o código do iFood primeiro!');
         return;
       }
-      if (precisaCobrar && !pagamentoConfirmado) {
+      if (precisaCobrar && pagamentoStatus !== 'confirmado') {
         alert('Você precisa confirmar o pagamento primeiro!');
         return;
       }
@@ -138,14 +239,12 @@ export default function ConfirmacaoEntrega() {
     if (lista && indiceAtualStr) {
       const pedidos = JSON.parse(lista);
       let indiceAtual = parseInt(indiceAtualStr, 10);
-      // Limpa status do pedido anterior
       await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
       if (indiceAtual < pedidos.length - 1) {
         indiceAtual += 1;
         await SecureStore.setItemAsync('indiceAtual', indiceAtual.toString());
         router.replace('/');
       } else {
-        // Última entrega, finalize a rota
         await SecureStore.deleteItemAsync('emEntrega');
         await SecureStore.deleteItemAsync('indiceAtual');
         await SecureStore.deleteItemAsync('pedidosCompletos');
@@ -167,12 +266,11 @@ export default function ConfirmacaoEntrega() {
 
   // Renderização do código de entrega
   const renderCodigoEntrega = () => (
-    !codigoConfirmado ? (
+    codigoStatus !== 'validado' ? (
       <View style={styles.linhaCodigo}>
         <TouchableOpacity
           style={[styles.botaoOutline, { borderColor: '#b71c1c' }]}
           onPress={() => {
-            // Salva o callback no SecureStore para ser usado na tela de verificação
             SecureStore.setItemAsync('codigoCallback', 'true');
             router.push('/VerificationScreen');
           }}
@@ -190,58 +288,10 @@ export default function ConfirmacaoEntrega() {
     )
   );
 
-  // Renderização do botão de pagamento
-  const renderBotaoPago = () => (
-    <TouchableOpacity
-      style={
-        codigoConfirmado && !pagamentoConfirmado
-          ? [styles.botaoOutline, { borderColor: '#2e7d32' }]
-          : pagamentoConfirmado
-          ? [styles.botaoOutline, { borderColor: '#2e7d32' }]
-          : styles.botaoOutline
-      }
-      disabled={!codigoConfirmado || pagamentoConfirmado}
-      onPress={() => setPagamentoConfirmado(true)}
-    >
-      <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Pago</Text>
-    </TouchableOpacity>
-  );
-
-  // Renderização do botão próxima entrega
-  const renderBotaoProximaEntrega = () => (
-    <TouchableOpacity
-      disabled={!podeLiberar}
-      style={[
-        styles.botaoProximaEntrega,
-        podeLiberar
-          ? styles.botaoProximaEntregaAtivo
-          : styles.botaoProximaEntregaDesabilitado,
-      ]}
-      onPress={handleProximaEntrega}
-    >
-      <Text style={styles.textoProximaEntrega}>Próxima entrega</Text>
-    </TouchableOpacity>
-  );
-
-  const renderStatusValidar = () => (
-    <View style={styles.statusItem}>
-      <MaterialCommunityIcons
-        name={codigoConfirmado ? 'check-circle' : 'alert-circle'}
-        size={14}
-        color={codigoConfirmado ? '#4caf50' : '#d32f2f'}
-      />
-      <Text style={[
-        styles.statusTexto,
-        { color: codigoConfirmado ? '#4caf50' : '#d32f2f', fontWeight: 'bold' }
-      ]}>
-        {codigoConfirmado ? 'validado' : 'validar'}
-      </Text>
-    </View>
-  );
-
+  // Status "Cobrar/Pago" agora baseado em pagamentoStatus
   const renderStatusPago = () => (
     <View style={styles.statusItem}>
-      {pagamentoConfirmado ? (
+      {pagamentoStatus === 'confirmado' ? (
         <>
           <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
           <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>pago</Text>
@@ -254,9 +304,40 @@ export default function ConfirmacaoEntrega() {
       )}
     </View>
   );
+  // Helper para exibir "validado/validar" (iFood)
+const renderStatusValidar = () => (
+  <View style={styles.statusItem}>
+    <MaterialCommunityIcons
+      name={codigoStatus === 'validado' ? 'check-circle' : 'alert-circle'}
+      size={14}
+      color={codigoStatus === 'validado' ? '#4caf50' : '#d32f2f'}
+    />
+    <Text
+      style={[
+        styles.statusTexto,
+        {
+          color: codigoStatus === 'validado' ? '#4caf50' : '#d32f2f',
+          fontWeight: 'bold',
+        },
+      ]}
+    >
+      {codigoStatus === 'validado' ? 'validado' : 'validar'}
+    </Text>
+  </View>
+);
 
-  return (
-    <View style={styles.tela}>
+
+return (
+  <KeyboardAvoidingView
+    style={styles.tela}
+    behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+  >
+    <ScrollView
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 160 + insets.bottom }}
+      showsVerticalScrollIndicator
+    >
+
       {/* Cabeçalho */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.leftButton} onPress={() => nav.goBack()}>
@@ -414,22 +495,199 @@ export default function ConfirmacaoEntrega() {
               </View>
             )
         )}
-  
-        {!pagamentoConfirmado && precisaCobrar && (
+
+        {pagamentoStatus !== 'confirmado' && precisaCobrar && (
           <TouchableOpacity
             style={[styles.botaoOutline, { borderColor: '#2e7d32' }]}
-            onPress={() => setPagamentoConfirmado(true)}
+            onPress={() => {
+              setPagamentoExpandido(!pagamentoExpandido);
+              setMetodoPickerAberto(false);
+            }}
           >
-            <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Pagar</Text>
+            <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Cobrar</Text>
           </TouchableOpacity>
+        )}
+
+        {/* Resumo de pagamento confirmado */}
+        {pagamentoStatus === 'confirmado' && pagamentoResumo && (
+          <View style={styles.resumoPagamento}>
+            <View style={styles.resumoPagamentoHeader}>
+              <Ionicons name="checkmark-circle" size={18} color="#4caf50" />
+              <Text style={styles.resumoPagamentoTitulo}>
+                Pagamento: ✅ Confirmado {pagamentoResumo.tipo === 'dividido' ? '(Dividido)' : ''}
+              </Text>
+            </View>
+            {pagamentoResumo.tipo === 'simples' && (
+              <Text style={styles.resumoPagamentoDetalhes}>
+                {pagamentoResumo.metodo} R$ {pagamentoResumo.valor?.toFixed(2).replace('.', ',')}
+                {pagamentoResumo.trocoPara && ` (Troco p/ ${pagamentoResumo.trocoPara.toFixed(2).replace('.', ',')})`}
+              </Text>
+            )}
+            {pagamentoResumo.tipo === 'dividido' && pagamentoResumo.partes && (
+              <Text style={styles.resumoPagamentoDetalhes}>
+                {pagamentoResumo.partes.map((parte, index) => (
+                  `${parte.metodo} R$ ${parte.valor.toFixed(2).replace('.', ',')}${parte.trocoPara ? ` (Troco p/ ${parte.trocoPara.toFixed(2).replace('.', ',')})` : ''}${parte.confirmado ? ' (Confirmado)' : ''}`
+                )).join(' + ')}
+              </Text>
+            )}
+          </View>
+        )}
+
+        {/* Seção de pagamento embutida */}
+        {pagamentoExpandido && (
+          <Animated.View style={styles.secaoPagamento}>
+            <View style={styles.divisor} />
+
+            {/* VALOR EM DESTAQUE (não editável) */}
+            <View style={styles.valorDestaqueContainer}>
+              <Text style={styles.valorDestaqueLabel}>Total a cobrar</Text>
+              <Text style={styles.valorDestaqueValor}>
+                R$ {valorTotal.toFixed(2).replace('.', ',')}
+              </Text>
+            </View>
+            
+            {/* Forma de pagamento (chip atual + toque para trocar) */}
+            <View style={styles.campoContainer}>
+              <Text style={styles.campoLabel}>Forma de pagamento</Text>
+
+              <TouchableOpacity
+                activeOpacity={0.8}
+                style={styles.metodoAtualChip}
+                onPress={() => setMetodoPickerAberto(prev => !prev)}
+              >
+                <Text style={styles.metodoAtualTexto}>{metodoPagamento}</Text>
+                <Ionicons
+                  name={metodoPickerAberto ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color="#2C79FF"
+                />
+                <Text style={styles.metodoHint}>Toque para trocar</Text>
+              </TouchableOpacity>
+
+              {metodoPickerAberto && (
+                <View style={styles.pickerContainer}>
+                  {(['Dinheiro', 'PIX', 'Débito', 'Crédito', 'Outros'] as MetodoPagamento[]).map((metodo) => (
+                    <TouchableOpacity
+                      key={metodo}
+                      style={[
+                        styles.opcaoMetodo,
+                        metodoPagamento === metodo && styles.opcaoMetodoSelecionada
+                      ]}
+                      onPress={() => {
+                        setMetodoPagamento(metodo);
+                        setMetodoPickerAberto(false);
+                        setPagamentoConfirmado(false);
+                        setTrocoPara(undefined);
+                      }}
+                    >
+                      <Text style={[
+                        styles.textoOpcaoMetodo,
+                        metodoPagamento === metodo && styles.textoOpcaoMetodoSelecionada
+                      ]}>
+                        {metodo}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+
+            {/* Condicionais baseadas no método */}
+            {metodoPagamento === 'Dinheiro' && (
+              <View style={styles.campoContainer}>
+                <Text style={styles.campoLabel}>Troco para (opcional)</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="R$ 0,00"
+                  keyboardType="numeric"
+                  value={typeof trocoPara === 'number' ? `R$ ${trocoPara.toFixed(2).replace('.', ',')}` : ''}
+                  onChangeText={(text) => {
+                    const valor = parseFloat(text.replace(/[^\d,]/g, '').replace(',', '.')) || 0;
+                    setTrocoPara(valor);
+                  }}
+                />
+              </View>
+            )}
+
+            {(metodoPagamento === 'PIX') && (
+              <View style={styles.campoContainer}>
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setPagamentoConfirmado(!pagamentoConfirmado)}
+                >
+                  <Ionicons 
+                    name={pagamentoConfirmado ? "checkbox" : "square-outline"} 
+                    size={20} 
+                    color={pagamentoConfirmado ? "#4caf50" : "#666"} 
+                  />
+                  <Text style={styles.checkboxLabel}>PIX confirmado</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.botaoCopiar}>
+                  <Text style={styles.textoBotaoCopiar}>Copiar chave</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {(metodoPagamento === 'Débito' || metodoPagamento === 'Crédito') && (
+              <View style={styles.campoContainer}>
+                <TouchableOpacity
+                  style={styles.checkboxContainer}
+                  onPress={() => setPagamentoConfirmado(!pagamentoConfirmado)}
+                >
+                  <Ionicons 
+                    name={pagamentoConfirmado ? "checkbox" : "square-outline"} 
+                    size={20} 
+                    color={pagamentoConfirmado ? "#4caf50" : "#666"} 
+                  />
+                  <Text style={styles.checkboxLabel}>Aprovado no POS</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Ações */}
+            <View style={styles.acoesPagamento}>
+              <TouchableOpacity
+                style={styles.botaoCancelarPagamento}
+                onPress={() => {
+                  setPagamentoExpandido(false);
+                  setMetodoPickerAberto(false);
+                }}
+              >
+                <Text style={styles.textoBotaoCancelarPagamento}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.botaoConfirmarPagamento,
+                  podeConfirmarPagamentoSimples() ? styles.botaoConfirmarPagamentoAtivo : styles.botaoConfirmarPagamentoInativo
+                ]}
+                onPress={handleConfirmarPagamentoSimples}
+                disabled={!podeConfirmarPagamentoSimples()}
+              >
+                <Text style={styles.textoBotaoConfirmarPagamento}>Confirmar pagamento</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Botão dividir pagamento */}
+            <TouchableOpacity
+              style={styles.botaoDividirPagamento}
+              onPress={() => router.push({
+                pathname: '/dividirPagamento',
+                params: { total: valorTotal.toString(), pedidoId: id_ifood.toString() }
+              })}
+            >
+              <Text style={styles.textoBotaoDividirPagamento}>🧮 Dividir pagamento</Text>
+            </TouchableOpacity>
+          </Animated.View>
         )}
       </View>
   
       {/* Espaço extra para não cobrir conteúdo */}
-      <View style={{ height: 120 }} />
-  
-      {/* Rodapé fixo */}
-      <View style={[styles.rodapeFixo, { paddingBottom: 24 + insets.bottom }]}>
+      </ScrollView>
+
+{/* Rodapé fixo */}
+<View style={[styles.rodapeFixo, { paddingBottom: 24 + insets.bottom }]}>
+
         <TouchableOpacity
           disabled={!podeLiberar}
           style={[
@@ -444,9 +702,7 @@ export default function ConfirmacaoEntrega() {
         </TouchableOpacity>
         <TouchableOpacity
           onPress={async () => {
-            // Finalizar rota manualmente com confirmação
-            // Em produção, aqui podemos pedir um motivo opcional
-            const confirmar = true; // placeholder; poderíamos abrir um Alert antes
+            const confirmar = true;
             if (confirmar) {
               await SecureStore.deleteItemAsync('emEntrega');
               await SecureStore.deleteItemAsync('indiceAtual');
@@ -461,9 +717,8 @@ export default function ConfirmacaoEntrega() {
           <Text style={styles.textoSair}>Finalizar rota</Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </KeyboardAvoidingView>
   );
-  
 }
 
 const styles = StyleSheet.create({
@@ -758,5 +1013,205 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-});
+  // Seção de pagamento
+  secaoPagamento: {
+    marginTop: 16,
+    paddingTop: 16,
+  },
+  divisor: {
+    height: 1,
+    backgroundColor: '#e0e0e0',
+    marginBottom: 16,
+  },
 
+  // Valor destacado
+  valorDestaqueContainer: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  valorDestaqueLabel: {
+    fontSize: 13,
+    color: '#777',
+    marginBottom: 4,
+  },
+  valorDestaqueValor: {
+    fontSize: 28,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+
+  campoContainer: {
+    marginBottom: 16,
+  },
+  campoLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+
+  // Chip da forma atual
+  metodoAtualChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    alignSelf: 'flex-start',
+    borderWidth: 1,
+    borderColor: '#2C79FF',
+    backgroundColor: '#EAF1FF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+  metodoAtualTexto: {
+    color: '#2C79FF',
+    fontWeight: '700',
+  },
+  metodoHint: {
+    color: '#2C79FF',
+    fontSize: 12,
+    marginLeft: 4,
+  },
+
+  // Grade de opções (quando aberto)
+  pickerContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  opcaoMetodo: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#f9f9f9',
+  },
+  opcaoMetodoSelecionada: {
+    borderColor: '#2C79FF',
+    backgroundColor: '#2C79FF',
+  },
+  textoOpcaoMetodo: {
+    fontSize: 14,
+    color: '#666',
+  },
+  textoOpcaoMetodoSelecionada: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  checkboxLabel: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
+  botaoCopiar: {
+    backgroundColor: '#2C79FF',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  textoBotaoCopiar: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  acoesPagamento: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 16,
+  },
+  botaoCancelarPagamento: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    backgroundColor: '#fff',
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  textoBotaoCancelarPagamento: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  botaoConfirmarPagamento: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+  botaoConfirmarPagamentoAtivo: {
+    backgroundColor: '#4caf50',
+  },
+  botaoConfirmarPagamentoInativo: {
+    backgroundColor: '#ccc',
+  },
+  textoBotaoConfirmarPagamento: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  botaoDividirPagamento: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2C79FF',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  textoBotaoDividirPagamento: {
+    color: '#2C79FF',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+
+  // Resumo pagamento
+  resumoPagamento: {
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4caf50',
+  },
+  resumoPagamentoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
+  resumoPagamentoTitulo: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#4caf50',
+    marginLeft: 6,
+  },
+  resumoPagamentoDetalhes: {
+    fontSize: 13,
+    color: '#666',
+    marginLeft: 24,
+  },
+
+});

@@ -79,6 +79,9 @@ function RootLayoutNav() {
         {/* Tela de verificação de código */}
         <Stack.Screen name="VerificationScreen" options={{ headerShown: false }} />
         
+        {/* Tela de divisão de pagamento */}
+        <Stack.Screen name="dividirPagamento" options={{ headerShown: false }} />
+        
         {/* Aqui você pode adicionar outras rotas normalmente */}
         {/* <Stack.Screen name="outraTela" options={{ headerShown: true }} /> */}
       </Stack>

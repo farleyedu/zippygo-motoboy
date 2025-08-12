@@ -364,7 +364,7 @@ export default function TelaInicialMap() {
           <>
             {(!emEntrega && !organizandoRota) && (
               <TouchableOpacity
-                style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18, marginRight: 10 }}
+                style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 10, marginLeft: 50, marginTop: 50  }}
                 onPress={() => {
                   if (!online || emEntrega || organizandoRota) {
                     Alert.alert('Indisponível', 'Você só pode aceitar pedidos quando estiver disponível.');
@@ -373,7 +373,7 @@ export default function TelaInicialMap() {
                   setModalRotaVisible(true);
                 }}
               >
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Testar Modal Rota</Text>
+                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Receber Pedidos</Text>
               </TouchableOpacity>
             )}
 
