@@ -281,6 +281,11 @@ export default function ConfirmacaoEntrega() {
       const pedidos = JSON.parse(lista);
       let indiceAtual = parseInt(indiceAtualStr, 10);
       await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
+      await SecureStore.deleteItemAsync(`pagamentoStatus_${pedidoId}`);
+      await SecureStore.deleteItemAsync(`pagamentoResumo_${pedidoId}`);
+      if (pagamentoStatus !== 'nao_iniciado') {
+        setPagamentoStatus('nao_iniciado');
+      }
       if (indiceAtual < pedidos.length - 1) {
         indiceAtual += 1;
         await SecureStore.setItemAsync('indiceAtual', indiceAtual.toString());
@@ -302,6 +307,11 @@ export default function ConfirmacaoEntrega() {
     await SecureStore.deleteItemAsync('pedidosCompletos');
     await SecureStore.deleteItemAsync('destinos');
     await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
+    await SecureStore.deleteItemAsync(`pagamentoStatus_${pedidoId}`);
+    await SecureStore.deleteItemAsync(`pagamentoResumo_${pedidoId}`);
+    if (pagamentoStatus !== 'nao_iniciado') {
+      setPagamentoStatus('nao_iniciado');
+    }
     router.replace('/');
   };
 
