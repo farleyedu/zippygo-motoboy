@@ -26,6 +26,7 @@ const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
 const pedidosMock = [
   {
     id: 123,
+    id_estabelecimento: 2123,
     id_ifood: 0,
     cliente: 'Rafael Andrade',
     pagamento: 'Pix',
@@ -45,6 +46,7 @@ const pedidosMock = [
   },
   {
     id: 124,
+    id_estabelecimento: 0,
     id_ifood: 8263,
     cliente: 'Maria Souza',
     pagamento: 'Dinheiro',
@@ -63,6 +65,7 @@ const pedidosMock = [
   },
   {
     id: 125,
+    id_estabelecimento: 2125,
     id_ifood: 0,
     cliente: 'João Pedro',
     pagamento: 'Crédito',
@@ -80,6 +83,7 @@ const pedidosMock = [
   },
   {
     id: 126,
+    id_estabelecimento: 2126,
     id_ifood: 0,
     cliente: 'Ana Paula',
     pagamento: 'Débito',
@@ -97,6 +101,7 @@ const pedidosMock = [
   },
   {
     id: 127,
+    id_estabelecimento: 0,
     id_ifood: 6389,
     cliente: 'Carlos Lima',
     pagamento: 'Pix',
@@ -220,7 +225,7 @@ export default function TelaInicialMap() {
   useFocusEffect(
     React.useCallback(() => {
       setRecenterToken((t) => t + 1);
-      return () => {};
+      return () => { };
     }, [])
   );
 
@@ -247,10 +252,10 @@ export default function TelaInicialMap() {
     setMostrandoConfirmar(false);
     iniciarOpacity.setValue(1);
     confirmarOpacity.setValue(0);
-    
+
     // Para o monitoramento de localização
     await pararMonitoramentoLocalizacao();
-    
+
     Alert.alert('Rota finalizada!', 'Todas as entregas foram concluídas.');
   };
 
@@ -320,10 +325,38 @@ export default function TelaInicialMap() {
       const indiceAtual = parseInt(indiceAtualStr, 10);
       pedidoAtual = pedidos[indiceAtual];
     }
+    // COLOCAR NO LUGAR (RECOMENDADO)
+    if (!pedidoAtual) return;
+
     router.push({
       pathname: '/confirmacaoEntrega',
-      params: pedidoAtual ? { ...pedidoAtual, quantidadePedidos: pedidoAtual.quantidadePedidos } : {},
+      params: {
+        // Identificadores (um deles > 0, o outro 0)
+        id: String(pedidoAtual.id),
+        id_ifood: String(pedidoAtual.id_ifood || 0),
+        id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
+
+        // Campos usados na tela de confirmação
+        nome: pedidoAtual.cliente,
+        bairro: pedidoAtual.bairro,
+        endereco: pedidoAtual.endereco,
+        statusPagamento: pedidoAtual.statusPagamento,        // 'pago' | 'a_receber'
+        valorTotal: String(pedidoAtual.valorTotal),
+        pagamento: pedidoAtual.pagamento || '',
+        horario: pedidoAtual.horario || '',
+
+        // Opcionais
+        telefone: pedidoAtual.telefone || '',
+        troco: pedidoAtual.troco || '',
+        distanciaKm: String(pedidoAtual.distanciaKm ?? ''),
+
+        // Sempre como string (expo-router params)
+        quantidadePedidos: String(pedidoAtual.quantidadePedidos ?? 1),
+        itens: JSON.stringify(pedidoAtual.itens || []),
+        coordinates: JSON.stringify(pedidoAtual.coordinates || null),
+      },
     });
+
   };
   useEffect(() => {
     const atualizarPedidosEmEntrega = async () => {
@@ -340,11 +373,11 @@ export default function TelaInicialMap() {
       atualizarPedidosEmEntrega();
     }
   }, [emEntrega])
-  
+
   return (
     <View style={styles.container}>
-<Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} recenterToken={recenterToken} />
-<View style={{ flexDirection: 'row', position: 'absolute', top: insets.top + 8, right: 20, zIndex: 20, alignItems: 'center' }}>
+      <Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} recenterToken={recenterToken} />
+      <View style={{ flexDirection: 'row', position: 'absolute', top: insets.top + 8, right: 20, zIndex: 20, alignItems: 'center' }}>
         {!online && (
           <TouchableOpacity
             onPress={handleIniciar}
@@ -364,7 +397,7 @@ export default function TelaInicialMap() {
           <>
             {(!emEntrega && !organizandoRota) && (
               <TouchableOpacity
-                style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 10, marginLeft: 50, marginTop: 50  }}
+                style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 10, marginLeft: 50, marginTop: 50 }}
                 onPress={() => {
                   if (!online || emEntrega || organizandoRota) {
                     Alert.alert('Indisponível', 'Você só pode aceitar pedidos quando estiver disponível.');
@@ -436,7 +469,7 @@ export default function TelaInicialMap() {
       </TouchableOpacity>
 
       {emEntrega && (
-      <Animated.View
+        <Animated.View
           style={[
             styles.confirmarButton,
             {
@@ -451,8 +484,8 @@ export default function TelaInicialMap() {
             },
           ]}
           pointerEvents="auto"
-          >
-            <TouchableOpacity onPress={handleConfirmar} disabled={!emEntrega}>
+        >
+          <TouchableOpacity onPress={handleConfirmar} disabled={!emEntrega}>
             <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
           </TouchableOpacity>
         </Animated.View>
