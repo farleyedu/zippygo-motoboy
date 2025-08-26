@@ -213,7 +213,7 @@ export default function ConfirmacaoEntrega() {
         const pagamentoStatusSalvo = await SecureStore.getItemAsync(`pagamentoStatus_${pedidoId}`);
         if (pagamentoStatusSalvo === 'confirmado') {
           setPagamentoStatus('confirmado');
-          setMostrarPagamento(false);
+          setModalPagamentoVisivel(false);
 
           const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${pedidoId}`);
           if (pagamentoResumoSalvo) {
@@ -261,12 +261,12 @@ export default function ConfirmacaoEntrega() {
 
   // Função para avançar para a próxima entrega
   const handleProximaEntrega = async () => {
-    if (isIfood && codigoStatus !== 'validado') {
-      alert('Você precisa validar o código do iFood primeiro!');
-      return;
-    }
-    if (precisaCobrar && pagamentoStatus !== 'confirmado') {
-      alert('Você precisa confirmar o pagamento primeiro!');
+    if (!podeLiberar) {
+      if (isIfood && codigoStatus !== 'validado') {
+        alert('Você precisa validar o código do iFood primeiro!');
+      } else if (precisaCobrar && pagamentoStatus !== 'confirmado') {
+        alert('Você precisa confirmar o pagamento primeiro!');
+      }
       return;
     }
 
