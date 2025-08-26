@@ -1014,25 +1014,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   sliderTrack: {
-    flex: 1,
+    position: 'absolute',
+    left: 0,
+    right: 0,
     height: 48,
-    borderRadius: 8,
+    borderRadius: 24,
     backgroundColor: '#EFF2F7',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sliderTxt: {
-    color: '#5A6B87',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  sliderTxt: { color: '#5A6B87', fontWeight: '700', fontSize: 13 },
+
   sliderThumb: {
     position: 'absolute',
     left: 4,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ccc',
+    backgroundColor: '#2C79FF',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1138,27 +1137,8 @@ const styles = StyleSheet.create({
 
   // Slider genérico (se reutilizar)
   sliderArea: { flex: 1, height: 48, position: 'relative', justifyContent: 'center' },
-  sliderTrack: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#EFF2F7',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sliderTxt: { color: '#5A6B87', fontWeight: '700', fontSize: 13 },
-  sliderThumb: {
-    position: 'absolute',
-    left: 4,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#2C79FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+
+
   resumoPagamentoGrande: {
     fontSize: 16,
     fontWeight: 'bold',
