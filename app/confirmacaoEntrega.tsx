@@ -14,7 +14,6 @@ import {
 
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
-import ModalPagamento, { MetodoPagamento } from '@/components/ModalPagamento';
 import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -23,6 +22,13 @@ import * as SecureStore from 'expo-secure-store';
 import { Animated } from 'react-native';
 
 type MetodoPagamento = 'Dinheiro' | 'PIX' | 'Débito' | 'Crédito';
+
+const icones: Record<MetodoPagamento, any> = {
+  Dinheiro: 'cash',
+  PIX: 'qrcode',
+  Débito: 'credit-card-outline',
+  Crédito: 'credit-card',
+};
 
 type CodigoStatus = 'pendente' | 'validando' | 'validado' | 'invalido';
 type PagamentoStatus = 'nao_iniciado' | 'em_andamento' | 'confirmado';
@@ -91,7 +97,7 @@ export default function ConfirmacaoEntrega() {
   const [mostrarBotaoProximaEntrega, setMostrarBotaoProximaEntrega] = useState(false);
 
   // Estados do pagamento simples
-  const [modalPagamentoVisivel, setModalPagamentoVisivel] = useState(false);
+  const [mostrarPagamento, setMostrarPagamento] = useState(false);
   const [metodoPagamento, setMetodoPagamento] = useState<MetodoPagamento>('Dinheiro');
 
   // Determina se pode liberar para próxima entrega
@@ -217,7 +223,7 @@ export default function ConfirmacaoEntrega() {
         const pagamentoStatusSalvo = await SecureStore.getItemAsync(`pagamentoStatus_${pedidoId}`);
         if (pagamentoStatusSalvo === 'confirmado') {
           setPagamentoStatus('confirmado');
-          setModalPagamentoVisivel(false);
+          setMostrarPagamento(false);
 
           const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${pedidoId}`);
           if (pagamentoResumoSalvo) {
@@ -248,7 +254,7 @@ export default function ConfirmacaoEntrega() {
 
     setPagamentoStatus('confirmado');
     setPagamentoResumo(resumo);
-    setModalPagamentoVisivel(false);
+    setMostrarPagamento(false);
   };
 
 
@@ -378,14 +384,6 @@ export default function ConfirmacaoEntrega() {
       style={styles.tela}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
-      <ModalPagamento
-        visivel={modalPagamentoVisivel}
-        valor={valorTotal}
-        metodo={metodoPagamento}
-        onSelect={setMetodoPagamento}
-        onConfirmar={handleConfirmarPagamentoSimples}
-        onVoltar={() => setModalPagamentoVisivel(false)}
-      />
       {/* CONTEÚDO PRINCIPAL (sem scroll) */}
       <View style={styles.conteudo}>
 
@@ -544,27 +542,6 @@ export default function ConfirmacaoEntrega() {
             </View>
           )}
 
-          {pagamentoStatus === 'confirmado' && pagamentoResumo && (
-            <View style={styles.cardConfirmado}>
-              <Ionicons name="checkmark-circle" size={18} color="#4caf50" style={{ marginRight: 6 }} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardConfirmadoTitulo}>Pagamento confirmado</Text>
-                {pagamentoResumo.tipo === 'simples' && (
-                  <Text style={styles.cardConfirmadoValor}>
-                    💵 {pagamentoResumo.metodo} — R$ {pagamentoResumo.valor?.toFixed(2).replace('.', ',')}
-                    {pagamentoResumo.trocoPara && ` (Troco p/ ${pagamentoResumo.trocoPara.toFixed(2).replace('.', ',')})`}
-                  </Text>
-                )}
-                {pagamentoResumo.tipo === 'dividido' && pagamentoResumo.partes && (
-                  <Text style={styles.cardConfirmadoValor}>
-                    {pagamentoResumo.partes.map((parte, index) => (
-                      `${parte.metodo} R$ ${parte.valor.toFixed(2).replace('.', ',')}${parte.trocoPara ? ` (Troco p/ ${parte.trocoPara.toFixed(2).replace('.', ',')})` : ''}${parte.confirmado ? ' (Confirmado)' : ''}`
-                    )).join(' + ')}
-                  </Text>
-                )}
-              </View>
-            </View>
-          )}
 
 
 
@@ -577,48 +554,108 @@ export default function ConfirmacaoEntrega() {
             </View>
           )}
 
-          {pagamentoStatus !== 'confirmado' && precisaCobrar && (
+          {precisaCobrar && pagamentoStatus !== 'confirmado' && !mostrarPagamento && (
             <TouchableOpacity
               style={[styles.botaoOutline, { borderColor: '#2e7d32' }]}
-              onPress={() => setModalPagamentoVisivel(true)}
+              onPress={() => setMostrarPagamento(true)}
             >
               <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Cobrar</Text>
             </TouchableOpacity>
+          )}
+
+          {precisaCobrar && pagamentoStatus !== 'confirmado' && mostrarPagamento && (
+            <View style={styles.secaoPagamento}>
+              <View style={styles.metodosGrid}>
+                {(['Dinheiro', 'PIX', 'Débito', 'Crédito'] as MetodoPagamento[]).map(m => (
+                  <TouchableOpacity
+                    key={m}
+                    style={[styles.metodoChip, metodoPagamento === m && styles.metodoChipSelecionado]}
+                    onPress={() => setMetodoPagamento(m)}
+                  >
+                    <MaterialCommunityIcons
+                      name={icones[m]}
+                      size={18}
+                      color={metodoPagamento === m ? '#fff' : '#2C79FF'}
+                      style={styles.metodoIcon}
+                    />
+                    <Text
+                      style={[styles.metodoLabel, metodoPagamento === m && styles.metodoLabelSelecionado]}
+                    >
+                      {m}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.valorDestaqueContainer}>
+                <Text style={styles.valorDestaqueLabel}>Total a cobrar</Text>
+                <Text style={styles.valorDestaqueValor}>
+                  R$ {valorTotal.toFixed(2).replace('.', ',')}
+                </Text>
+              </View>
+            </View>
           )}
         </View>
       </View>
 
       {/* Rodapé fixo */}
       <View style={[styles.rodapeFixo, { paddingBottom: 24 + insets.bottom }]}>
-        {mostrarBotaoProximaEntrega && (
-          <View style={styles.sliderWrapper} onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}>
-            <View
-              style={[
-                styles.sliderTrack,
-                sliderConcluido ? { backgroundColor: '#2e7d32' } : arrastando ? { backgroundColor: '#A5D6A7' } : null,
-              ]}
+        {pagamentoStatus !== 'confirmado' && mostrarPagamento ? (
+          <View style={styles.rodapePagamento}>
+            <TouchableOpacity
+              style={[styles.acaoChipSecundaria, { flex: 1, marginRight: 8 }]}
+              onPress={handleConfirmarPagamentoSimples}
             >
-              {sliderConcluido ? (
-                <Ionicons name="checkmark" size={24} color="#fff" />
-              ) : (
-                <Text style={styles.sliderTxt}>
-                  {arrastando ? 'Continue arrastando...' : 'Arraste para confirmar'}
-                </Text>
-              )}
-            </View>
-            <Animated.View
-              style={[
-                styles.sliderThumb,
-                { transform: [{ translateX: sliderX }, { scale: arrastando ? 1.05 : 1 }] },
-                arrastando ? { backgroundColor: '#81c784' } : sliderConcluido ? { backgroundColor: '#2e7d32' } : null,
-              ]}
-              {...panResponder.panHandlers}
+              <Text style={styles.acaoChipSecundariaTxt}>Confirmar pagamento</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.botaoDividirPequeno}
+              onPress={() =>
+                router.push({
+                  pathname: '/dividirPagamento',
+                  params: { total: valorTotal.toString(), pedidoId: pedidoId.toString() },
+                })
+              }
             >
-              {!sliderConcluido && (
-                <MaterialCommunityIcons name="chevron-double-right" size={20} color="#fff" />
-              )}
-            </Animated.View>
+              <MaterialCommunityIcons
+                name="cash-multiple"
+                size={16}
+                color="#2C79FF"
+                style={{ marginRight: 4 }}
+              />
+              <Text style={styles.textoBotaoDividirPequeno}>Dividir</Text>
+            </TouchableOpacity>
           </View>
+        ) : (
+          mostrarBotaoProximaEntrega && (
+            <View style={styles.sliderWrapper} onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}>
+              <View
+                style={[
+                  styles.sliderTrack,
+                  sliderConcluido ? { backgroundColor: '#2e7d32' } : arrastando ? { backgroundColor: '#A5D6A7' } : null,
+                ]}
+              >
+                {sliderConcluido ? (
+                  <Ionicons name="checkmark" size={24} color="#fff" />
+                ) : (
+                  <Text style={styles.sliderTxt}>
+                    {arrastando ? 'Continue arrastando...' : 'Arraste para confirmar'}
+                  </Text>
+                )}
+              </View>
+              <Animated.View
+                style={[
+                  styles.sliderThumb,
+                  { transform: [{ translateX: sliderX }, { scale: arrastando ? 1.05 : 1 }] },
+                  arrastando ? { backgroundColor: '#81c784' } : sliderConcluido ? { backgroundColor: '#2e7d32' } : null,
+                ]}
+                {...panResponder.panHandlers}
+              >
+                {!sliderConcluido && (
+                  <MaterialCommunityIcons name="chevron-double-right" size={20} color="#fff" />
+                )}
+              </Animated.View>
+            </View>
+          )
         )}
 
         <TouchableOpacity
@@ -860,6 +897,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderColor: '#eee',
+  },
+
+  rodapePagamento: {
+    width: 350,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
 
   botaoProximaEntrega: {
