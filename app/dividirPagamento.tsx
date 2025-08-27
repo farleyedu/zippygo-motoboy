@@ -298,21 +298,19 @@ export default function DividirPagamento() {
       </ScrollView>
 
       {/* Footer */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}>
-        <TouchableOpacity style={styles.botaoCancelar} onPress={() => router.back()}>
-          <Text style={styles.textoBotaoCancelar}>Cancelar</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[
-            styles.botaoConfirmar,
-            podeConfirmar() ? styles.botaoConfirmarAtivo : styles.botaoConfirmarInativo
-          ]}
-          onPress={handleConfirmar}
-          disabled={!podeConfirmar()}
-        >
-          <Text style={styles.textoBotaoConfirmar}>Confirmar divisão</Text>
-        </TouchableOpacity>
+      <View style={[styles.footer, { paddingBottom: insets.bottom + 20 }]}> 
+        {Math.abs(restante) < 0.01 && (
+          <TouchableOpacity
+            style={[
+              styles.botaoConfirmar,
+              podeConfirmar() ? styles.botaoConfirmarAtivo : styles.botaoConfirmarInativo
+            ]}
+            onPress={handleConfirmar}
+            disabled={!podeConfirmar()}
+          >
+            <Text style={styles.textoBotaoConfirmar}>Confirmar pagamento</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -519,29 +517,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingTop: 16,
     backgroundColor: '#fff',
     borderTopWidth: 1,
     borderTopColor: '#e0e0e0',
-  },
-  botaoCancelar: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    backgroundColor: '#fff',
-    marginRight: 8,
     alignItems: 'center',
-  },
-  textoBotaoCancelar: {
-    color: '#666',
-    fontSize: 16,
-    fontWeight: '600',
   },
   botaoConfirmar: {
     flex: 1,
