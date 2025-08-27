@@ -920,6 +920,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderTopWidth: 1,
     borderColor: '#eee',
+    zIndex: 10,
   },
 
   botaoProximaEntrega: {
