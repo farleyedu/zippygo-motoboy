@@ -24,7 +24,7 @@ import { Animated } from 'react-native';
 type MetodoPagamento = 'Dinheiro' | 'PIX' | 'Débito' | 'Crédito' | 'Outros';
 
 type CodigoStatus = 'pendente' | 'validando' | 'validado' | 'invalido';
-type PagamentoStatus = 'nao_iniciado' | 'em_andamento' | 'confirmado';
+type PagamentoStatus = 'pendente' | 'confirmado';
 
 interface PagamentoResumo {
   tipo: 'simples' | 'dividido';
@@ -77,7 +77,7 @@ export default function ConfirmacaoEntrega() {
   const [codigoStatus, setCodigoStatus] = useState<CodigoStatus>(!isIfood ? 'validado' : 'pendente');
   const [codigoValor, setCodigoValor] = useState('');
   const [pagamentoStatus, setPagamentoStatus] = useState<PagamentoStatus>(
-    statusPagamento === 'pago' ? 'confirmado' : 'nao_iniciado'
+    statusPagamento === 'pago' ? 'confirmado' : 'pendente'
   );
     const [pagamentoResumo, setPagamentoResumo] = useState<PagamentoResumo | null>(null);
   const [modalCodigo, setModalCodigo] = useState(false);
@@ -175,7 +175,7 @@ export default function ConfirmacaoEntrega() {
       if (statusPagamento === 'pago') {
         setPagamentoStatus('confirmado');
       } else {
-        setPagamentoStatus('nao_iniciado');
+        setPagamentoStatus('pendente');
       }
 
       // ❌ Não sobrescreve mais com SecureStore na inicialização
@@ -280,6 +280,12 @@ export default function ConfirmacaoEntrega() {
     if (lista && indiceAtualStr) {
       const pedidos = JSON.parse(lista);
       let indiceAtual = parseInt(indiceAtualStr, 10);
+      await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
+      await SecureStore.deleteItemAsync(`pagamentoStatus_${pedidoId}`);
+      await SecureStore.deleteItemAsync(`pagamentoResumo_${pedidoId}`);
+      if (pagamentoStatus !== 'confirmado') {
+        setPagamentoStatus('pendente');
+      }
       await SecureStore.deleteItemAsync(`codigoConfirmado_${pedidoId}`);
       if (indiceAtual < pedidos.length - 1) {
         indiceAtual += 1;
@@ -301,6 +307,12 @@ export default function ConfirmacaoEntrega() {
     await SecureStore.deleteItemAsync('indiceAtual');
     await SecureStore.deleteItemAsync('pedidosCompletos');
     await SecureStore.deleteItemAsync('destinos');
+    await SecureStore.deleteItemAsync(`codigoConfirmado_${id_ifood}`);
+    await SecureStore.deleteItemAsync(`pagamentoStatus_${pedidoId}`);
+    await SecureStore.deleteItemAsync(`pagamentoResumo_${pedidoId}`);
+    if (pagamentoStatus !== 'pendente') {
+      setPagamentoStatus('pendente');
+    }
     await SecureStore.deleteItemAsync(`codigoConfirmado_${pedidoId}`);
     router.replace('/');
   };
