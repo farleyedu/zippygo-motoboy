@@ -1,5 +1,5 @@
 "use client";
-
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import React, { useState } from "react";
 import {
   View,
@@ -48,6 +48,7 @@ export default function EntregaNovaScreen() {
     // Linking.openURL("tel:+5511999999999") etc.
     setMostrarAcoesTelefone(false);
   };
+  const insets = useSafeAreaInsets();
 
   const Chip = ({
     ativo,
@@ -411,19 +412,31 @@ export default function EntregaNovaScreen() {
       </ScrollView>
 
       {/* Barra fixa inferior */}
-      <View style={styles.bottomBar}>
-        <View style={{ alignItems: "center", marginBottom: 6 }}>
-          <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>Aguardando pagamento</Text>
-          <Text style={{ fontSize: 12, color: "#4B5563" }}>Complete o pagamento para continuar</Text>
-        </View>
+      <View
+  style={[
+    styles.bottomBar,
+    {
+      paddingBottom: 12 + insets.bottom,  // respiro interno pela safe area
+    },
+  ]}
+>
+  <View style={{ alignItems: "center", marginBottom: 6 }}>
+    <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>
+      Aguardando pagamento
+    </Text>
+    <Text style={{ fontSize: 12, color: "#4B5563" }}>
+      Complete o pagamento para continuar
+    </Text>
+  </View>
 
-        <TouchableOpacity activeOpacity={1} style={[styles.primaryBtn, { backgroundColor: "#9CA3AF" }]}>
-          <View style={styles.squareIcon}>
-            <View style={styles.squareDot} />
-          </View>
-          <Text style={[styles.primaryBtnTxt]}>Próxima Entrega</Text>
-        </TouchableOpacity>
-      </View>
+  <TouchableOpacity activeOpacity={1} style={[styles.primaryBtn, { backgroundColor: "#9CA3AF" }]}>
+    <View style={styles.squareIcon}>
+      <View style={styles.squareDot} />
+    </View>
+    <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
+  </TouchableOpacity>
+</View>
+
     </View>
   );
 }
@@ -524,12 +537,12 @@ const styles = StyleSheet.create({
   timelineTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
   timelineSub: { fontSize: 12, color: "#2563EB" },
 
-  phoneBtn: { width: "100%", flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, backgroundColor: "#F9FAFB", borderRadius: 10 },
+  phoneBtn: { width: "100%", zIndex:100, flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, backgroundColor: "#F9FAFB", borderRadius: 10 },
   phoneIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
   phoneTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
   phoneSub: { fontSize: 12, color: "#4B5563" },
 
-  phoneMenu: { position: "absolute", top: 48, left: 0, right: 0, backgroundColor: "#fff", borderColor: "#E5E7EB", borderWidth: 1, borderRadius: 10, overflow: "hidden", elevation: 3 },
+  phoneMenu: {zIndex:100, position: "absolute", top: 48, left: 0, right: 0, backgroundColor: "#fff", borderColor: "#E5E7EB", borderWidth: 1, borderRadius: 10, overflow: "hidden", elevation: 3 },
   menuRow: { flexDirection: "row", alignItems: "center", padding: 12, gap: 8 },
   menuTxt: { marginLeft: 8, fontSize: 14, color: "#111827" },
 
@@ -541,7 +554,22 @@ const styles = StyleSheet.create({
   secondaryBtn: { width: "100%", height: 48, borderRadius: 12, flexDirection: "row", alignItems: "center", justifyContent: "center", marginBottom: 8 },
   secondaryTxt: { color: "#fff", fontSize: 16, fontWeight: "700", marginLeft: 8 },
 
-  bottomBar: { position: "absolute", bottom: 0, left: 0, right: 0, alignSelf: "center", width: "100%", maxWidth: 480, backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#E5E7EB", paddingHorizontal: 16, paddingVertical: 12 },
+  bottomBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,              // <- mantém colado no fundo
+    alignSelf: "center",
+    width: "100%",
+    maxWidth: 480,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#E5E7EB",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  
+
   squareIcon: { width: 16, height: 16, backgroundColor: "#9CA3AF", borderRadius: 4, alignItems: "center", justifyContent: "center", marginRight: 8 },
   squareDot: { width: 8, height: 8, backgroundColor: "#fff", borderRadius: 2 },
 });
