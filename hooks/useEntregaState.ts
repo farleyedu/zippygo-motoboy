@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
 
 export type EntregaState = {
   codeStatus: 'pending' | 'validated';
@@ -18,23 +19,23 @@ export default function useEntregaState() {
   const [state, setState] = useState<EntregaState>(defaultState);
 
   useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const stored = localStorage.getItem('entregaState');
-    if (stored) {
+    (async () => {
       try {
-        setState(JSON.parse(stored));
+        const stored = await SecureStore.getItemAsync('entregaState');
+        if (stored) {
+          setState(JSON.parse(stored));
+        }
       } catch {
-        localStorage.removeItem('entregaState');
+        // ignora erros de leitura
       }
-    }
+    })();
   }, []);
 
   const update = (partial: Partial<EntregaState>) => {
     setState((prev) => {
       const next = { ...prev, ...partial };
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('entregaState', JSON.stringify(next));
-      }
+      // persistência assíncrona (fire-and-forget)
+      SecureStore.setItemAsync('entregaState', JSON.stringify(next)).catch(() => {});
       return next;
     });
   };

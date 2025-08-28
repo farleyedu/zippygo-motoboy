@@ -1,5 +1,6 @@
-import { motion } from 'framer-motion';
 import React from 'react';
+import { View, Text, StyleSheet, Pressable } from 'react-native';
+import { FontAwesome } from '@expo/vector-icons';
 
 type Props = {
   amount: number;
@@ -9,27 +10,58 @@ type Props = {
 
 export default function PaymentConfirmedRow({ amount, method, onEdit }: Props) {
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 10 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-green-50 border border-green-200 rounded-lg p-4 flex items-center justify-between w-full max-w-md"
-    >
-      <div className="flex items-center gap-3">
-        <div className="bg-green-500 rounded-full p-1 flex items-center justify-center">
-          <i className="fa-solid fa-check text-white text-xs" />
-        </div>
-        <div>
-          <div className="text-green-700 font-semibold text-base">Pagamento Confirmado</div>
-          <div className="text-black text-sm">R$ {amount.toFixed(2)} — {method}</div>
-        </div>
-      </div>
-      <button
-        onClick={onEdit}
-        className="text-gray-400 hover:text-gray-600 transition-colors"
-        aria-label="Editar"
-      >
-        <i className="fa-solid fa-pen" />
-      </button>
-    </motion.div>
+    <View style={styles.container}>
+      <View style={styles.left}>
+        <View style={styles.checkCircle}>
+          <FontAwesome name="check" size={10} color="#fff" />
+        </View>
+        <View>
+          <Text style={styles.title}>Pagamento Confirmado</Text>
+          <Text style={styles.subtitle}>R$ {amount.toFixed(2)} — {method}</Text>
+        </View>
+      </View>
+      <Pressable onPress={onEdit} accessibilityLabel="Editar" style={({ pressed }) => [styles.editBtn, pressed && { opacity: 0.6 }]}>
+        <FontAwesome name="pencil" size={16} color="#9CA3AF" />
+      </Pressable>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    maxWidth: 480,
+  },
+  left: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  checkCircle: {
+    backgroundColor: '#22C55E',
+    borderRadius: 999,
+    padding: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  title: {
+    color: '#15803D',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  subtitle: {
+    color: '#111827',
+    fontSize: 13,
+  },
+  editBtn: {
+    padding: 8,
+  },
+});

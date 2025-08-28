@@ -1,5 +1,5 @@
-import { motion } from 'framer-motion';
 import React, { useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 
 type Method = 'Dinheiro' | 'PIX' | 'Débito' | 'Crédito';
 
@@ -12,7 +12,8 @@ type Props = {
 
 export default function PaymentChooser({ amount, method, onChange, onCharge }: Props) {
   const [progress, setProgress] = useState(0);
-  const timer = useRef<NodeJS.Timeout | null>(null);
+  // Compatível com DOM (number) e Node (Timeout)
+  const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const startHold = () => {
     if (!method) return;
@@ -21,7 +22,7 @@ export default function PaymentChooser({ amount, method, onChange, onCharge }: P
       const pct = Math.min((Date.now() - start) / 800, 1);
       setProgress(pct);
       if (pct === 1) {
-        clearInterval(timer.current!);
+        if (timer.current) clearInterval(timer.current);
         onCharge();
         setTimeout(() => setProgress(0), 300);
       }
@@ -33,41 +34,106 @@ export default function PaymentChooser({ amount, method, onChange, onCharge }: P
     setProgress(0);
   };
 
-  const btnClass = (m: Method) =>
-    `px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
-      method === m
-        ? 'border-green-500 bg-green-50 text-green-700'
-        : 'border-gray-300 text-gray-700'
-    }`;
+  const isSelected = (m: Method) => method === m;
 
   return (
-    <div className="w-full max-w-md">
-      <div className="grid grid-cols-4 gap-2 mb-4">
-        <button className={btnClass('Dinheiro')} onClick={() => onChange('Dinheiro')}>Dinheiro</button>
-        <button className={btnClass('PIX')} onClick={() => onChange('PIX')}>PIX</button>
-        <button className={btnClass('Débito')} onClick={() => onChange('Débito')}>Débito</button>
-        <button className={btnClass('Crédito')} onClick={() => onChange('Crédito')}>Crédito</button>
-      </div>
-      <div className="relative">
-        <button
+    <View style={styles.wrapper}>
+      <View style={styles.methodsRow}>
+        {(['Dinheiro', 'PIX', 'Débito', 'Crédito'] as Method[]).map((m) => (
+          <Pressable key={m} onPress={() => onChange(m)} style={({ pressed }) => [
+            styles.methodBtn,
+            isSelected(m) ? styles.methodBtnSelected : styles.methodBtnDefault,
+            pressed && styles.methodBtnPressed,
+          ]}>
+            <Text style={[styles.methodText, isSelected(m) ? styles.methodTextSelected : undefined]}>{m}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      <View style={styles.chargeWrap}>
+        <Pressable
           disabled={!method}
-          onPointerDown={startHold}
-          onPointerUp={cancelHold}
-          onPointerLeave={cancelHold}
-          className={`w-full py-3 rounded-lg font-medium transition-transform active:scale-95 ${
-            method
-              ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
-              : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-          }`}
+          onPressIn={startHold}
+          onPressOut={cancelHold}
+          style={({ pressed }) => [
+            styles.chargeBtn,
+            !method && styles.chargeBtnDisabled,
+            pressed && method && styles.chargeBtnPressed,
+          ]}
         >
-          Cobrar R$ {amount.toFixed(2)}
-        </button>
-        <motion.div
-          className="absolute left-0 bottom-0 h-1 bg-green-500"
-          initial={{ width: 0 }}
-          animate={{ width: `${progress * 100}%` }}
-        />
-      </div>
-    </div>
+          <Text style={[styles.chargeText, !method && styles.chargeTextDisabled]}>Cobrar R$ {amount.toFixed(2)}</Text>
+        </Pressable>
+        <View style={[styles.progressBar, { width: `${progress * 100}%` }]} />
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  wrapper: {
+    width: '100%',
+    maxWidth: 480,
+  },
+  methodsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  methodBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  methodBtnDefault: {
+    borderColor: '#D1D5DB',
+    backgroundColor: '#fff',
+  },
+  methodBtnSelected: {
+    borderColor: '#22C55E',
+    backgroundColor: '#ECFDF5',
+  },
+  methodBtnPressed: {
+    opacity: 0.9,
+  },
+  methodText: {
+    fontSize: 14,
+    color: '#374151',
+    fontWeight: '500',
+  },
+  methodTextSelected: {
+    color: '#047857',
+  },
+  chargeWrap: {
+    position: 'relative',
+  },
+  chargeBtn: {
+    width: '100%',
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    backgroundColor: '#2563EB',
+  },
+  chargeBtnDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  chargeBtnPressed: {
+    transform: [{ scale: 0.98 }],
+  },
+  chargeText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  chargeTextDisabled: {
+    color: '#6B7280',
+  },
+  progressBar: {
+    position: 'absolute',
+    left: 0,
+    bottom: 0,
+    height: 4,
+    backgroundColor: '#22C55E',
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+});

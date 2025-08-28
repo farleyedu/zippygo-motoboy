@@ -1,5 +1,6 @@
-import { motion } from 'framer-motion';
 import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { FontAwesome } from '@expo/vector-icons';
 
 type Props = {
   amount: number;
@@ -8,22 +9,63 @@ type Props = {
 
 export default function DeliveryReleasedCard({ amount, method }: Props) {
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="bg-green-50 border border-green-200 rounded-2xl p-6 flex flex-col items-center text-center gap-4 w-full max-w-md"
-    >
-      <div className="bg-green-600 rounded-full p-3">
-        <i className="fa-solid fa-check text-white" />
-      </div>
-      <div className="text-green-700 font-semibold text-lg">Entrega Liberada! ✨</div>
-      <div className="text-gray-700 text-sm">
-        Código validado e pagamento registrado com sucesso.
-      </div>
-      <div className="bg-white border border-green-200 rounded-lg px-4 py-2">
-        <div className="text-black font-medium">R$ {amount.toFixed(2)}</div>
-        <div className="text-gray-500 text-sm">{method}</div>
-      </div>
-    </motion.div>
+    <View style={styles.container}>
+      <View style={styles.iconCircle}>
+        <FontAwesome name="check" size={20} color="#fff" />
+      </View>
+      <Text style={styles.title}>Entrega Liberada! ✨</Text>
+      <Text style={styles.subtitle}>Código validado e pagamento registrado com sucesso.</Text>
+      <View style={styles.amountBox}>
+        <Text style={styles.amount}>R$ {amount.toFixed(2)}</Text>
+        <Text style={styles.method}>{method}</Text>
+      </View>
+    </View>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+    gap: 12,
+    width: '100%',
+    maxWidth: 480,
+  },
+  iconCircle: {
+    backgroundColor: '#16A34A',
+    borderRadius: 999,
+    padding: 10,
+  },
+  title: {
+    color: '#15803D',
+    fontWeight: '600',
+    fontSize: 18,
+    textAlign: 'center',
+  },
+  subtitle: {
+    color: '#374151',
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  amountBox: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  amount: {
+    color: '#111827',
+    fontWeight: '600',
+  },
+  method: {
+    color: '#6B7280',
+    fontSize: 12,
+  },
+});
