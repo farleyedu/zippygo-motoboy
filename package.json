@@ -29,6 +29,7 @@
     "expo-system-ui": "~5.0.8",
     "expo-task-manager": "~13.1.6",
     "expo-web-browser": "~14.1.6",
+    "framer-motion": "^11.2.6",
     "leaflet": "^1.9.4",
     "leaflet-defaulticon-compatibility": "^0.1.2",
     "lucide-react": "^0.542.0",
