@@ -358,40 +358,10 @@ export default function TelaInicialMap() {
     });
 
   };
-
-  const handleNovaEntrega = async () => {
-    const lista = await SecureStore.getItemAsync('pedidosCompletos');
-    const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
-    let pedidoAtual = null;
-    if (lista && indiceAtualStr) {
-      const pedidos = JSON.parse(lista);
-      const indiceAtual = parseInt(indiceAtualStr, 10);
-      pedidoAtual = pedidos[indiceAtual];
-    }
-    if (!pedidoAtual) return;
-
-    router.push({
-      pathname: '/EntregaNovaScreen',
-      params: {
-        id: String(pedidoAtual.id),
-        id_ifood: String(pedidoAtual.id_ifood || 0),
-        id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
-        nome: pedidoAtual.cliente,
-        bairro: pedidoAtual.bairro,
-        endereco: pedidoAtual.endereco,
-        statusPagamento: pedidoAtual.statusPagamento,
-        valorTotal: String(pedidoAtual.valorTotal),
-        pagamento: pedidoAtual.pagamento || '',
-        horario: pedidoAtual.horario || '',
-        telefone: pedidoAtual.telefone || '',
-        troco: pedidoAtual.troco || '',
-        distanciaKm: String(pedidoAtual.distanciaKm ?? ''),
-        quantidadePedidos: String(pedidoAtual.quantidadePedidos ?? 1),
-        itens: JSON.stringify(pedidoAtual.itens || []),
-        coordinates: JSON.stringify(pedidoAtual.coordinates || null),
-      },
-    });
+  const handleNovaEntrega = () => {
+    router.push('/EntregaNovaScreen');
   };
+  
   useEffect(() => {
     const atualizarPedidosEmEntrega = async () => {
       const pedidosStr = await SecureStore.getItemAsync('pedidosCompletos');
@@ -503,11 +473,12 @@ export default function TelaInicialMap() {
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.novaEntregaButton, { top: insets.top + 60 }]}
-        onPress={handleNovaEntrega}
-      >
-        <Text style={styles.novaEntregaButtonText}>Nova Entrega (layout novo)</Text>
-      </TouchableOpacity>
+  style={[styles.novaEntregaButton, { top: insets.top + 60 }]}
+  onPress={handleNovaEntrega}
+>
+  <Text style={styles.novaEntregaButtonText}>Nova Entrega (layout novo)</Text>
+</TouchableOpacity>
+
 
       {emEntrega && (
         <Animated.View
