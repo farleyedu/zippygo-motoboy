@@ -51,9 +51,9 @@ export default function PaymentChooser({ amount, method, onChange, onCharge }: P
       <div className="relative">
         <button
           disabled={!method}
-          onMouseDown={startHold}
-          onMouseUp={cancelHold}
-          onMouseLeave={cancelHold}
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerLeave={cancelHold}
           className={`w-full py-3 rounded-lg font-medium transition-transform active:scale-95 ${
             method
               ? 'bg-blue-600 hover:bg-blue-700 text-white cursor-pointer'
