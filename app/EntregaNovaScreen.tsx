@@ -1,5 +1,6 @@
 "use client";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
+import { Stack } from "expo-router";
 import React, { useState } from "react";
 import {
   View,
@@ -99,15 +100,11 @@ export default function EntregaNovaScreen() {
   );
 
   return (
-    <View style={styles.screen}>
-      {/* Cabeçalho */}
-      <View style={styles.header}>
-        <ArrowLeft size={24} color="#374151" />
-        <Text style={styles.headerTitle}>ENTREGA</Text>
-        <MessageCircle size={24} color="#374151" />
-      </View>
+    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
+      <Stack.Screen options={{ headerShown: false }} />
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 140 }}>
+
+      <ScrollView contentContainerStyle={{ paddingBottom: 200 }}>
         {/* Card Endereço */}
         <View style={styles.cardOuter}>
           <View style={styles.rowBetween}>
@@ -436,8 +433,7 @@ export default function EntregaNovaScreen() {
     <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
   </TouchableOpacity>
 </View>
-
-    </View>
+    </SafeAreaView>
   );
 }
 
