@@ -1,6 +1,6 @@
 "use client";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
-import { Stack } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import React, { useState } from "react";
 import {
   View,
@@ -8,6 +8,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  Animated,
+  PanResponder,
+  Dimensions,
 } from "react-native";
 import {
   MapPin,
@@ -28,6 +31,7 @@ import {
   Coffee,
   Utensils,
 } from "lucide-react-native";
+import Feather from '@expo/vector-icons/Feather';
 
 export default function EntregaNovaScreen() {
   const [metodoSelecionado, setMetodoSelecionado] =
@@ -50,6 +54,96 @@ export default function EntregaNovaScreen() {
     setMostrarAcoesTelefone(false);
   };
   const insets = useSafeAreaInsets();
+  const router = useRouter();
+
+  // Sheet: controla a tela inteira como um sheet arrastável
+  const screenH = Dimensions.get('window').height;
+  const SHEET_TOP_GAP = 50; // fresta mínima no topo (altere aqui)
+  const SHEET_MIN_Y = SHEET_TOP_GAP; // expandido com gap
+  const SHEET_MAX_Y = Math.round(screenH * 0.6); // minimizado (~60% para baixo)
+  const MID_Y = (SHEET_MIN_Y + SHEET_MAX_Y) / 2; // ponto médio para snap
+  const CLOSE_THRESHOLD_Y = Math.round(screenH * 0.88); // arraste quase total → voltar ao mapa
+  const MAX_DRAG_Y = Math.round(screenH * 0.95); // limite visual de arraste
+  // Sensibilidade baseada em velocidade/pequeno deslocamento
+  const CAPTURE_DY = 3;         // deslocamento mínimo para considerar gesto
+  const CAPTURE_VY = 0.18;      // velocidade mínima para capturar gesto
+  const MINIMIZE_DY = 16;       // deslocamento para snap em minimizado
+  const MINIMIZE_VY = 0.25;     // velocidade para snap em minimizado
+  const CLOSE_VY = 1.0;         // velocidade para fechar para o mapa
+  const CONTENT_TOP_MARGIN = 4; // margem do conteúdo após a seta (altere aqui)
+  const translateY = React.useRef(new Animated.Value(SHEET_MIN_Y)).current; // começa expandido com gap
+  const offsetRef = React.useRef(SHEET_MIN_Y);
+  const scrollYRef = React.useRef(0);
+  const dragYRef = React.useRef(SHEET_MIN_Y);
+
+  const snapTo = (to: number) => {
+    Animated.spring(translateY, {
+      toValue: to,
+      useNativeDriver: true,
+      bounciness: 6,
+      speed: 14,
+    }).start(() => {
+      offsetRef.current = to;
+    });
+  };
+
+  const panResponder = React.useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, g) => {
+        const { dy, vy } = g;
+        // Se já está parcialmente minimizado, capturamos o gesto facilmente
+        if (offsetRef.current > 0.5) return true;
+        // Quando expandido: captura se puxar para baixo no topo do conteúdo,
+        // ou se a velocidade exceder o limiar mesmo com pequeno deslocamento
+        const fastEnough = Math.abs(vy) > CAPTURE_VY;
+        const movedEnough = Math.abs(dy) > CAPTURE_DY;
+        if (scrollYRef.current <= 0.5 && dy > 0 && (movedEnough || fastEnough)) return true;
+        return false;
+      },
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        const { dy, vy } = g;
+        if (offsetRef.current > 0.5) return true;
+        const fastEnough = Math.abs(vy) > CAPTURE_VY;
+        const movedEnough = Math.abs(dy) > CAPTURE_DY;
+        if (scrollYRef.current <= 0.5 && dy > 0 && (movedEnough || fastEnough)) return true;
+        return false;
+      },
+      onPanResponderGrant: () => {
+        translateY.stopAnimation();
+        dragYRef.current = offsetRef.current;
+      },
+      onPanResponderMove: (_, g) => {
+        let next = offsetRef.current + g.dy;
+        if (next < SHEET_MIN_Y) next = SHEET_MIN_Y;
+        if (next > MAX_DRAG_Y) next = MAX_DRAG_Y;
+        translateY.setValue(next);
+        dragYRef.current = next;
+      },
+      onPanResponderRelease: (_, g) => {
+        const finalY = Math.max(SHEET_MIN_Y, Math.min(MAX_DRAG_Y, offsetRef.current + g.dy));
+        const willClose = finalY >= CLOSE_THRESHOLD_Y || g.vy > CLOSE_VY;
+        if (willClose) {
+          // Anima para fora da tela e volta ao mapa
+          Animated.timing(translateY, {
+            toValue: screenH,
+            duration: 160,
+            useNativeDriver: true,
+          }).start(() => {
+            router.back();
+          });
+          return;
+        }
+        const shouldMinimize = g.dy > MINIMIZE_DY || g.vy > MINIMIZE_VY || finalY > MID_Y;
+        snapTo(shouldMinimize ? SHEET_MAX_Y : SHEET_MIN_Y);
+      },
+      onPanResponderTerminate: () => {
+        const currentY = dragYRef.current;
+        const to = currentY > MID_Y ? SHEET_MAX_Y : SHEET_MIN_Y;
+        snapTo(to);
+      },
+    })
+  ).current;
 
   const Chip = ({
     ativo,
@@ -100,13 +194,23 @@ export default function EntregaNovaScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.screen} edges={["top", "left", "right"]}>
-      <Stack.Screen options={{ headerShown: false }} />
+    <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerShown: false, presentation: 'transparentModal', contentStyle: { backgroundColor: 'transparent' } }} />
 
+      {/* Sheet que cobre a tela e pode ser minimizado */}
+      <Animated.View style={[styles.sheetContainer, { transform: [{ translateY }] }] } {...panResponder.panHandlers}>
+        <SafeAreaView style={styles.screen} edges={["left", "right"]}>
+          {/* Handle/Icone de colapso (zona de arraste) */}
+          <View style={styles.dragZone}>
+            <Feather name="chevron-down" size={18} color="#9CA3AF" />
+          </View>
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 200 }}>
+          <ScrollView contentContainerStyle={{ paddingBottom: 200 }}
+            scrollEventThrottle={16}
+            onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
+          >
         {/* Card Endereço */}
-        <View style={styles.cardOuter}>
+        <View style={[styles.cardOuter, { marginTop: CONTENT_TOP_MARGIN }]}>
           <View style={styles.rowBetween}>
             <View style={{ flexDirection: "row" }}>
               <View style={styles.pinCircle}>
@@ -406,10 +510,10 @@ export default function EntregaNovaScreen() {
             </TouchableOpacity>
           </View>
         </View>
-      </ScrollView>
+          </ScrollView>
 
-      {/* Barra fixa inferior */}
-      <View
+          {/* Barra fixa inferior */}
+          <View
   style={[
     styles.bottomBar,
     {
@@ -432,13 +536,40 @@ export default function EntregaNovaScreen() {
     </View>
     <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
   </TouchableOpacity>
-</View>
-    </SafeAreaView>
+        </View>
+        </SafeAreaView>
+      </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#F9FAFB" },
+
+  sheetContainer: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#F9FAFB',
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    overflow: 'hidden',
+  },
+
+  dragZone: {
+    alignItems: 'center',
+    paddingTop: 0,
+    paddingBottom: 2,
+  },
+  dragHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 4,
+    backgroundColor: '#D1D5DB',
+    marginBottom: 4,
+  },
 
   header: {
     backgroundColor: "#fff",
