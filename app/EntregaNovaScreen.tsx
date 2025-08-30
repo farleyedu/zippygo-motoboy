@@ -44,6 +44,11 @@ export default function EntregaNovaScreen() {
   const [codigoSolicitado, setCodigoSolicitado] = useState(false);
   const [codigoValidado, setCodigoValidado] = useState(false);
   const [pagamentoConfirmado, setPagamentoConfirmado] = useState(false);
+  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
+  const [refundProgress, setRefundProgress] = useState(0);
+  const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
+  const scaleAnim = new Animated.Value(1);
+  const glowAnim = new Animated.Value(0);
 
   // Comentado para facilitar testes - sempre inicia solicitando código
   // useEffect(() => {
@@ -94,6 +99,90 @@ export default function EntregaNovaScreen() {
   const handleEditarPagamento = () => {
     // Permite editar o pagamento voltando ao estado anterior
     setPagamentoConfirmado(false);
+  };
+
+  const startRefundProcess = () => {
+    if (isProcessingRefund) return;
+    
+    setIsProcessingRefund(true);
+    setRefundProgress(0);
+    
+    // Animações de início
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 0.98,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 1,
+        duration: 300,
+        useNativeDriver: false,
+      }),
+    ]).start();
+    
+    const timer = setInterval(() => {
+      setRefundProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(timer);
+          // Animação de conclusão
+          Animated.sequence([
+            Animated.timing(scaleAnim, {
+              toValue: 1.05,
+              duration: 150,
+              useNativeDriver: true,
+            }),
+            Animated.timing(scaleAnim, {
+              toValue: 1,
+              duration: 200,
+              useNativeDriver: true,
+            }),
+          ]).start();
+          
+          Animated.timing(glowAnim, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: false,
+          }).start();
+          
+          // Volta ao estado não cobrado
+          setTimeout(() => {
+            setPagamentoConfirmado(false);
+            setIsProcessingRefund(false);
+            setRefundProgress(0);
+          }, 500);
+          return 100;
+        }
+        return prev + 2; // 2% a cada 40ms = 2 segundos total
+      });
+    }, 40);
+    
+    setLongPressTimer(timer);
+  };
+  
+  const cancelRefundProcess = () => {
+    if (longPressTimer) {
+      clearInterval(longPressTimer);
+      setLongPressTimer(null);
+    }
+    
+    // Animações de cancelamento
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 150,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.timing(glowAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: false,
+      }),
+    ]).start();
+    
+    setIsProcessingRefund(false);
+    setRefundProgress(0);
   };
 
   const handleSolicitarCodigo = () => {
@@ -370,7 +459,52 @@ export default function EntregaNovaScreen() {
 
           {codigoValidado && pagamentoConfirmado ? (
             /* Card de Entrega Liberada */
-            <View style={styles.entregaLiberadaCard}>
+            <TouchableOpacity
+               onPressIn={startRefundProcess}
+               onPressOut={cancelRefundProcess}
+               onLongPress={() => {}}
+               delayLongPress={2000}
+               activeOpacity={1}
+             >
+               <Animated.View
+                 style={[
+                   styles.entregaLiberadaCard,
+                   {
+                     transform: [{ scale: scaleAnim }],
+                     shadowColor: glowAnim.interpolate({
+                       inputRange: [0, 1],
+                       outputRange: ['rgba(34, 197, 94, 0)', 'rgba(34, 197, 94, 0.4)'],
+                     }),
+                     shadowOffset: {
+                       width: 0,
+                       height: glowAnim.interpolate({
+                         inputRange: [0, 1],
+                         outputRange: [2, 8],
+                       }),
+                     },
+                     shadowOpacity: glowAnim.interpolate({
+                       inputRange: [0, 1],
+                       outputRange: [0.1, 0.6],
+                     }),
+                     shadowRadius: glowAnim.interpolate({
+                       inputRange: [0, 1],
+                       outputRange: [3, 15],
+                     }),
+                     elevation: glowAnim.interpolate({
+                       inputRange: [0, 1],
+                       outputRange: [2, 10],
+                     }),
+                     backgroundColor: glowAnim.interpolate({
+                       inputRange: [0, 1],
+                       outputRange: ['#F0FDF4', '#ECFDF5'],
+                     }),
+                     borderColor: glowAnim.interpolate({
+                       inputRange: [0, 1],
+                       outputRange: ['#BBF7D0', '#22C55E'],
+                     }),
+                   },
+                 ]}
+               >
               <View style={styles.entregaLiberadaIconContainer}>
                 <Check size={24} color="#fff" />
               </View>
@@ -393,13 +527,32 @@ export default function EntregaNovaScreen() {
                   </View>
                 </View>
                 <Text style={styles.entregaLiberadaInstrucao}>
-                  Segure para refazer a cobrança
+                  {isProcessingRefund ? "Solte para cancelar..." : "Segure para refazer a cobrança"}
                 </Text>
                 <Text style={styles.entregaLiberadaProximo}>
                   Tudo pronto. Avance para a próxima entrega.
                 </Text>
-              </View>
-            </View>
+                
+                {/* Barra de progresso */}
+                 {isProcessingRefund && (
+                   <View style={styles.progressContainer}>
+                     <Animated.View 
+                       style={[
+                         styles.progressBar, 
+                         { 
+                           width: `${refundProgress}%`,
+                           backgroundColor: glowAnim.interpolate({
+                             inputRange: [0, 1],
+                             outputRange: ['#22C55E', '#16A34A'],
+                           }),
+                         }
+                       ]} 
+                     />
+                   </View>
+                 )}
+               </View>
+               </Animated.View>
+             </TouchableOpacity>
           ) : pagamentoConfirmado ? (
             /* Card de Pagamento Confirmado */
             <View style={styles.pagamentoConfirmadoCard}>
@@ -995,6 +1148,19 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     textAlign: "center",
+  },
+  progressContainer: {
+    width: "100%",
+    height: 4,
+    backgroundColor: "rgba(34, 197, 94, 0.2)",
+    borderRadius: 2,
+    marginTop: 12,
+    overflow: "hidden",
+  },
+  progressBar: {
+    height: "100%",
+    backgroundColor: "#22C55E",
+    borderRadius: 2,
   },
   phoneIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
   phoneTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },

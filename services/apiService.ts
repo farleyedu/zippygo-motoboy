@@ -67,7 +67,7 @@ export const confirmarEntrega = async (pedidoId: number, dados: any): Promise<an
   }
 };
 
-// Função para atualizar localização do motorista
+// Função para atualizar localização
 export const atualizarLocalizacao = async (latitude: number, longitude: number): Promise<any> => {
   try {
     const response = await apiClient.post(API_CONFIG.ENDPOINTS.LOCALIZACAO, {
@@ -79,6 +79,23 @@ export const atualizarLocalizacao = async (latitude: number, longitude: number):
   } catch (error) {
     console.error('Erro ao atualizar localização:', error);
     throw error;
+  }
+};
+
+// Função para testar conexão com a base de dados
+export const testDatabaseConnection = async (): Promise<{ success: boolean; message: string }> => {
+  try {
+    const response = await apiClient.get(API_CONFIG.ENDPOINTS.HEALTH_CHECK);
+    return {
+      success: true,
+      message: 'Conexão com a base de dados estabelecida com sucesso'
+    };
+  } catch (error) {
+    console.error('Erro ao testar conexão com a base de dados:', error);
+    return {
+      success: false,
+      message: 'Falha na conexão com a base de dados'
+    };
   }
 };
 
