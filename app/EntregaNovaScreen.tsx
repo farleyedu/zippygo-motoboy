@@ -43,6 +43,7 @@ export default function EntregaNovaScreen() {
   const [mostrarAcoesTelefone, setMostrarAcoesTelefone] = useState(false);
   const [codigoSolicitado, setCodigoSolicitado] = useState(false);
   const [codigoValidado, setCodigoValidado] = useState(false);
+  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(false);
 
   // Comentado para facilitar testes - sempre inicia solicitando código
   // useEffect(() => {
@@ -86,7 +87,13 @@ export default function EntregaNovaScreen() {
       setTimeout(() => setMostrarAvisoMetodo(false), 2000);
       return;
     }
-    // TODO: fluxo real de cobrança
+    // Confirma o pagamento
+    setPagamentoConfirmado(true);
+  };
+
+  const handleEditarPagamento = () => {
+    // Permite editar o pagamento voltando ao estado anterior
+    setPagamentoConfirmado(false);
   };
 
   const handleSolicitarCodigo = () => {
@@ -344,83 +351,111 @@ export default function EntregaNovaScreen() {
             </View>
           )}
 
-          {/* Valor + título seção */}
-          <View style={{ alignItems: "center", marginBottom: 16 }}>
-            <Text style={styles.totalValue}>R$ 20,00</Text>
-            <Text style={styles.totalCaption}>Valor a cobrar</Text>
-            <Text style={styles.payMethodTitle}>Método de Pagamento</Text>
-          </View>
+          {pagamentoConfirmado ? (
+            /* Card de Pagamento Confirmado */
+            <View style={styles.pagamentoConfirmadoCard}>
+              <View style={styles.pagamentoConfirmadoContent}>
+                <View style={styles.pagamentoConfirmadoIconContainer}>
+                  <Check size={16} color="#fff" />
+                </View>
+                <View style={styles.pagamentoConfirmadoTexto}>
+                  <Text style={styles.pagamentoConfirmadoTitulo}>Pagamento Confirmado</Text>
+                  <Text style={styles.pagamentoConfirmadoValor}>
+                    R$ 20,00 — {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
+                              metodoSelecionado === "pix" ? "PIX" : 
+                              metodoSelecionado === "debito" ? "Débito" : "Crédito"}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                onPress={handleEditarPagamento}
+                style={styles.pagamentoConfirmadoEditBtn}
+              >
+                <Edit3 size={16} color="#9CA3AF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            /* Seção de Cobrança Original */
+            <>
+              {/* Valor + título seção */}
+              <View style={{ alignItems: "center", marginBottom: 16 }}>
+                <Text style={styles.totalValue}>R$ 20,00</Text>
+                <Text style={styles.totalCaption}>Valor a cobrar</Text>
+                <Text style={styles.payMethodTitle}>Método de Pagamento</Text>
+              </View>
 
-          {/* Chips (4 colunas, alinhados à largura do botão) */}
-          <View style={styles.chipsRow}>
-            <Chip
-              ativo={metodoSelecionado === "dinheiro"}
-              onPress={() => setMetodoSelecionado("dinheiro")}
-              icon={<DollarSign size={14} color="#22c55e" />}
-              label="Dinheiro"
-              ringColor="#22c55e"
-              bgLight="#ECFDF5"
-              textColor="#166534"
-              mr={8}
-            />
+              {/* Chips (4 colunas, alinhados à largura do botão) */}
+              <View style={styles.chipsRow}>
+                <Chip
+                  ativo={metodoSelecionado === "dinheiro"}
+                  onPress={() => setMetodoSelecionado("dinheiro")}
+                  icon={<DollarSign size={14} color="#22c55e" />}
+                  label="Dinheiro"
+                  ringColor="#22c55e"
+                  bgLight="#ECFDF5"
+                  textColor="#166534"
+                  mr={8}
+                />
 
-            <Chip
-              ativo={metodoSelecionado === "pix"}
-              onPress={() => setMetodoSelecionado("pix")}
-              icon={<QrCode size={14} color="#06b6d4" />}
-              label="PIX"
-              ringColor="#06b6d4"
-              bgLight="#ECFEFF"
-              textColor="#0E7490"
-              mr={8}
-            />
+                <Chip
+                  ativo={metodoSelecionado === "pix"}
+                  onPress={() => setMetodoSelecionado("pix")}
+                  icon={<QrCode size={14} color="#06b6d4" />}
+                  label="PIX"
+                  ringColor="#06b6d4"
+                  bgLight="#ECFEFF"
+                  textColor="#0E7490"
+                  mr={8}
+                />
 
-            <Chip
-              ativo={metodoSelecionado === "debito"}
-              onPress={() => setMetodoSelecionado("debito")}
-              icon={<CreditCard size={14} color="#a855f7" />}
-              label="Débito"
-              ringColor="#a855f7"
-              bgLight="#FAF5FF"
-              textColor="#6B21A8"
-              mr={8}
-            />
+                <Chip
+                  ativo={metodoSelecionado === "debito"}
+                  onPress={() => setMetodoSelecionado("debito")}
+                  icon={<CreditCard size={14} color="#a855f7" />}
+                  label="Débito"
+                  ringColor="#a855f7"
+                  bgLight="#FAF5FF"
+                  textColor="#6B21A8"
+                  mr={8}
+                />
 
-            <Chip
-              ativo={metodoSelecionado === "credito"}
-              onPress={() => setMetodoSelecionado("credito")}
-              icon={<CreditCard size={14} color="#f97316" />}
-              label="Crédito"
-              ringColor="#f97316"
-              bgLight="#FFF7ED"
-              textColor="#9A3412"
-            />
-          </View>
+                <Chip
+                  ativo={metodoSelecionado === "credito"}
+                  onPress={() => setMetodoSelecionado("credito")}
+                  icon={<CreditCard size={14} color="#f97316" />}
+                  label="Crédito"
+                  ringColor="#f97316"
+                  bgLight="#FFF7ED"
+                  textColor="#9A3412"
+                />
+              </View>
 
-          {mostrarAvisoMetodo && (
-            <Text style={styles.warnSelect}>Selecione um método de pagamento para continuar.</Text>
+              {mostrarAvisoMetodo && (
+                <Text style={styles.warnSelect}>Selecione um método de pagamento para continuar.</Text>
+              )}
+
+              {/* Botão COBRAR */}
+              <TouchableOpacity
+                onPress={handleCobrar}
+                activeOpacity={0.85}
+                style={[
+                  styles.primaryBtn,
+                  !metodoSelecionado && { backgroundColor: "#E5E7EB" },
+                ]}
+                disabled={!metodoSelecionado}
+              >
+                <Edit3 size={18} color={metodoSelecionado ? "#fff" : "#6B7280"} />
+                <Text
+                  style={[
+                    styles.primaryBtnTxt,
+                    !metodoSelecionado && { color: "#6B7280" },
+                  ]}
+                >
+                  Cobrar R$ 20,00
+                </Text>
+              </TouchableOpacity>
+            </>
           )}
-
-          {/* Botão COBRAR */}
-          <TouchableOpacity
-            onPress={handleCobrar}
-            activeOpacity={0.85}
-            style={[
-              styles.primaryBtn,
-              !metodoSelecionado && { backgroundColor: "#E5E7EB" },
-            ]}
-            disabled={!metodoSelecionado}
-          >
-            <Edit3 size={18} color={metodoSelecionado ? "#fff" : "#6B7280"} />
-            <Text
-              style={[
-                styles.primaryBtnTxt,
-                !metodoSelecionado && { color: "#6B7280" },
-              ]}
-            >
-              Cobrar R$ 20,00
-            </Text>
-          </TouchableOpacity>
         </View>
 
         {/* Itens do Pedido */}
@@ -756,6 +791,49 @@ const styles = StyleSheet.create({
   timelineSub: { fontSize: 12, color: "#2563EB" },
 
   phoneBtn: { width: "100%", zIndex:100, flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, backgroundColor: "#F9FAFB", borderRadius: 10 },
+
+  // Estilos do Card de Pagamento Confirmado
+  pagamentoConfirmadoCard: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  pagamentoConfirmadoContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    flex: 1,
+  },
+  pagamentoConfirmadoIconContainer: {
+    backgroundColor: "#22C55E",
+    borderRadius: 20,
+    width: 24,
+    height: 24,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  pagamentoConfirmadoTexto: {
+    flex: 1,
+  },
+  pagamentoConfirmadoTitulo: {
+    color: "#15803D",
+    fontWeight: "600",
+    fontSize: 16,
+    marginBottom: 2,
+  },
+  pagamentoConfirmadoValor: {
+    color: "#000",
+    fontSize: 14,
+  },
+  pagamentoConfirmadoEditBtn: {
+    padding: 4,
+  },
   phoneIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
   phoneTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
   phoneSub: { fontSize: 12, color: "#4B5563" },
