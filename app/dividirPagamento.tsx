@@ -12,7 +12,7 @@ import { Stack, useRouter, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MaterialCommunityIcons, FontAwesome } from '@expo/vector-icons';
-import * as SecureStore from 'expo-secure-store';
+import { setSecureItem } from '../utils/secureStorage';
 
 type MetodoPagamento = 'Dinheiro' | 'PIX' | 'Débito' | 'Crédito' | 'Outros';
 
@@ -105,8 +105,8 @@ export default function DividirPagamento() {
     };
 
     // Salva o resumo do pagamento
-    await SecureStore.setItemAsync(`pagamentoResumo_${pedidoId}`, JSON.stringify(pagamentoResumo));
-    await SecureStore.setItemAsync(`pagamentoStatus_${pedidoId}`, 'confirmado');
+    await setSecureItem(`pagamentoResumo_${pedidoId}`, JSON.stringify(pagamentoResumo));
+      await setSecureItem(`pagamentoStatus_${pedidoId}`, 'confirmado');
 
     Alert.alert('Sucesso', 'Pagamento dividido confirmado!', [
       { text: 'OK', onPress: () => router.back() }

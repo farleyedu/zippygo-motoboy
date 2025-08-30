@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { StyleSheet, Text, View, Image } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -60,8 +60,8 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   useEffect(() => {
     async function carregarDestino() {
       try {
-        const rawDestinos = await SecureStore.getItemAsync('destinos');
-        const rawIndice = await SecureStore.getItemAsync('indiceAtual');
+        const rawDestinos = await getSecureItem('destinos');
+        const rawIndice = await getSecureItem('indiceAtual');
         const idx = parseInt(rawIndice || '0', 10);
         if (rawDestinos) {
           const destinos: { latitude: number; longitude: number }[] = JSON.parse(rawDestinos);

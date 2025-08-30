@@ -15,9 +15,10 @@ import { Ionicons } from '@expo/vector-icons';
 import Mapa from './Mapa';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import ModalConfirmarRota from './ModalConfirmarRota';
 import PedidosDraggableList from './PedidosDraggableList';
+
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 100;
@@ -147,15 +148,15 @@ export default function TelaInicialMap() {
 
   const handleIniciarRota = async () => {
     // grava pedidos e destinos no SecureStore
-    await SecureStore.setItemAsync('pedidosCompletos', JSON.stringify(pedidosAceitos));
+    await setSecureItem('pedidosCompletos', JSON.stringify(pedidosAceitos));
     const destinos = pedidosAceitos.map(p => ({
       latitude: p.coordinates.latitude,
       longitude: p.coordinates.longitude,
       id_ifood: p.id_ifood,
     }));
-    await SecureStore.setItemAsync('destinos', JSON.stringify(destinos));
-    await SecureStore.setItemAsync('indiceAtual', '0');
-    await SecureStore.setItemAsync('emEntrega', 'true');
+    await setSecureItem('destinos', JSON.stringify(destinos));
+    await setSecureItem('indiceAtual', '0');
+    await setSecureItem('emEntrega', 'true');
 
     // começa o monitoramento
     iniciarMonitoramentoLocalizacao();
@@ -182,32 +183,32 @@ export default function TelaInicialMap() {
 
   useEffect(() => {
     const verificarStatus = async () => {
-      const abrir = await SecureStore.getItemAsync('abrirConfirmacaoImediata');
-      if (abrir === 'true') {
-        const lista = await SecureStore.getItemAsync('pedidosCompletos');
-        const destinos = await SecureStore.getItemAsync('destinos');
+      const abrir = await getSecureItem('abrirConfirmacaoImediata');
+    if (abrir === 'true') {
+      const lista = await getSecureItem('pedidosCompletos');
+      const destinos = await getSecureItem('destinos');
 
         if (lista && destinos) {
-          await SecureStore.deleteItemAsync('abrirConfirmacaoImediata');
+          await deleteSecureItem('abrirConfirmacaoImediata');
           router.push('/confirmacaoEntrega');
         }
       }
 
-      const emEntregaStatus = await SecureStore.getItemAsync('emEntrega');
+      const emEntregaStatus = await getSecureItem('emEntrega');
       setEmEntrega(emEntregaStatus === 'true');
       if (emEntregaStatus === 'true') {
         setMostrandoConfirmar(true);
         iniciarOpacity.setValue(0);
         confirmarOpacity.setValue(1);
         // Recarrega pedidos no painel ao voltar para a tela
-        const pedidosStr = await SecureStore.getItemAsync('pedidosCompletos');
+        const pedidosStr = await getSecureItem('pedidosCompletos');
         if (pedidosStr) {
           const pedidos = JSON.parse(pedidosStr);
           setPedidosAceitos(pedidos);
         }
       }
 
-      const onlineStatus = await SecureStore.getItemAsync('online');
+      const onlineStatus = await getSecureItem('online');
       setOnline(onlineStatus === 'true');
 
       // Fecha modal se o estado não permitir mais receber pedidos
@@ -231,8 +232,8 @@ export default function TelaInicialMap() {
 
   useEffect(() => {
     const checarUltimaEntrega = async () => {
-      const lista = await SecureStore.getItemAsync('pedidosCompletos');
-      const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+      const lista = await getSecureItem('pedidosCompletos');
+    const indiceAtualStr = await getSecureItem('indiceAtual');
       if (lista && indiceAtualStr) {
         const pedidos = JSON.parse(lista);
         const indiceAtual = parseInt(indiceAtualStr, 10);
@@ -245,10 +246,10 @@ export default function TelaInicialMap() {
   }, [mostrandoConfirmar]);
 
   const finalizarRota = async () => {
-    await SecureStore.deleteItemAsync('emEntrega');
-    await SecureStore.deleteItemAsync('indiceAtual');
-    await SecureStore.deleteItemAsync('pedidosCompletos');
-    await SecureStore.deleteItemAsync('destinos');
+    await deleteSecureItem('emEntrega');
+    await deleteSecureItem('indiceAtual');
+    await deleteSecureItem('pedidosCompletos');
+    await deleteSecureItem('destinos');
     setMostrandoConfirmar(false);
     iniciarOpacity.setValue(1);
     confirmarOpacity.setValue(0);
@@ -297,7 +298,7 @@ export default function TelaInicialMap() {
   ).current;
 
   const handleIniciar = async () => {
-    await SecureStore.setItemAsync('online', 'true');
+    await setSecureItem('online', 'true');
     setOnline(true);
     Alert.alert('Você está online!', 'Agora pode receber pedidos.');
   };
@@ -317,8 +318,8 @@ export default function TelaInicialMap() {
 
 
   const handleConfirmar = async () => {
-    const lista = await SecureStore.getItemAsync('pedidosCompletos');
-    const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+    const lista = await getSecureItem('pedidosCompletos');
+    const indiceAtualStr = await getSecureItem('indiceAtual');
     let pedidoAtual = null;
     if (lista && indiceAtualStr) {
       const pedidos = JSON.parse(lista);
@@ -364,8 +365,8 @@ export default function TelaInicialMap() {
   
   useEffect(() => {
     const atualizarPedidosEmEntrega = async () => {
-      const pedidosStr = await SecureStore.getItemAsync('pedidosCompletos');
-      const indiceStr = await SecureStore.getItemAsync('indiceAtual');
+      const pedidosStr = await getSecureItem('pedidosCompletos');
+    const indiceStr = await getSecureItem('indiceAtual');
       if (pedidosStr && indiceStr) {
         const pedidos = JSON.parse(pedidosStr);
         // Não usar slice: manter a lista completa e usar indiceAtual no mapa
@@ -432,7 +433,7 @@ export default function TelaInicialMap() {
                         onPress: async () => {
                           setPedidosAceitos([]);
                           setOrganizandoRota(false);
-                          await SecureStore.setItemAsync('online', 'false');
+                          await setSecureItem('online', 'false');
                           setOnline(false);
                           Alert.alert('Status atualizado', 'Você está agora offline.');
                         },
@@ -441,7 +442,7 @@ export default function TelaInicialMap() {
                   );
                   return;
                 }
-                await SecureStore.setItemAsync('online', 'false');
+                await setSecureItem('online', 'false');
                 setOnline(false);
                 Alert.alert('Status atualizado', 'Você está agora offline.');
               }}
@@ -467,6 +468,8 @@ export default function TelaInicialMap() {
         <Ionicons name="menu" size={24} color="#000" />
         <View style={styles.badge} />
       </TouchableOpacity>
+
+
 
       <TouchableOpacity style={[styles.valorPainel, { top: insets.top + 10 }]}> 
         <Text style={styles.valorTexto}>R$130,40</Text>

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 
 export type EntregaState = {
   codeStatus: 'pending' | 'validated';
@@ -21,7 +21,7 @@ export default function useEntregaState() {
   useEffect(() => {
     (async () => {
       try {
-        const stored = await SecureStore.getItemAsync('entregaState');
+        const stored = await getSecureItem('entregaState');
         if (stored) {
           setState(JSON.parse(stored));
         }
@@ -35,7 +35,7 @@ export default function useEntregaState() {
     setState((prev) => {
       const next = { ...prev, ...partial };
       // persistência assíncrona (fire-and-forget)
-      SecureStore.setItemAsync('entregaState', JSON.stringify(next)).catch(() => {});
+      setSecureItem('entregaState', JSON.stringify(next)).catch(() => {});
       return next;
     });
   };

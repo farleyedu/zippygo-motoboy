@@ -13,7 +13,7 @@ import { CodeField, Cursor, useBlurOnFulfill, useClearByFocusCell } from 'react-
 import { Stack, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import * as SecureStore from 'expo-secure-store';
+import { setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 
 const CELL_COUNT = 4;
 const lockIcon = require('../assets/images/lock.png'); // ajuste o caminho se necessário
@@ -27,9 +27,9 @@ export default function VerificationScreen() {
 
   const handleValidar = async () => {
     // Marca que o código foi validado
-    await SecureStore.setItemAsync('codigoValidado', 'true');
+    await setSecureItem('codigoValidado', 'true');
     // Remove o flag de callback
-    await SecureStore.deleteItemAsync('codigoCallback');
+    await deleteSecureItem('codigoCallback');
     // Volta para a tela anterior
     router.back();
   };

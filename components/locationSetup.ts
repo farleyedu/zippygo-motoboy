@@ -1,13 +1,13 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem } from '../utils/secureStorage';
 import { Alert } from 'react-native';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
 export async function iniciarMonitoramentoLocalizacao() {
   try {
-    const emEntrega = await SecureStore.getItemAsync('emEntrega');
+    const emEntrega = await getSecureItem('emEntrega');
     if (emEntrega !== 'true') {
       console.log('[ZIPPY] Ignorado - não está em rota.');
       return;

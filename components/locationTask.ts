@@ -1,7 +1,7 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import * as Linking from 'expo-linking';
 import { AppState } from 'react-native';
 
@@ -38,7 +38,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }: TaskManager.T
   }
 
   const location = locations[0];
-  const emEntrega = await SecureStore.getItemAsync('emEntrega');
+  const emEntrega = await getSecureItem('emEntrega');
 if (emEntrega !== 'true') {
   console.log('[TASK] Ignorado pois não está em rota.');
   return;
@@ -46,9 +46,9 @@ if (emEntrega !== 'true') {
 
   console.log('[TASK] Local atual recebido:', location.coords);
 
-  const rawDestinos = await SecureStore.getItemAsync('destinos');
-  const rawPedidos = await SecureStore.getItemAsync('pedidosCompletos');
-  const indiceAtual = parseInt(await SecureStore.getItemAsync('indiceAtual') || '0', 10);
+  const rawDestinos = await getSecureItem('destinos');
+  const rawPedidos = await getSecureItem('pedidosCompletos');
+  const indiceAtual = parseInt(await getSecureItem('indiceAtual') || '0', 10);
 
   if (!rawDestinos || !rawPedidos) {
     console.warn('[TASK] Dados necessários ainda não foram carregados. Ignorando verificação de destino.');
@@ -69,7 +69,7 @@ if (emEntrega !== 'true') {
   if (distancia <= 100) {
     console.log('[TASK] Dentro do raio!');
 
-    const destinosNotificadosRaw = await SecureStore.getItemAsync('destinosNotificados');
+    const destinosNotificadosRaw = await getSecureItem('destinosNotificados');
     const destinosNotificados = destinosNotificadosRaw ? JSON.parse(destinosNotificadosRaw) : [];
 
     if (destinosNotificados.includes(indiceAtual)) {
@@ -78,15 +78,15 @@ if (emEntrega !== 'true') {
     }
 
     destinosNotificados.push(indiceAtual);
-    await SecureStore.setItemAsync('destinosNotificados', JSON.stringify(destinosNotificados));
-    await SecureStore.setItemAsync('chegouNoDestino', 'true');
+    await setSecureItem('destinosNotificados', JSON.stringify(destinosNotificados));
+    await setSecureItem('chegouNoDestino', 'true');
 
     const appState = AppState.currentState;
     const isForeground = appState === 'active';
 
     if (isForeground) {
       console.log('[TASK] App em foreground - navegando direto.');
-      await SecureStore.setItemAsync('abrirConfirmacaoImediata', 'true');
+      await setSecureItem('abrirConfirmacaoImediata', 'true');
     } else {
       console.log('[TASK] App em background - enviando notificação.');
     

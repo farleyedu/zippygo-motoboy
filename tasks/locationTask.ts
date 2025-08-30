@@ -1,7 +1,7 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import * as Linking from 'expo-linking';
 
 const LOCATION_TASK_NAME = 'background-location-task';
@@ -48,7 +48,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
 
   try {
     // Verifica se ainda está em entrega
-    const emEntrega = await SecureStore.getItemAsync('emEntrega');
+    const emEntrega = await getSecureItem('emEntrega');
     if (emEntrega !== 'true') {
       console.log('[TASK] Não está mais em entrega, parando task...');
       if (intervalId) {
@@ -63,7 +63,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
       intervalId = setInterval(async () => {
         try {
           // Verifica novamente se ainda está em entrega
-          const emEntregaCheck = await SecureStore.getItemAsync('emEntrega');
+          const emEntregaCheck = await getSecureItem('emEntrega');
           if (emEntregaCheck !== 'true') {
             console.log('[TASK] Entrega finalizada, parando monitoramento...');
             if (intervalId) {
@@ -89,7 +89,7 @@ TaskManager.defineTask(LOCATION_TASK_NAME, async ({ data, error }) => {
             console.log('[TASK] Está dentro do raio de 100m! Enviando notificação...');
 
             // Salva usando SecureStore
-            await SecureStore.setItemAsync('chegouNoDestino', 'true');
+    await setSecureItem('chegouNoDestino', 'true');
 
             // Envia notificação com deep link
             await Notifications.scheduleNotificationAsync({

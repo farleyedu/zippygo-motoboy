@@ -18,7 +18,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
+import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import { Animated } from 'react-native';
 
 type MetodoPagamento = 'Dinheiro' | 'PIX' | 'Débito' | 'Crédito' | 'Outros';
@@ -149,8 +149,8 @@ export default function ConfirmacaoEntrega() {
 
   useEffect(() => {
     (async () => {
-      const lista = await SecureStore.getItemAsync('pedidosCompletos');
-      const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+      const lista = await getSecureItem('pedidosCompletos');
+      const indiceAtualStr = await getSecureItem('indiceAtual');
       if (lista && indiceAtualStr) {
         const pedidos = JSON.parse(lista);
         const indiceAtual = parseInt(indiceAtualStr, 10);
@@ -164,7 +164,7 @@ export default function ConfirmacaoEntrega() {
         setCodigoStatus('validado');
       } else {
         // Checa status de código confirmado individual por pedido
-        const status = await SecureStore.getItemAsync(`codigoConfirmado_${pedidoId}`);
+        const status = await getSecureItem(`codigoConfirmado_${pedidoId}`);
         console.log('Status código confirmado', pedidoId, status);
         if (status === 'true') {
           setCodigoStatus('validado');
@@ -183,7 +183,7 @@ export default function ConfirmacaoEntrega() {
 
 
       // Carrega resumo de pagamento salvo
-      const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${pedidoId}`);
+      const pagamentoResumoSalvo = await getSecureItem(`pagamentoResumo_${pedidoId}`);
       if (pagamentoResumoSalvo) {
         setPagamentoResumo(JSON.parse(pagamentoResumoSalvo));
       }
@@ -195,10 +195,10 @@ export default function ConfirmacaoEntrega() {
     React.useCallback(() => {
       const verificarCodigoValidado = async () => {
         if (isIfood) {
-          const codigoValidado = await SecureStore.getItemAsync('codigoValidado');
-          if (codigoValidado === 'true') {
-            await SecureStore.setItemAsync(`codigoConfirmado_${pedidoId}`, 'true');
-            await SecureStore.deleteItemAsync('codigoValidado');
+          const codigoValidado = await getSecureItem('codigoValidado');
+      if (codigoValidado === 'true') {
+        await setSecureItem(`codigoConfirmado_${pedidoId}`, 'true');
+        await deleteSecureItem('codigoValidado');
             setCodigoStatus('validado');
           }
         }
@@ -211,12 +211,12 @@ export default function ConfirmacaoEntrega() {
   useFocusEffect(
     React.useCallback(() => {
       const verificarPagamentoDividido = async () => {
-        const pagamentoStatusSalvo = await SecureStore.getItemAsync(`pagamentoStatus_${pedidoId}`);
+        const pagamentoStatusSalvo = await getSecureItem(`pagamentoStatus_${pedidoId}`);
         if (pagamentoStatusSalvo === 'confirmado') {
           setPagamentoStatus('confirmado');
           setPagamentoExpandido(false);
 
-          const pagamentoResumoSalvo = await SecureStore.getItemAsync(`pagamentoResumo_${pedidoId}`);
+          const pagamentoResumoSalvo = await getSecureItem(`pagamentoResumo_${pedidoId}`);
           if (pagamentoResumoSalvo) {
             setPagamentoResumo(JSON.parse(pagamentoResumoSalvo));
           }
@@ -227,7 +227,7 @@ export default function ConfirmacaoEntrega() {
   );
 
   const handleCodigoValidado = async () => {
-    await SecureStore.setItemAsync(`codigoConfirmado_${pedidoId}`, 'true');
+    await setSecureItem(`codigoConfirmado_${pedidoId}`, 'true');
     setCodigoStatus('validado');
   };
 
@@ -240,8 +240,8 @@ export default function ConfirmacaoEntrega() {
       valor: valorTotal,
     };
 
-    await SecureStore.setItemAsync(`pagamentoResumo_${pedidoId}`, JSON.stringify(resumo));
-    await SecureStore.setItemAsync(`pagamentoStatus_${pedidoId}`, 'confirmado');
+    await setSecureItem(`pagamentoResumo_${pedidoId}`, JSON.stringify(resumo));
+    await setSecureItem(`pagamentoStatus_${pedidoId}`, 'confirmado');
 
     setPagamentoStatus('confirmado');  // ✅ Só confirma aqui
     setPagamentoResumo(resumo);
@@ -275,33 +275,33 @@ export default function ConfirmacaoEntrega() {
       return;
     }
 
-    const lista = await SecureStore.getItemAsync('pedidosCompletos');
-    const indiceAtualStr = await SecureStore.getItemAsync('indiceAtual');
+    const lista = await getSecureItem('pedidosCompletos');
+    const indiceAtualStr = await getSecureItem('indiceAtual');
     if (lista && indiceAtualStr) {
       const pedidos = JSON.parse(lista);
       let indiceAtual = parseInt(indiceAtualStr, 10);
-      await SecureStore.deleteItemAsync(`codigoConfirmado_${pedidoId}`);
+      await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
       if (indiceAtual < pedidos.length - 1) {
         indiceAtual += 1;
-        await SecureStore.setItemAsync('indiceAtual', indiceAtual.toString());
+        await setSecureItem('indiceAtual', indiceAtual.toString());
         router.replace('/');
       } else {
-        await SecureStore.deleteItemAsync('emEntrega');
-        await SecureStore.deleteItemAsync('indiceAtual');
-        await SecureStore.deleteItemAsync('pedidosCompletos');
-        await SecureStore.deleteItemAsync('destinos');
-        await SecureStore.deleteItemAsync(`codigoConfirmado_${pedidoId}`);
+        await deleteSecureItem('emEntrega');
+        await deleteSecureItem('indiceAtual');
+        await deleteSecureItem('pedidosCompletos');
+        await deleteSecureItem('destinos');
+        await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
         router.replace('/');
       }
     }
   };
 
   const handleFinalizarRota = async () => {
-    await SecureStore.deleteItemAsync('emEntrega');
-    await SecureStore.deleteItemAsync('indiceAtual');
-    await SecureStore.deleteItemAsync('pedidosCompletos');
-    await SecureStore.deleteItemAsync('destinos');
-    await SecureStore.deleteItemAsync(`codigoConfirmado_${pedidoId}`);
+    await deleteSecureItem('emEntrega');
+    await deleteSecureItem('indiceAtual');
+    await deleteSecureItem('pedidosCompletos');
+    await deleteSecureItem('destinos');
+    await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
     router.replace('/');
   };
 
@@ -683,10 +683,10 @@ export default function ConfirmacaoEntrega() {
 
         <TouchableOpacity
           onPress={async () => {
-            await SecureStore.deleteItemAsync('emEntrega');
-            await SecureStore.deleteItemAsync('indiceAtual');
-            await SecureStore.deleteItemAsync('pedidosCompletos');
-            await SecureStore.deleteItemAsync('destinos');
+            await deleteSecureItem('emEntrega');
+            await deleteSecureItem('indiceAtual');
+            await deleteSecureItem('pedidosCompletos');
+            await deleteSecureItem('destinos');
             router.replace('/');
           }}
           style={styles.botaoSair}

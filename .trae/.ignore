@@ -1,0 +1,14 @@
+**/bin/**
+**/obj/**
+**/node_modules/**
+**/.expo/**
+**/.next/**
+**/dist/**
+**/*.map
+**/*.lock
+**/*.log
+**/.env
+**/*.keystore
+**/google-services.json
+**/GoogleService-Info.plist
+**/assets/images/**
