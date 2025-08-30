@@ -1,7 +1,7 @@
 "use client";
 import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -30,14 +30,55 @@ import {
   Ban,
   Coffee,
   Utensils,
+  Key,
 } from "lucide-react-native";
 import Feather from '@expo/vector-icons/Feather';
+import { getSecureItem } from '../utils/secureStorage';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function EntregaNovaScreen() {
   const [metodoSelecionado, setMetodoSelecionado] =
     useState<null | "dinheiro" | "pix" | "debito" | "credito">(null);
   const [mostrarAvisoMetodo, setMostrarAvisoMetodo] = useState(false);
   const [mostrarAcoesTelefone, setMostrarAcoesTelefone] = useState(false);
+  const [codigoSolicitado, setCodigoSolicitado] = useState(false);
+  const [codigoValidado, setCodigoValidado] = useState(false);
+
+  // Comentado para facilitar testes - sempre inicia solicitando código
+  // useEffect(() => {
+  //   const carregarEstadoCodigo = async () => {
+  //     try {
+  //       const codigoValidadoSalvo = await getSecureItem('codigoValidado');
+  //       if (codigoValidadoSalvo === 'true') {
+  //         setCodigoValidado(true);
+  //         setCodigoSolicitado(true);
+  //       }
+  //     } catch (error) {
+  //       console.log('Erro ao carregar estado do código:', error);
+  //     }
+  //   };
+  //   
+  //   carregarEstadoCodigo();
+  // }, []);
+
+  // Recarregar estado quando a tela receber foco (volta da VerificationScreen)
+  useFocusEffect(
+    React.useCallback(() => {
+      const verificarCodigoValidado = async () => {
+        try {
+          const codigoValidadoSalvo = await getSecureItem('codigoValidado');
+          if (codigoValidadoSalvo === 'true') {
+            setCodigoValidado(true);
+            setCodigoSolicitado(true);
+          }
+        } catch (error) {
+          console.log('Erro ao verificar código validado:', error);
+        }
+      };
+      
+      verificarCodigoValidado();
+    }, [])
+  );
 
   const handleCobrar = () => {
     if (!metodoSelecionado) {
@@ -46,6 +87,12 @@ export default function EntregaNovaScreen() {
       return;
     }
     // TODO: fluxo real de cobrança
+  };
+
+  const handleSolicitarCodigo = () => {
+    // Navegar para tela de verificação
+    router.push('/VerificationScreen');
+    setCodigoSolicitado(true);
   };
 
   const handleAcaoTelefone = (acao: "ligar" | "whatsapp") => {
@@ -278,11 +325,24 @@ export default function EntregaNovaScreen() {
             </View>
           </View>
 
-          {/* Código confirmado */}
-          <View style={styles.codeOk}>
-            <Settings size={16} color="#16A34A" />
-            <Text style={styles.codeOkTxt}>Código confirmado</Text>
-          </View>
+          {/* Código de entrega */}
+          {!codigoValidado ? (
+            <View style={styles.codeRequestCard}>
+              <Key size={20} color="#EF4444" />
+              <Text style={styles.codeRequestTitle}>Código de entrega</Text>
+              <TouchableOpacity 
+                style={styles.codeRequestButton}
+                onPress={handleSolicitarCodigo}
+              >
+                <Text style={styles.codeRequestButtonText}>Solicitar</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.codeOk}>
+              <Settings size={16} color="#16A34A" />
+              <Text style={styles.codeOkTxt}>Código confirmado</Text>
+            </View>
+          )}
 
           {/* Valor + título seção */}
           <View style={{ alignItems: "center", marginBottom: 16 }}>
@@ -635,6 +695,37 @@ const styles = StyleSheet.create({
 
   codeOk: { backgroundColor: "#D1FAE5", borderColor: "#A7F3D0", borderWidth: 1, padding: 10, borderRadius: 8, flexDirection: "row", alignItems: "center", marginBottom: 12 },
   codeOkTxt: { marginLeft: 8, color: "#15803D", fontSize: 14, fontWeight: "600" },
+
+  codeRequestCard: {
+    backgroundColor: "#FFFBEB",
+    borderColor: "#FCD34D",
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  codeRequestTitle: {
+    flex: 1,
+    marginLeft: 12,
+    color: "#1F2937",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  codeRequestButton: {
+    backgroundColor: "#F97316",
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  codeRequestButtonText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
 
   totalValue: { fontSize: 22, fontWeight: "800", color: "#EF4444", marginBottom: 2 },
   totalCaption: { fontSize: 13, color: "#4B5563", marginBottom: 8 },
