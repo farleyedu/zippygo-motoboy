@@ -322,14 +322,31 @@ export default function EntregaNovaScreen() {
 
           {/* Status */}
           <View style={[styles.row, { marginBottom: 12 }]}>
-            <View style={[styles.pill, styles.pillGreen]}>
-              <Check size={12} color="#166534" />
-              <Text style={styles.pillTxtGreen}>Validado</Text>
-            </View>
-            <View style={[styles.pill, styles.pillRed]}>
-              <Clock size={12} color="#991B1B" />
-              <Text style={styles.pillTxtRed}>Cobrar</Text>
-            </View>
+            {/* Pill de Código */}
+            {codigoValidado ? (
+              <View style={[styles.pill, styles.pillGreen]}>
+                <Check size={12} color="#166534" />
+                <Text style={styles.pillTxtGreen}>Validado</Text>
+              </View>
+            ) : (
+              <View style={[styles.pill, styles.pillRed]}>
+                <Clock size={12} color="#991B1B" />
+                <Text style={styles.pillTxtRed}>Validar</Text>
+              </View>
+            )}
+            
+            {/* Pill de Pagamento */}
+            {pagamentoConfirmado ? (
+              <View style={[styles.pill, styles.pillGreen]}>
+                <Check size={12} color="#166534" />
+                <Text style={styles.pillTxtGreen}>Pago</Text>
+              </View>
+            ) : (
+              <View style={[styles.pill, styles.pillRed]}>
+                <Clock size={12} color="#991B1B" />
+                <Text style={styles.pillTxtRed}>Cobrar</Text>
+              </View>
+            )}
           </View>
 
           {/* Código de entrega */}
@@ -344,27 +361,62 @@ export default function EntregaNovaScreen() {
                 <Text style={styles.codeRequestButtonText}>Solicitar</Text>
               </TouchableOpacity>
             </View>
-          ) : (
+          ) : codigoValidado && !pagamentoConfirmado ? (
             <View style={styles.codeOk}>
               <Settings size={16} color="#16A34A" />
               <Text style={styles.codeOkTxt}>Código confirmado</Text>
             </View>
-          )}
+          ) : null}
 
-          {pagamentoConfirmado ? (
+          {codigoValidado && pagamentoConfirmado ? (
+            /* Card de Entrega Liberada */
+            <View style={styles.entregaLiberadaCard}>
+              <View style={styles.entregaLiberadaIconContainer}>
+                <Check size={24} color="#fff" />
+              </View>
+              <View style={styles.entregaLiberadaContent}>
+                <Text style={styles.entregaLiberadaTitulo}>Entrega Liberada! ✨</Text>
+                <Text style={styles.entregaLiberadaSubtitulo}>
+                  Código validado e pagamento registrado com sucesso.
+                </Text>
+                <View style={styles.entregaLiberadaResumo}>
+                  <View style={styles.entregaLiberadaResumoIcon}>
+                    <CreditCard size={16} color="#6B7280" />
+                  </View>
+                  <View style={styles.entregaLiberadaResumoTexto}>
+                    <Text style={styles.entregaLiberadaResumoValor}>R$ 20,00</Text>
+                    <Text style={styles.entregaLiberadaResumoMetodo}>
+                      {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
+                       metodoSelecionado === "pix" ? "PIX" : 
+                       metodoSelecionado === "debito" ? "Débito" : "Crédito"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.entregaLiberadaInstrucao}>
+                  Segure para refazer a cobrança
+                </Text>
+                <Text style={styles.entregaLiberadaProximo}>
+                  Tudo pronto. Avance para a próxima entrega.
+                </Text>
+              </View>
+            </View>
+          ) : pagamentoConfirmado ? (
             /* Card de Pagamento Confirmado */
             <View style={styles.pagamentoConfirmadoCard}>
               <View style={styles.pagamentoConfirmadoContent}>
                 <View style={styles.pagamentoConfirmadoIconContainer}>
-                  <Check size={16} color="#fff" />
+                  <CreditCard size={16} color="#fff" />
                 </View>
                 <View style={styles.pagamentoConfirmadoTexto}>
                   <Text style={styles.pagamentoConfirmadoTitulo}>Pagamento Confirmado</Text>
-                  <Text style={styles.pagamentoConfirmadoValor}>
-                    R$ 20,00 — {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
-                              metodoSelecionado === "pix" ? "PIX" : 
-                              metodoSelecionado === "debito" ? "Débito" : "Crédito"}
-                  </Text>
+                  <View style={styles.pagamentoConfirmadoResumo}>
+                    <Text style={styles.pagamentoConfirmadoValor}>R$ 20,00</Text>
+                    <Text style={styles.pagamentoConfirmadoMetodo}>
+                      {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
+                                metodoSelecionado === "pix" ? "PIX" : 
+                                metodoSelecionado === "debito" ? "Débito" : "Crédito"}
+                    </Text>
+                  </View>
                 </View>
               </View>
               <TouchableOpacity 
@@ -616,21 +668,41 @@ export default function EntregaNovaScreen() {
     },
   ]}
 >
-  <View style={{ alignItems: "center", marginBottom: 6 }}>
-    <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>
-      Aguardando pagamento
-    </Text>
-    <Text style={{ fontSize: 12, color: "#4B5563" }}>
-      Complete o pagamento para continuar
-    </Text>
-  </View>
+  {codigoValidado && pagamentoConfirmado ? (
+    /* Estado: Entrega Liberada */
+    <TouchableOpacity 
+      activeOpacity={0.8} 
+      style={[styles.primaryBtn, { backgroundColor: "#22C55E" }]}
+      onPress={() => {
+        // TODO: Navegar para próxima entrega
+        console.log('Navegando para próxima entrega');
+      }}
+    >
+      <View style={[styles.squareIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+        <View style={[styles.squareDot, { backgroundColor: "#fff" }]} />
+      </View>
+      <Text style={[styles.primaryBtnTxt, { color: "#fff" }]}>Próxima Entrega</Text>
+    </TouchableOpacity>
+  ) : (
+    /* Estado: Aguardando */
+    <>
+      <View style={{ alignItems: "center", marginBottom: 6 }}>
+        <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>
+          {!codigoValidado ? "Aguardando código" : "Aguardando pagamento"}
+        </Text>
+        <Text style={{ fontSize: 12, color: "#4B5563" }}>
+          {!codigoValidado ? "Solicite o código para continuar" : "Complete o pagamento para continuar"}
+        </Text>
+      </View>
 
-  <TouchableOpacity activeOpacity={1} style={[styles.primaryBtn, { backgroundColor: "#9CA3AF" }]}>
-    <View style={styles.squareIcon}>
-      <View style={styles.squareDot} />
-    </View>
-    <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
-  </TouchableOpacity>
+      <TouchableOpacity activeOpacity={1} style={[styles.primaryBtn, { backgroundColor: "#9CA3AF" }]}>
+        <View style={styles.squareIcon}>
+          <View style={styles.squareDot} />
+        </View>
+        <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
+      </TouchableOpacity>
+    </>
+  )}
         </View>
         </SafeAreaView>
       </Animated.View>
@@ -827,12 +899,102 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginBottom: 2,
   },
+  pagamentoConfirmadoResumo: {
+    alignItems: "center",
+  },
   pagamentoConfirmadoValor: {
     color: "#000",
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  pagamentoConfirmadoMetodo: {
+    color: "#6B7280",
+    fontSize: 12,
   },
   pagamentoConfirmadoEditBtn: {
     padding: 4,
+  },
+
+  // Estilos do Card de Entrega Liberada
+  entregaLiberadaCard: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#BBF7D0",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 20,
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  entregaLiberadaIconContainer: {
+    backgroundColor: "#22C55E",
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+  },
+  entregaLiberadaContent: {
+    alignItems: "center",
+    width: "100%",
+  },
+  entregaLiberadaTitulo: {
+    color: "#15803D",
+    fontWeight: "700",
+    fontSize: 20,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  entregaLiberadaSubtitulo: {
+    color: "#6B7280",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 16,
+    lineHeight: 20,
+  },
+  entregaLiberadaResumo: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 12,
+    width: "100%",
+    maxWidth: 200,
+  },
+  entregaLiberadaResumoIcon: {
+    backgroundColor: "#F3F4F6",
+    borderRadius: 8,
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 12,
+  },
+  entregaLiberadaResumoTexto: {
+    flex: 1,
+    alignItems: "center",
+  },
+  entregaLiberadaResumoValor: {
+    color: "#111827",
+    fontWeight: "700",
+    fontSize: 16,
+  },
+  entregaLiberadaResumoMetodo: {
+    color: "#6B7280",
+    fontSize: 12,
+  },
+  entregaLiberadaInstrucao: {
+    color: "#9CA3AF",
+    fontSize: 12,
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  entregaLiberadaProximo: {
+    color: "#059669",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
   },
   phoneIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
   phoneTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
