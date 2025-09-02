@@ -47,8 +47,9 @@ export default function EntregaNovaScreen() {
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
   const [refundProgress, setRefundProgress] = useState(0);
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
-  const scaleAnim = new Animated.Value(1);
-  const glowAnim = new Animated.Value(0);
+  const scaleAnim = React.useRef(new Animated.Value(1)).current;
+  const glowAnim = React.useRef(new Animated.Value(0)).current;
+  const progressAnim = React.useRef(new Animated.Value(0)).current;
 
   // Comentado para facilitar testes - sempre inicia solicitando código
   // useEffect(() => {
@@ -107,25 +108,32 @@ export default function EntregaNovaScreen() {
     setIsProcessingRefund(true);
     setRefundProgress(0);
     
-    // Animações de início
-    Animated.parallel([
-      Animated.timing(scaleAnim, {
-        toValue: 0.98,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 1,
-        duration: 300,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    // Animação nativa para scale
+    Animated.timing(scaleAnim, {
+      toValue: 0.98,
+      duration: 200,
+      useNativeDriver: true,
+    }).start();
+    
+    // Animação JS para glow (cores)
+    Animated.timing(glowAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: false,
+    }).start();
+    
+    // Animação nativa para progresso
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: 2000,
+      useNativeDriver: true,
+    }).start();
     
     const timer = setInterval(() => {
       setRefundProgress(prev => {
         if (prev >= 100) {
           clearInterval(timer);
-          // Animação de conclusão
+          // Animação de conclusão - apenas nativa
           Animated.sequence([
             Animated.timing(scaleAnim, {
               toValue: 1.05,
@@ -139,11 +147,15 @@ export default function EntregaNovaScreen() {
             }),
           ]).start();
           
+          // Reset das animações JS
           Animated.timing(glowAnim, {
             toValue: 0,
             duration: 300,
             useNativeDriver: false,
           }).start();
+          
+          // Reset da animação nativa
+          progressAnim.setValue(0);
           
           // Volta ao estado não cobrado
           setTimeout(() => {
@@ -166,24 +178,53 @@ export default function EntregaNovaScreen() {
       setLongPressTimer(null);
     }
     
-    // Animações de cancelamento
-    Animated.parallel([
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 150,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-      Animated.timing(glowAnim, {
-        toValue: 0,
-        duration: 200,
-        useNativeDriver: false,
-      }),
-    ]).start();
+    // Animação nativa para scale
+    Animated.spring(scaleAnim, {
+      toValue: 1,
+      tension: 150,
+      friction: 8,
+      useNativeDriver: true,
+    }).start();
+    
+    // Animação JS para glow
+    Animated.timing(glowAnim, {
+      toValue: 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+    
+    // Reset da animação nativa de progresso
+    progressAnim.setValue(0);
     
     setIsProcessingRefund(false);
     setRefundProgress(0);
   };
+  // Toque único para reverter pagamento com animações consistentes
+  const handleReverterPagamento = () => {
+    if (!pagamentoConfirmado) return;
+    // Garantir que nenhuma animação concorrente esteja ativa
+    scaleAnim.stopAnimation();
+    (glowAnim as any).stopAnimation?.();
+    (progressAnim as any).stopAnimation?.();
+
+    // Feedback visual rápido (bounce + glow breve)
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(scaleAnim, { toValue: 0.98, duration: 120, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1.02, duration: 150, useNativeDriver: true }),
+        Animated.timing(scaleAnim, { toValue: 1, duration: 150, useNativeDriver: true }),
+      ]),
+      Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 150, useNativeDriver: false }),
+        Animated.timing(glowAnim, { toValue: 0, duration: 200, useNativeDriver: false }),
+      ]),
+    ]).start(() => {
+      progressAnim.setValue(0);
+      setIsProcessingRefund(false);
+      setPagamentoConfirmado(false);
+    });
+  };
+
 
   const handleSolicitarCodigo = () => {
     // Navegar para tela de verificação
@@ -208,8 +249,8 @@ export default function EntregaNovaScreen() {
   const CLOSE_THRESHOLD_Y = Math.round(screenH * 0.88); // arraste quase total → voltar ao mapa
   const MAX_DRAG_Y = Math.round(screenH * 0.95); // limite visual de arraste
   // Sensibilidade baseada em velocidade/pequeno deslocamento
-  const CAPTURE_DY = 3;         // deslocamento mínimo para considerar gesto
-  const CAPTURE_VY = 0.18;      // velocidade mínima para capturar gesto
+  const CAPTURE_DY = 20;        // deslocamento mínimo para considerar gesto (aumentado)
+  const CAPTURE_VY = 0.8;       // velocidade mínima para capturar gesto (aumentado)
   const MINIMIZE_DY = 16;       // deslocamento para snap em minimizado
   const MINIMIZE_VY = 0.25;     // velocidade para snap em minimizado
   const CLOSE_VY = 1.0;         // velocidade para fechar para o mapa
@@ -232,25 +273,33 @@ export default function EntregaNovaScreen() {
 
   const panResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, g) => {
-        const { dy, vy } = g;
-        // Se já está parcialmente minimizado, capturamos o gesto facilmente
-        if (offsetRef.current > 0.5) return true;
-        // Quando expandido: captura se puxar para baixo no topo do conteúdo,
-        // ou se a velocidade exceder o limiar mesmo com pequeno deslocamento
-        const fastEnough = Math.abs(vy) > CAPTURE_VY;
-        const movedEnough = Math.abs(dy) > CAPTURE_DY;
-        if (scrollYRef.current <= 0.5 && dy > 0 && (movedEnough || fastEnough)) return true;
-        return false;
+      onStartShouldSetPanResponder: (evt, gestureState) => {
+        // Só captura se o toque for na área de drag (topo) e não em elementos interativos
+        const touchY = evt.nativeEvent.pageY;
+        const isInDragZone = touchY <= 80; // reduzido para 80px
+        return isInDragZone;
       },
-      onMoveShouldSetPanResponderCapture: (_, g) => {
+      onMoveShouldSetPanResponder: (evt, g) => {
         const { dy, vy } = g;
-        if (offsetRef.current > 0.5) return true;
-        const fastEnough = Math.abs(vy) > CAPTURE_VY;
+        const isAtTop = offsetRef.current <= SHEET_MIN_Y + 10;
         const movedEnough = Math.abs(dy) > CAPTURE_DY;
-        if (scrollYRef.current <= 0.5 && dy > 0 && (movedEnough || fastEnough)) return true;
-        return false;
+        const fastEnough = Math.abs(vy) > CAPTURE_VY;
+        const touchY = evt.nativeEvent.pageY;
+        const isInDragZone = touchY <= 80;
+        
+        // Só captura se estiver no topo E na zona de drag E movimento/velocidade suficientes
+        return isAtTop && isInDragZone && dy > CAPTURE_DY && movedEnough && fastEnough;
+      },
+      onMoveShouldSetPanResponderCapture: (evt, g) => {
+        const { dy, vy } = g;
+        const isAtTop = offsetRef.current <= SHEET_MIN_Y + 10;
+        const movedEnough = Math.abs(dy) > CAPTURE_DY;
+        const fastEnough = Math.abs(vy) > CAPTURE_VY;
+        const touchY = evt.nativeEvent.pageY;
+        const isInDragZone = touchY <= 80;
+        
+        // Só captura se estiver no topo E na zona de drag E movimento para baixo significativo
+        return isAtTop && isInDragZone && dy > CAPTURE_DY && movedEnough && fastEnough;
       },
       onPanResponderGrant: () => {
         translateY.stopAnimation();
@@ -306,35 +355,54 @@ export default function EntregaNovaScreen() {
     bgLight: string;
     textColor: string;
     mr?: number;
-  }) => (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[
-        styles.chip,
-        { marginRight: mr },
-        ativo
-          ? {
-              borderWidth: 2,
-              borderColor: ringColor,
-              backgroundColor: bgLight,
-            }
-          : styles.chipOff,
-      ]}
-      activeOpacity={0.8}
-    >
-      <View style={styles.rowCenter}>
-        {icon}
-        <Text
-          style={[
-            styles.chipText,
-            ativo ? { color: textColor } : { color: "#374151" },
-          ]}
-        >
-          {label}
-        </Text>
-      </View>
-    </TouchableOpacity>
-  );
+  }) => {
+    const [isPressed, setIsPressed] = useState(false);
+
+    const handlePress = () => {
+      console.log(`[Chip ${label}] Clique processado`);
+      onPress();
+    };
+    
+    return (
+      <TouchableOpacity
+        onPress={handlePress}
+        onPressIn={() => setIsPressed(true)}
+        onPressOut={() => setIsPressed(false)}
+        style={[
+          styles.chip,
+          { marginRight: mr },
+          ativo
+            ? {
+                borderWidth: 2,
+                borderColor: ringColor,
+                backgroundColor: bgLight,
+              }
+            : styles.chipOff,
+          isPressed && {
+            transform: [{ scale: 0.96 }],
+            opacity: 0.85,
+          },
+        ]}
+        activeOpacity={0.5}
+        delayPressIn={0}
+        delayPressOut={0}
+        hitSlop={{ top: 20, bottom: 20, left: 16, right: 16 }}
+        pressRetentionOffset={{ top: 20, bottom: 20, left: 16, right: 16 }}
+      >
+        <View style={styles.rowCenter}>
+          {icon}
+          <Text
+            style={[
+              styles.chipText,
+              ativo ? { color: textColor } : { color: "#374151" },
+            ]}
+          >
+            {label}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <View style={{ flex: 1 }}>
@@ -459,52 +527,23 @@ export default function EntregaNovaScreen() {
 
           {codigoValidado && pagamentoConfirmado ? (
             /* Card de Entrega Liberada */
-            <TouchableOpacity
-               onPressIn={startRefundProcess}
-               onPressOut={cancelRefundProcess}
-               onLongPress={() => {}}
-               delayLongPress={2000}
-               activeOpacity={1}
-             >
-               <Animated.View
-                 style={[
-                   styles.entregaLiberadaCard,
-                   {
-                     transform: [{ scale: scaleAnim }],
-                     shadowColor: glowAnim.interpolate({
-                       inputRange: [0, 1],
-                       outputRange: ['rgba(34, 197, 94, 0)', 'rgba(34, 197, 94, 0.4)'],
-                     }),
-                     shadowOffset: {
-                       width: 0,
-                       height: glowAnim.interpolate({
-                         inputRange: [0, 1],
-                         outputRange: [2, 8],
-                       }),
-                     },
-                     shadowOpacity: glowAnim.interpolate({
-                       inputRange: [0, 1],
-                       outputRange: [0.1, 0.6],
-                     }),
-                     shadowRadius: glowAnim.interpolate({
-                       inputRange: [0, 1],
-                       outputRange: [3, 15],
-                     }),
-                     elevation: glowAnim.interpolate({
-                       inputRange: [0, 1],
-                       outputRange: [2, 10],
-                     }),
-                     backgroundColor: glowAnim.interpolate({
-                       inputRange: [0, 1],
-                       outputRange: ['#F0FDF4', '#ECFDF5'],
-                     }),
-                     borderColor: glowAnim.interpolate({
-                       inputRange: [0, 1],
-                       outputRange: ['#BBF7D0', '#22C55E'],
-                     }),
-                   },
-                 ]}
-               >
+            <TouchableOpacity onPress={handleReverterPagamento} activeOpacity={0.9}>
+              <Animated.View
+                style={[
+                  styles.entregaLiberadaCard,
+                  {
+                    transform: [{ scale: scaleAnim }],
+                    backgroundColor: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['#F0FDF4', '#ECFDF5'],
+                    }),
+                    borderColor: glowAnim.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: ['#BBF7D0', '#22C55E'],
+                    }),
+                  },
+                ]}
+              >
               <View style={styles.entregaLiberadaIconContainer}>
                 <Check size={24} color="#fff" />
               </View>
@@ -526,9 +565,7 @@ export default function EntregaNovaScreen() {
                     </Text>
                   </View>
                 </View>
-                <Text style={styles.entregaLiberadaInstrucao}>
-                  {isProcessingRefund ? "Solte para cancelar..." : "Segure para refazer a cobrança"}
-                </Text>
+                <Text style={styles.entregaLiberadaInstrucao}>Toque para desfazer a cobrança</Text>
                 <Text style={styles.entregaLiberadaProximo}>
                   Tudo pronto. Avance para a próxima entrega.
                 </Text>
@@ -540,7 +577,7 @@ export default function EntregaNovaScreen() {
                        style={[
                          styles.progressBar, 
                          { 
-                           width: `${refundProgress}%`,
+                           transform: [{ scaleX: progressAnim }],
                            backgroundColor: glowAnim.interpolate({
                              inputRange: [0, 1],
                              outputRange: ['#22C55E', '#16A34A'],
@@ -550,6 +587,7 @@ export default function EntregaNovaScreen() {
                      />
                    </View>
                  )}
+                {/* Removido progresso por hold; ação agora é toque único */}
                </View>
                </Animated.View>
              </TouchableOpacity>
@@ -599,7 +637,6 @@ export default function EntregaNovaScreen() {
                   ringColor="#22c55e"
                   bgLight="#ECFDF5"
                   textColor="#166534"
-                  mr={8}
                 />
 
                 <Chip
@@ -610,7 +647,6 @@ export default function EntregaNovaScreen() {
                   ringColor="#06b6d4"
                   bgLight="#ECFEFF"
                   textColor="#0E7490"
-                  mr={8}
                 />
 
                 <Chip
@@ -621,7 +657,6 @@ export default function EntregaNovaScreen() {
                   ringColor="#a855f7"
                   bgLight="#FAF5FF"
                   textColor="#6B21A8"
-                  mr={8}
                 />
 
                 <Chip
@@ -991,10 +1026,20 @@ const styles = StyleSheet.create({
   totalCaption: { fontSize: 13, color: "#4B5563", marginBottom: 8 },
   payMethodTitle: { fontSize: 14, color: "#111827", fontWeight: "700" },
 
-  chipsRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 8 },
-  chip: { flex: 1, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: "#fff", alignItems: "center" },
+  chipsRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4, gap: 8 },
+  chip: { 
+    flex: 1, 
+    paddingHorizontal: 14, 
+    paddingVertical: 6, 
+    borderRadius: 10, 
+    backgroundColor: "#fff", 
+    alignItems: "center",
+    minHeight: 48,
+    justifyContent: "center",
+    elevation: 2,
+  },
   chipOff: { backgroundColor: "#fff", borderColor: "#E5E7EB", borderWidth: 1 },
-  chipText: { fontSize: 11, fontWeight: "600", marginLeft: 6 },
+  chipText: { fontSize: 10, fontWeight: "600", marginLeft: 6 },
 
   warnSelect: { marginTop: 6, marginBottom: 8, fontSize: 12, color: "#DC2626" },
 
@@ -1159,8 +1204,10 @@ const styles = StyleSheet.create({
   },
   progressBar: {
     height: "100%",
+    width: "100%",
     backgroundColor: "#22C55E",
     borderRadius: 2,
+    transformOrigin: "left",
   },
   phoneIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
   phoneTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
