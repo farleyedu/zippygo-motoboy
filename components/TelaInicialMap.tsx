@@ -482,6 +482,17 @@ export default function TelaInicialMap() {
   <Text style={styles.novaEntregaButtonText}>Nova Entrega (layout novo)</Text>
 </TouchableOpacity>
 
+      {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device */}
+      <TouchableOpacity
+        style={[styles.sacolaDemoButton, { top: insets.top + 100 }]}
+        onPress={() => router.push('/ExemploSacolaScreen')}
+        accessibilityRole="button"
+        accessibilityLabel="Abrir Sacola (demo)"
+        testID="btn-abrir-sacola-demo-inline"
+      >
+        <Text style={styles.sacolaDemoButtonText}>Sacola (demo)</Text>
+      </TouchableOpacity>
+
 
       {emEntrega && (
         <Animated.View
@@ -697,5 +708,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  sacolaDemoButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    backgroundColor: '#111827',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    zIndex: 1000,
+    elevation: 12,
+  },
+  sacolaDemoButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });
