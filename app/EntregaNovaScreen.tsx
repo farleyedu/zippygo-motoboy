@@ -1,5 +1,5 @@
 "use client";
-import { useSafeAreaInsets, SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Stack, useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
 import {
@@ -7,8 +7,9 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  ScrollView,
   Animated,
+  SafeAreaView,
+  ScrollView,
   PanResponder,
   Dimensions,
 } from "react-native";
@@ -260,6 +261,9 @@ export default function EntregaNovaScreen() {
   const scrollYRef = React.useRef(0);
   const dragYRef = React.useRef(SHEET_MIN_Y);
 
+  // Helper para limitar faixa de deslocamento
+  const clamp = (val: number, min: number, max: number) => Math.min(Math.max(val, min), max);
+
   const snapTo = (to: number) => {
     Animated.spring(translateY, {
       toValue: to,
@@ -273,69 +277,61 @@ export default function EntregaNovaScreen() {
 
   const panResponder = React.useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: (evt, gestureState) => {
-        // Só captura se o toque for na área de drag (topo) e não em elementos interativos
-        const touchY = evt.nativeEvent.pageY;
-        const isInDragZone = touchY <= 80; // reduzido para 80px
-        return isInDragZone;
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, g) => {
+        const isVertical = Math.abs(g.dy) > Math.abs(g.dx);
+        // Sempre captura gestos verticais na área de arrasto
+        if (!isVertical) return false;
+        if (Math.abs(g.dy) > 5) return true; // threshold menor para maior sensibilidade
+        return false;
       },
-      onMoveShouldSetPanResponder: (evt, g) => {
-        const { dy, vy } = g;
-        const isAtTop = offsetRef.current <= SHEET_MIN_Y + 10;
-        const movedEnough = Math.abs(dy) > CAPTURE_DY;
-        const fastEnough = Math.abs(vy) > CAPTURE_VY;
-        const touchY = evt.nativeEvent.pageY;
-        const isInDragZone = touchY <= 80;
-        
-        // Só captura se estiver no topo E na zona de drag E movimento/velocidade suficientes
-        return isAtTop && isInDragZone && dy > CAPTURE_DY && movedEnough && fastEnough;
-      },
-      onMoveShouldSetPanResponderCapture: (evt, g) => {
-        const { dy, vy } = g;
-        const isAtTop = offsetRef.current <= SHEET_MIN_Y + 10;
-        const movedEnough = Math.abs(dy) > CAPTURE_DY;
-        const fastEnough = Math.abs(vy) > CAPTURE_VY;
-        const touchY = evt.nativeEvent.pageY;
-        const isInDragZone = touchY <= 80;
-        
-        // Só captura se estiver no topo E na zona de drag E movimento para baixo significativo
-        return isAtTop && isInDragZone && dy > CAPTURE_DY && movedEnough && fastEnough;
+      onMoveShouldSetPanResponderCapture: (_, g) => {
+        const isVertical = Math.abs(g.dy) > Math.abs(g.dx);
+        if (!isVertical) return false;
+        if (Math.abs(g.dy) > 5) return true; // threshold menor
+        return false;
       },
       onPanResponderGrant: () => {
-        translateY.stopAnimation();
         dragYRef.current = offsetRef.current;
       },
       onPanResponderMove: (_, g) => {
-        let next = offsetRef.current + g.dy;
-        if (next < SHEET_MIN_Y) next = SHEET_MIN_Y;
-        if (next > MAX_DRAG_Y) next = MAX_DRAG_Y;
-        translateY.setValue(next);
-        dragYRef.current = next;
+        // Atualiza a posição do sheet em tempo real
+        const nextY = clamp(dragYRef.current + g.dy, SHEET_MIN_Y, MAX_DRAG_Y);
+        translateY.setValue(nextY);
       },
       onPanResponderRelease: (_, g) => {
-        const finalY = Math.max(SHEET_MIN_Y, Math.min(MAX_DRAG_Y, offsetRef.current + g.dy));
-        const willClose = finalY >= CLOSE_THRESHOLD_Y || g.vy > CLOSE_VY;
-        if (willClose) {
-          // Anima para fora da tela e volta ao mapa
+        const endY = clamp(dragYRef.current + g.dy, SHEET_MIN_Y, MAX_DRAG_Y);
+        const goingDownFast = g.vy > CLOSE_VY;
+        const pastCloseThreshold = endY >= CLOSE_THRESHOLD_Y;
+        // Fechar para o mapa (voltar) se arrastar bastante para baixo
+        if (goingDownFast || pastCloseThreshold) {
+          // anima ligeiro antes de fechar
           Animated.timing(translateY, {
-            toValue: screenH,
-            duration: 160,
+            toValue: MAX_DRAG_Y,
+            duration: 120,
             useNativeDriver: true,
           }).start(() => {
-            router.back();
+            try { router.back(); } catch {}
+            offsetRef.current = MAX_DRAG_Y;
           });
           return;
         }
-        const shouldMinimize = g.dy > MINIMIZE_DY || g.vy > MINIMIZE_VY || finalY > MID_Y;
-        snapTo(shouldMinimize ? SHEET_MAX_Y : SHEET_MIN_Y);
+        // Minimizar se puxar para baixo
+        if (g.vy > MINIMIZE_VY || g.dy > MINIMIZE_DY) {
+          snapTo(SHEET_MAX_Y);
+        } else {
+          // Voltar ao expandido
+          snapTo(SHEET_MIN_Y);
+        }
       },
       onPanResponderTerminate: () => {
-        const currentY = dragYRef.current;
-        const to = currentY > MID_Y ? SHEET_MAX_Y : SHEET_MIN_Y;
+        // Garantir snap a uma posição válida se gesto foi interrompido
+        const current = (translateY as any)._value ?? offsetRef.current;
+        const to = current > MID_Y ? SHEET_MAX_Y : SHEET_MIN_Y;
         snapTo(to);
       },
     })
-  ).current;
+  );
 
   const Chip = ({
     ativo,
@@ -409,160 +405,162 @@ export default function EntregaNovaScreen() {
       <Stack.Screen options={{ headerShown: false, presentation: 'transparentModal', contentStyle: { backgroundColor: 'transparent' } }} />
 
       {/* Sheet que cobre a tela e pode ser minimizado */}
-      <Animated.View style={[styles.sheetContainer, { transform: [{ translateY }] }] } {...panResponder.panHandlers}>
-        <SafeAreaView style={styles.screen} edges={["left", "right"]}>
-          {/* Handle/Icone de colapso (zona de arraste) */}
-          <View style={styles.dragZone}>
-            <Feather name="chevron-down" size={18} color="#9CA3AF" />
+      <Animated.View style={[styles.sheetContainer, { transform: [{ translateY }] }]}>
+        <SafeAreaView style={{ flex: 1 }}>
+          {/* Área de arrasto no topo */}
+          <View style={styles.dragZone} {...panResponder.current?.panHandlers}>
+            <View style={styles.dragHandle} />
           </View>
-
-          <ScrollView contentContainerStyle={{ paddingBottom: 200 }}
+          
+          <ScrollView 
+            contentContainerStyle={{ paddingBottom: 220 }}
             scrollEventThrottle={16}
+            bounces={false}
             onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
           >
-        {/* Card Endereço */}
-        <View style={[styles.cardOuter, { marginTop: CONTENT_TOP_MARGIN }]}>
-          <View style={styles.rowBetween}>
-            <View style={{ flexDirection: "row" }}>
-              <View style={styles.pinCircle}>
-                <MapPin size={16} color="#3B82F6" />
+          <View style={[styles.cardOuter, { marginTop: CONTENT_TOP_MARGIN }]}>
+            <View style={styles.rowBetween}>
+              <View style={{ flexDirection: "row" }}>
+                <View style={styles.pinCircle}>
+                  <MapPin size={16} color="#3B82F6" />
+                </View>
+                <View>
+                  <Text style={styles.addrTitle}>Rua das Flores, 1234</Text>
+                  <Text style={styles.addrSub}>Vila Madalena - São Paulo, SP</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.addrTitle}>Rua das Flores, 1234</Text>
-                <Text style={styles.addrSub}>Vila Madalena - São Paulo, SP</Text>
-              </View>
-            </View>
 
-            <TouchableOpacity
-              style={styles.mapBtn}
-              activeOpacity={0.85}
-              // onPress={() => {}}
-            >
-              <View style={styles.mapDotBox}>
-                <View style={styles.mapDot} />
-              </View>
-              <Text style={styles.mapBtnText}>Mapa</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Alerta */}
-        <View style={styles.alertRow}>
-          <AlertTriangle size={12} color="#B45309" />
-          <Text style={styles.alertText}>Solicite o código de entrega</Text>
-        </View>
-
-        {/* Card principal */}
-        <View style={styles.cardOuter}>
-          {/* Header restaurante */}
-          <View style={[styles.rowBetween, { marginBottom: 12 }]}>
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text style={styles.clientName}>Maria Silva</Text>
-              <Text style={styles.ifoodTag}>iFood</Text>
-            </View>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarTxt}>MS</Text>
-            </View>
-          </View>
-
-          {/* ID e Itens */}
-          <View style={[styles.rowBetween, { marginBottom: 12 }]}>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>ID do Pedido</Text>
-              <Text style={styles.infoValue}>#12345678</Text>
-            </View>
-            <View style={styles.infoBox}>
-              <Text style={styles.infoLabel}>Itens</Text>
-              <Text style={styles.infoValue}>3 itens</Text>
-            </View>
-          </View>
-
-          {/* Status */}
-          <View style={[styles.row, { marginBottom: 12 }]}>
-            {/* Pill de Código */}
-            {codigoValidado ? (
-              <View style={[styles.pill, styles.pillGreen]}>
-                <Check size={12} color="#166534" />
-                <Text style={styles.pillTxtGreen}>Validado</Text>
-              </View>
-            ) : (
-              <View style={[styles.pill, styles.pillRed]}>
-                <Clock size={12} color="#991B1B" />
-                <Text style={styles.pillTxtRed}>Validar</Text>
-              </View>
-            )}
-            
-            {/* Pill de Pagamento */}
-            {pagamentoConfirmado ? (
-              <View style={[styles.pill, styles.pillGreen]}>
-                <Check size={12} color="#166534" />
-                <Text style={styles.pillTxtGreen}>Pago</Text>
-              </View>
-            ) : (
-              <View style={[styles.pill, styles.pillRed]}>
-                <Clock size={12} color="#991B1B" />
-                <Text style={styles.pillTxtRed}>Cobrar</Text>
-              </View>
-            )}
-          </View>
-
-          {/* Código de entrega */}
-          {!codigoValidado ? (
-            <View style={styles.codeRequestCard}>
-              <Key size={20} color="#EF4444" />
-              <Text style={styles.codeRequestTitle}>Código de entrega</Text>
-              <TouchableOpacity 
-                style={styles.codeRequestButton}
-                onPress={handleSolicitarCodigo}
+              <TouchableOpacity
+                style={styles.mapBtn}
+                activeOpacity={0.85}
+                // onPress={() => {}}
               >
-                <Text style={styles.codeRequestButtonText}>Solicitar</Text>
+                <View style={styles.mapDotBox}>
+                  <View style={styles.mapDot} />
+                </View>
+                <Text style={styles.mapBtnText}>Mapa</Text>
               </TouchableOpacity>
             </View>
-          ) : codigoValidado && !pagamentoConfirmado ? (
-            <View style={styles.codeOk}>
-              <Settings size={16} color="#16A34A" />
-              <Text style={styles.codeOkTxt}>Código confirmado</Text>
-            </View>
-          ) : null}
+          </View>
 
-          {codigoValidado && pagamentoConfirmado ? (
-            /* Card de Entrega Liberada */
-            <TouchableOpacity onPress={handleReverterPagamento} activeOpacity={0.9}>
-              <Animated.View
-                style={[
-                  styles.entregaLiberadaCard,
-                  {
-                    transform: [{ scale: scaleAnim }],
-                    backgroundColor: glowAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['#F0FDF4', '#ECFDF5'],
-                    }),
-                    borderColor: glowAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['#BBF7D0', '#22C55E'],
-                    }),
-                  },
-                ]}
-              >
-              <View style={styles.entregaLiberadaIconContainer}>
-                <Check size={24} color="#fff" />
+          {/* Alerta */}
+          <View style={styles.alertRow}>
+            <AlertTriangle size={12} color="#B45309" />
+            <Text style={styles.alertText}>Solicite o código de entrega</Text>
+          </View>
+
+          {/* Card principal */}
+          <View style={styles.cardOuter}>
+            {/* Header restaurante */}
+            <View style={[styles.rowBetween, { marginBottom: 12 }]}>
+              <View style={{ flexDirection: "row", alignItems: "center" }}>
+                <Text style={styles.clientName}>Maria Silva</Text>
+                <Text style={styles.ifoodTag}>iFood</Text>
               </View>
-              <View style={styles.entregaLiberadaContent}>
-                <Text style={styles.entregaLiberadaTitulo}>Entrega Liberada! ✨</Text>
-                <Text style={styles.entregaLiberadaSubtitulo}>
-                  Código validado e pagamento registrado com sucesso.
-                </Text>
-                <View style={styles.entregaLiberadaResumo}>
-                  <View style={styles.entregaLiberadaResumoIcon}>
-                    <CreditCard size={16} color="#6B7280" />
-                  </View>
-                  <View style={styles.entregaLiberadaResumoTexto}>
-                    <Text style={styles.entregaLiberadaResumoValor}>R$ 20,00</Text>
-                    <Text style={styles.entregaLiberadaResumoMetodo}>
-                      {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
-                       metodoSelecionado === "pix" ? "PIX" : 
-                       metodoSelecionado === "debito" ? "Débito" : "Crédito"}
-                    </Text>
+              <View style={styles.avatar}>
+                <Text style={styles.avatarTxt}>MS</Text>
+              </View>
+            </View>
+
+            {/* ID e Itens */}
+            <View style={[styles.rowBetween, { marginBottom: 12 }]}>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>ID do Pedido</Text>
+                <Text style={styles.infoValue}>#12345678</Text>
+              </View>
+              <View style={styles.infoBox}>
+                <Text style={styles.infoLabel}>Itens</Text>
+                <Text style={styles.infoValue}>3 itens</Text>
+              </View>
+            </View>
+
+            {/* Status */}
+            <View style={[styles.row, { marginBottom: 12 }]}>
+              {/* Pill de Código */}
+              {codigoValidado ? (
+                <View style={[styles.pill, styles.pillGreen]}>
+                  <Check size={12} color="#166534" />
+                  <Text style={styles.pillTxtGreen}>Validado</Text>
+                </View>
+              ) : (
+                <View style={[styles.pill, styles.pillRed]}>
+                  <Clock size={12} color="#991B1B" />
+                  <Text style={styles.pillTxtRed}>Validar</Text>
+                </View>
+              )}
+              
+              {/* Pill de Pagamento */}
+              {pagamentoConfirmado ? (
+                <View style={[styles.pill, styles.pillGreen]}>
+                  <Check size={12} color="#166534" />
+                  <Text style={styles.pillTxtGreen}>Pago</Text>
+                </View>
+              ) : (
+                <View style={[styles.pill, styles.pillRed]}>
+                  <Clock size={12} color="#991B1B" />
+                  <Text style={styles.pillTxtRed}>Cobrar</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Código de entrega */}
+            {!codigoValidado ? (
+              <View style={styles.codeRequestCard}>
+                <Key size={20} color="#EF4444" />
+                <Text style={styles.codeRequestTitle}>Código de entrega</Text>
+                <TouchableOpacity 
+                  style={styles.codeRequestButton}
+                  onPress={handleSolicitarCodigo}
+                >
+                  <Text style={styles.codeRequestButtonText}>Solicitar</Text>
+                </TouchableOpacity>
+              </View>
+            ) : codigoValidado && !pagamentoConfirmado ? (
+              <View style={styles.codeOk}>
+                <Settings size={16} color="#16A34A" />
+                <Text style={styles.codeOkTxt}>Código confirmado</Text>
+              </View>
+            ) : null}
+
+            {codigoValidado && pagamentoConfirmado ? (
+              /* Card de Entrega Liberada */
+              <TouchableOpacity onPress={handleReverterPagamento} activeOpacity={0.9}>
+                <Animated.View
+                  style={[
+                    styles.entregaLiberadaCard,
+                    {
+                      transform: [{ scale: scaleAnim }],
+                      backgroundColor: glowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['#F0FDF4', '#ECFDF5'],
+                      }),
+                      borderColor: glowAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['#BBF7D0', '#22C55E'],
+                      }),
+                    },
+                  ]}
+                >
+                <View style={styles.entregaLiberadaIconContainer}>
+                  <Check size={24} color="#fff" />
+                </View>
+                <View style={styles.entregaLiberadaContent}>
+                  <Text style={styles.entregaLiberadaTitulo}>Entrega Liberada! ✨</Text>
+                  <Text style={styles.entregaLiberadaSubtitulo}>
+                    Código validado e pagamento registrado com sucesso.
+                  </Text>
+                  <View style={styles.entregaLiberadaResumo}>
+                    <View style={styles.entregaLiberadaResumoIcon}>
+                      <CreditCard size={16} color="#6B7280" />
+                    </View>
+                    <View style={styles.entregaLiberadaResumoTexto}>
+                      <Text style={styles.entregaLiberadaResumoValor}>R$ 20,00</Text>
+                      <Text style={styles.entregaLiberadaResumoMetodo}>
+                        {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
+                         metodoSelecionado === "pix" ? "PIX" : 
+                         metodoSelecionado === "debito" ? "Débito" : "Crédito"}
+                      </Text>
+                    </View>
                   </View>
                 </View>
                 <Text style={styles.entregaLiberadaInstrucao}>Toque para desfazer a cobrança</Text>
@@ -574,23 +572,22 @@ export default function EntregaNovaScreen() {
                  {isProcessingRefund && (
                    <View style={styles.progressContainer}>
                      <Animated.View 
-                       style={[
-                         styles.progressBar, 
-                         { 
-                           transform: [{ scaleX: progressAnim }],
-                           backgroundColor: glowAnim.interpolate({
-                             inputRange: [0, 1],
-                             outputRange: ['#22C55E', '#16A34A'],
-                           }),
-                         }
-                       ]} 
+                                           style={[
+                     styles.progressBar, 
+                     { 
+                       transform: [{ scaleX: progressAnim }],
+                       backgroundColor: glowAnim.interpolate({
+                         inputRange: [0, 1],
+                         outputRange: ['#22C55E', '#16A34A'],
+                       }),
+                     }
+                                           ]} 
                      />
                    </View>
                  )}
                 {/* Removido progresso por hold; ação agora é toque único */}
-               </View>
-               </Animated.View>
-             </TouchableOpacity>
+                </Animated.View>
+              </TouchableOpacity>
           ) : pagamentoConfirmado ? (
             /* Card de Pagamento Confirmado */
             <View style={styles.pagamentoConfirmadoCard}>
@@ -849,49 +846,49 @@ export default function EntregaNovaScreen() {
 
           {/* Barra fixa inferior */}
           <View
-  style={[
-    styles.bottomBar,
-    {
-      paddingBottom: 12 + insets.bottom,  // respiro interno pela safe area
-    },
-  ]}
->
-  {codigoValidado && pagamentoConfirmado ? (
-    /* Estado: Entrega Liberada */
-    <TouchableOpacity 
-      activeOpacity={0.8} 
-      style={[styles.primaryBtn, { backgroundColor: "#22C55E" }]}
-      onPress={() => {
-        // TODO: Navegar para próxima entrega
-        console.log('Navegando para próxima entrega');
-      }}
-    >
-      <View style={[styles.squareIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-        <View style={[styles.squareDot, { backgroundColor: "#fff" }]} />
-      </View>
-      <Text style={[styles.primaryBtnTxt, { color: "#fff" }]}>Próxima Entrega</Text>
-    </TouchableOpacity>
-  ) : (
-    /* Estado: Aguardando */
-    <>
-      <View style={{ alignItems: "center", marginBottom: 6 }}>
-        <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>
-          {!codigoValidado ? "Aguardando código" : "Aguardando pagamento"}
-        </Text>
-        <Text style={{ fontSize: 12, color: "#4B5563" }}>
-          {!codigoValidado ? "Solicite o código para continuar" : "Complete o pagamento para continuar"}
-        </Text>
-      </View>
+            style={[
+              styles.bottomBar,
+              {
+                paddingBottom: 12 + insets.bottom,
+              },
+            ]}
+          >
+            {codigoValidado && pagamentoConfirmado ? (
+              /* Estado: Entrega Liberada */
+              <TouchableOpacity 
+                activeOpacity={0.8} 
+                style={[styles.primaryBtn, { backgroundColor: "#22C55E" }]}
+                onPress={() => {
+                  // TODO: Navegar para próxima entrega
+                  console.log('Navegando para próxima entrega');
+                }}
+              >
+                <View style={[styles.squareIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}> 
+                  <View style={[styles.squareDot, { backgroundColor: "#fff" }]} />
+                </View>
+                <Text style={[styles.primaryBtnTxt, { color: "#fff" }]}>Próxima Entrega</Text>
+              </TouchableOpacity>
+            ) : (
+              /* Estado: Aguardando */
+              <>
+                <View style={{ alignItems: "center", marginBottom: 6 }}>
+                  <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>
+                    {!codigoValidado ? "Aguardando código" : "Aguardando pagamento"}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: "#4B5563" }}>
+                    {!codigoValidado ? "Solicite o código para continuar" : "Complete o pagamento para continuar"}
+                  </Text>
+                </View>
 
-      <TouchableOpacity activeOpacity={1} style={[styles.primaryBtn, { backgroundColor: "#9CA3AF" }]}>
-        <View style={styles.squareIcon}>
-          <View style={styles.squareDot} />
-        </View>
-        <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
-      </TouchableOpacity>
-    </>
-  )}
-        </View>
+                <TouchableOpacity activeOpacity={1} style={[styles.primaryBtn, { backgroundColor: "#9CA3AF" }]}>
+                  <View style={styles.squareIcon}>
+                    <View style={styles.squareDot} />
+                  </View>
+                  <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
         </SafeAreaView>
       </Animated.View>
     </View>
@@ -914,16 +911,17 @@ const styles = StyleSheet.create({
   },
 
   dragZone: {
+    height: 40,
+    width: '100%',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 0,
-    paddingBottom: 2,
+    paddingVertical: 10,
   },
   dragHandle: {
-    width: 36,
+    width: 40,
     height: 4,
-    borderRadius: 4,
-    backgroundColor: '#D1D5DB',
-    marginBottom: 4,
+    backgroundColor: '#ccc',
+    borderRadius: 2,
   },
 
   header: {
@@ -1061,8 +1059,6 @@ const styles = StyleSheet.create({
   timelineSub: { fontSize: 12, color: "#2563EB" },
 
   phoneBtn: { width: "100%", zIndex:100, flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: 12, backgroundColor: "#F9FAFB", borderRadius: 10 },
-
-  // Estilos do Card de Pagamento Confirmado
   pagamentoConfirmadoCard: {
     backgroundColor: "#F0FDF4",
     borderColor: "#BBF7D0",
@@ -1112,8 +1108,6 @@ const styles = StyleSheet.create({
   pagamentoConfirmadoEditBtn: {
     padding: 4,
   },
-
-  // Estilos do Card de Entrega Liberada
   entregaLiberadaCard: {
     backgroundColor: "#F0FDF4",
     borderColor: "#BBF7D0",
@@ -1207,7 +1201,7 @@ const styles = StyleSheet.create({
     width: "100%",
     backgroundColor: "#22C55E",
     borderRadius: 2,
-    transformOrigin: "left",
+    // transformOrigin: "left", // removido: não suportado no RN
   },
   phoneIcon: { width: 24, height: 24, borderRadius: 12, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
   phoneTitle: { fontSize: 14, fontWeight: "700", color: "#111827" },
@@ -1239,8 +1233,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
-  
-
   squareIcon: { width: 16, height: 16, backgroundColor: "#9CA3AF", borderRadius: 4, alignItems: "center", justifyContent: "center", marginRight: 8 },
   squareDot: { width: 8, height: 8, backgroundColor: "#fff", borderRadius: 2 },
 });
