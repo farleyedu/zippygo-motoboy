@@ -611,7 +611,7 @@ export default function ExemploSacolaScreen() {
         </View>
 
         {/* Informações do Cliente */}
-        <View style={styles.cardOuter}>
+        <View style={[styles.cardOuter, {marginBottom: !codigoValidado ? 70 : 75}]}>
           <Text style={styles.sectionTitle}>Informações do Cliente</Text>
 
           {/* Telefone */}
@@ -706,7 +706,7 @@ export default function ExemploSacolaScreen() {
             ) : (
               /* Estado: Aguardando */
               <>
-                <View style={{ alignItems: "center", marginBottom: 6 }}>
+                <View style={{ alignItems: "center", marginBottom: 6}}>
                   <Text style={{ fontSize: 14, fontWeight: "600", color: "#F97316" }}>
                     {!codigoValidado ? "Aguardando código" : "Aguardando pagamento"}
                   </Text>
