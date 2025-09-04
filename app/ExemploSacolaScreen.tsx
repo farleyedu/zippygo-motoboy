@@ -25,6 +25,7 @@ import {
   MessageCircle,
 } from 'lucide-react-native';
 import Feather from '@expo/vector-icons/Feather';
+import Mapa from '../components/Mapa';
 
 // Tela de demonstração do comportamento de Sacola (iFood-like)
 // Requisitos atendidos:
@@ -167,9 +168,40 @@ export default function ExemploSacolaScreen() {
     />
   ), []);
 
+  // Dados mock para o mapa
+  const pedidosMock = [
+    {
+      id: 12345678,
+      id_ifood: 0,
+      id_estabelecimento: 2123,
+      cliente: 'Maria Silva',
+      pagamento: 'Dinheiro',
+      statusPagamento: 'a_receber',
+      valorTotal: 20.00,
+      endereco: 'Rua das Flores, 1234',
+      bairro: 'Vila Madalena',
+      distanciaKm: 1.2,
+      horario: '19:30',
+      troco: '',
+      coordinates: { latitude: -23.5505, longitude: -46.6333 },
+      itens: [
+        { nome: 'Big Mac', tipo: 'comida', quantidade: 1, valor: 18.90 },
+        { nome: 'Batata Frita Média', tipo: 'acompanhamento', quantidade: 1, valor: 12.90 },
+        { nome: 'Coca-Cola 500ml', tipo: 'bebida', quantidade: 1, valor: 8.90 }
+      ]
+    }
+  ];
+
   return (
     <View style={styles.container}>
       <Stack.Screen options={{ headerShown: false }} />
+      
+      {/* Mapa como background */}
+      <Mapa 
+        pedidos={pedidosMock} 
+        emEntrega={false} 
+        recenterToken={0}
+      />
 
       <BottomSheet
         ref={sheetRef}
@@ -675,15 +707,19 @@ export default function ExemploSacolaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: '#F3F4F6',
+    width: '100%',
+    margin: 0,
+    padding: 0,
   },
   sheet: {
-    // Mantém suave e performático; a lib usa Reanimated/GH sob o capô
+    zIndex: 1000,
+    elevation: 1000,
   },
   header: {
     paddingTop: 8,
     paddingBottom: 8,
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
     backgroundColor: '#fff',
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -702,6 +738,7 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 16,
   },
   headerTitle: {
     fontSize: 18,
@@ -721,18 +758,18 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   closeBtn: {
-    marginLeft: 'auto',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
     paddingVertical: 8,
   },
   closeBtnText: {
     color: '#EF4444',
     fontSize: 14,
     fontWeight: '600',
+
   },
   scrollContent: {
     backgroundColor: '#fff',
-    paddingHorizontal: 16,
+    paddingHorizontal: 0,
   },
   inputRow: {
     flexDirection: 'row',
@@ -867,8 +904,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     padding: 16,
-    marginHorizontal: 16,
     marginTop: 16,
+    marginHorizontal: 16,
   },
 
   rowBetween: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
@@ -885,7 +922,6 @@ const styles = StyleSheet.create({
   mapBtnText: { color: "#fff", fontSize: 14, fontWeight: "600" },
 
   alertRow: {
-    marginHorizontal: 16,
     marginTop: 6,
     borderWidth: 1,
     borderColor: "#FCD34D",
@@ -895,6 +931,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     flexDirection: "row",
     alignItems: "center",
+    marginHorizontal: 16,
   },
   alertText: { marginLeft: 6, color: "#92400E", fontSize: 13, fontWeight: "600" },
 
@@ -1259,10 +1296,7 @@ function SacolaHeader({ onClose }: { onClose: () => void }) {
     <Animated.View style={[styles.header, headerAnimatedStyle]}>
       <View style={styles.grabber} />
       <View style={styles.headerRow}>
-        <Text style={styles.headerTitle}>Sacola (demo)</Text>
-        <View style={styles.subtotalPill}>
-          <Text style={styles.subtotalText}>Subtotal R$ 89,90</Text>
-        </View>
+
         <TouchableOpacity
           accessibilityRole="button"
           accessibilityLabel="Fechar sacola"

@@ -51,15 +51,7 @@ export default function Index() {
       <TelaInicialMap />
 
       {/* Botão flutuante para abrir a tela de exemplo da sacola (demo) */}
-      <TouchableOpacity
-        onPress={() => router.push('/ExemploSacolaScreen')}
-        style={[styles.fab, { bottom: 24 + insets.bottom }]}
-        accessibilityRole="button"
-        accessibilityLabel="Abrir Sacola (demo)"
-        testID="btn-abrir-sacola-demo"
-      >
-        <Text style={styles.fabText}>Abrir Sacola (demo)</Text>
-      </TouchableOpacity>
+
     </View>
   );
 }

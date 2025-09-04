@@ -359,9 +359,7 @@ export default function TelaInicialMap() {
     });
 
   };
-  const handleNovaEntrega = () => {
-    router.push('/EntregaNovaScreen');
-  };
+
   
   useEffect(() => {
     const atualizarPedidosEmEntrega = async () => {
@@ -475,12 +473,12 @@ export default function TelaInicialMap() {
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity
+      {/* <TouchableOpacity
   style={[styles.novaEntregaButton, { top: insets.top + 60 }]}
   onPress={handleNovaEntrega}
 >
   <Text style={styles.novaEntregaButtonText}>Nova Entrega (layout novo)</Text>
-</TouchableOpacity>
+</TouchableOpacity> */}
 
       {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device */}
       <TouchableOpacity

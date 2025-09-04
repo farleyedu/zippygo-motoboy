@@ -289,7 +289,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   return (
     <MapView
       ref={mapRef}
-      style={StyleSheet.absoluteFillObject}
+      style={[StyleSheet.absoluteFillObject, { width: '100%', height: '100%', margin: 0, padding: 0 }]}
       provider={PROVIDER_GOOGLE}
       moveOnMarkerPress={false}
       loadingEnabled
