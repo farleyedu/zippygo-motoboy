@@ -38,6 +38,7 @@ const pedidosMock = [
     distanciaKm: 1.8,
     horario: '20:30',
     troco: 'R$50',
+    telefone: '(34) 99123-4567',
     coordinates: { latitude: -18.906376273263426, longitude: -48.215105388963835 },
     itens: [
       { nome: 'X-Burguer', tipo: 'comida', quantidade: 1, valor: 18 },
@@ -58,6 +59,7 @@ const pedidosMock = [
     distanciaKm: 2.6,
     horario: '19:22',
     troco: 'R$10',
+    telefone: '(34) 99876-5432',
     coordinates: { latitude: -18.910321782284516, longitude: -48.21741885096243 },
     itens: [
       { nome: 'Guaraná', tipo: 'bebida', quantidade: 1, valor: 7 },
@@ -77,6 +79,7 @@ const pedidosMock = [
     distanciaKm: 0.9,
     horario: '20:00',
     troco: '',
+    telefone: '(34) 99555-1234',
     coordinates: { latitude: -18.90887126021788, longitude: -48.21877699273963 },
     itens: [
       { nome: 'Sprite', tipo: 'bebida', quantidade: 1, valor: 8 },
@@ -91,9 +94,11 @@ const pedidosMock = [
     statusPagamento: 'a_receber',
     valorTotal: 14.00,
     endereco: 'Av. Anselmo Alves dos Santos, 4925',
+    bairro: 'Grand Ville',
     distanciaKm: 3.2,
     horario: '19:55',
     troco: '',
+    telefone: '(34) 99333-7890',
     coordinates: { latitude: -18.905433401263668, longitude: -48.218426601132954 },
     itens: [
       { nome: 'Fanta', tipo: 'bebida', quantidade: 1, valor: 8 },
@@ -113,6 +118,7 @@ const pedidosMock = [
     distanciaKm: 2.1,
     horario: '21:10',
     troco: '',
+    telefone: '(34) 99777-2468',
     coordinates: { latitude: -18.908385204055833, longitude: -48.21598084877664 },
     itens: [
       { nome: 'Coca L.', tipo: 'bebida', quantidade: 1, valor: 12 },
@@ -360,6 +366,46 @@ export default function TelaInicialMap() {
 
   };
 
+  const handleAbrirSacola = async () => {
+    const lista = await getSecureItem('pedidosCompletos');
+    const indiceAtualStr = await getSecureItem('indiceAtual');
+    let pedidoAtual = null;
+    if (lista && indiceAtualStr) {
+      const pedidos = JSON.parse(lista);
+      const indiceAtual = parseInt(indiceAtualStr, 10);
+      pedidoAtual = pedidos[indiceAtual];
+    }
+    
+    if (!pedidoAtual) return;
+
+    router.push({
+      pathname: '/ExemploSacolaScreen',
+      params: {
+        // Identificadores (um deles > 0, o outro 0)
+        id: String(pedidoAtual.id),
+        id_ifood: String(pedidoAtual.id_ifood || 0),
+        id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
+
+        // Campos usados na tela da sacola
+        nome: pedidoAtual.cliente,
+        bairro: pedidoAtual.bairro,
+        endereco: pedidoAtual.endereco,
+        statusPagamento: pedidoAtual.statusPagamento,        // 'pago' | 'a_receber'
+        valorTotal: String(pedidoAtual.valorTotal),
+        pagamento: pedidoAtual.pagamento || '',
+        horario: pedidoAtual.horario || '',
+
+        // Opcionais
+        telefone: pedidoAtual.telefone || '',
+        troco: pedidoAtual.troco || '',
+
+        // Sempre como string (expo-router params)
+        itens: JSON.stringify(pedidoAtual.itens || []),
+        coordinates: JSON.stringify(pedidoAtual.coordinates || null),
+      },
+    });
+  };
+
   
   useEffect(() => {
     const atualizarPedidosEmEntrega = async () => {
@@ -480,16 +526,18 @@ export default function TelaInicialMap() {
   <Text style={styles.novaEntregaButtonText}>Nova Entrega (layout novo)</Text>
 </TouchableOpacity> */}
 
-      {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device */}
-      <TouchableOpacity
-        style={[styles.sacolaDemoButton, { top: insets.top + 100 }]}
-        onPress={() => router.push('/ExemploSacolaScreen')}
-        accessibilityRole="button"
-        accessibilityLabel="Abrir Sacola (demo)"
-        testID="btn-abrir-sacola-demo-inline"
-      >
-        <Text style={styles.sacolaDemoButtonText}>Sacola (demo)</Text>
-      </TouchableOpacity>
+      {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device - só visível quando em rota */}
+      {emEntrega && (
+        <TouchableOpacity
+          style={[styles.sacolaDemoButton, { top: insets.top + 100 }]}
+          onPress={handleAbrirSacola}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir Sacola (demo)"
+          testID="btn-abrir-sacola-demo-inline"
+        >
+          <Text style={styles.sacolaDemoButtonText}>Sacola (demo)</Text>
+        </TouchableOpacity>
+      )}
 
 
       {emEntrega && (

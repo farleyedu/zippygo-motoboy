@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Animated as RNAnimated } from 'react-native';
-import { Stack, useRouter, useFocusEffect } from 'expo-router';
-import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, useBottomSheet } from '@gorhom/bottom-sheet';
+import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, useBottomSheet, BottomSheetBackgroundProps } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
 import {
@@ -25,7 +25,22 @@ import {
   MessageCircle,
 } from 'lucide-react-native';
 import Feather from '@expo/vector-icons/Feather';
-import Mapa from '../components/Mapa';
+import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
+
+// Componente de background transparente customizado
+const TransparentBackground: React.FC<BottomSheetBackgroundProps> = ({ style }) => {
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        style,
+        {
+          backgroundColor: 'transparent',
+        },
+      ]}
+    />
+  );
+};
 
 // Tela de demonstração do comportamento de Sacola (iFood-like)
 // Requisitos atendidos:
@@ -41,17 +56,44 @@ import Mapa from '../components/Mapa';
 export default function ExemploSacolaScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const params = useLocalSearchParams();
 
   const sheetRef = useRef<React.ElementRef<typeof BottomSheet>>(null);
   const snapPoints = useMemo(() => ['100%', '70%', '35%'], []);
+
+  // Extrai dados do pedido dos params
+  const nomeCliente = params.nome || 'Cliente';
+  const bairro = params.bairro || 'Bairro';
+  const endereco = params.endereco || 'Endereço';
+  const id_ifood = parseInt(params.id_ifood as string, 10) || 0;
+  const id_estabelecimento = parseInt(params.id_estabelecimento as string, 10) || 0;
+  const pedidoId = (id_ifood && id_ifood > 0) ? id_ifood : id_estabelecimento;
+  const statusPagamento = params.statusPagamento || 'a_receber';
+  const valorTotal = parseFloat(params.valorTotal as string) || 0;
+  const telefone = params.telefone || '';
+  const pagamento = params.pagamento || '';
+  const horario = params.horario || '';
+  const troco = params.troco || '';
+  const itens = params.itens ? JSON.parse(params.itens as string) : [];
+  
+  // Determina se é iFood ou estabelecimento baseado no id_ifood
+  const isIfood = id_ifood > 0;
+  const origem = isIfood ? 'ifood' : 'estabelecimento';
+  
+  // Determina se precisa cobrar baseado no status de pagamento
+  const precisaCobrar = statusPagamento === 'a_receber';
+  const jaFoiPago = statusPagamento === 'pago';
+  
+  // Estados para controle de última entrega
+  const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
 
   // Estados necessários
   const [metodoSelecionado, setMetodoSelecionado] = useState<null | "dinheiro" | "pix" | "debito" | "credito">(null);
   const [mostrarAvisoMetodo, setMostrarAvisoMetodo] = useState(false);
   const [mostrarAcoesTelefone, setMostrarAcoesTelefone] = useState(false);
   const [codigoSolicitado, setCodigoSolicitado] = useState(false);
-  const [codigoValidado, setCodigoValidado] = useState(false);
-  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(false);
+  const [codigoValidado, setCodigoValidado] = useState(!isIfood); // Se não é iFood, código já está validado
+  const [pagamentoConfirmado, setPagamentoConfirmado] = useState(jaFoiPago); // Se já foi pago, pagamento confirmado
   const [isProcessingRefund, setIsProcessingRefund] = useState(false);
   const [refundProgress, setRefundProgress] = useState(0);
   const [longPressTimer, setLongPressTimer] = useState<number | null>(null);
@@ -59,12 +101,38 @@ export default function ExemploSacolaScreen() {
   const glowAnim = useRef(new RNAnimated.Value(0)).current;
   const progressAnim = useRef(new RNAnimated.Value(0)).current;
 
+  // useEffect para inicialização
+  useEffect(() => {
+    (async () => {
+      const lista = await getSecureItem('pedidosCompletos');
+      const indiceAtualStr = await getSecureItem('indiceAtual');
+      if (lista && indiceAtualStr) {
+        const pedidos = JSON.parse(lista);
+        const indiceAtual = parseInt(indiceAtualStr, 10);
+        setIsUltimaEntrega(indiceAtual >= pedidos.length - 1);
+      } else {
+        setIsUltimaEntrega(false);
+      }
+
+      // Se é iFood, verifica se código já foi confirmado
+      if (isIfood) {
+        const status = await getSecureItem(`codigoConfirmado_${pedidoId}`);
+        if (status === 'true') {
+          setCodigoValidado(true);
+        }
+      }
+    })();
+  }, [pedidoId, isIfood]);
+
   // Funções necessárias
   const handleSolicitarCodigo = () => {
     setCodigoSolicitado(true);
     console.log('Código solicitado');
     // Navegar para VerificationScreen
-    router.push('/VerificationScreen');
+    router.push({
+      pathname: '/VerificationScreen',
+      params: { id_ifood: String(id_ifood) }
+    });
   };
 
   // Detectar retorno da VerificationScreen com código confirmado
@@ -72,13 +140,15 @@ export default function ExemploSacolaScreen() {
     useCallback(() => {
       const verificarCodigoValidado = async () => {
         try {
-          const { getSecureItem, deleteSecureItem } = await import('../utils/secureStorage');
-          const codigoValidado = await getSecureItem('codigoValidado');
-          if (codigoValidado === 'true') {
-            setCodigoValidado(true);
-            setCodigoSolicitado(false);
-            await deleteSecureItem('codigoValidado');
-            console.log('Código confirmado retornado da VerificationScreen');
+          if (isIfood) {
+            const codigoValidado = await getSecureItem('codigoValidado');
+            if (codigoValidado === 'true') {
+              await setSecureItem(`codigoConfirmado_${pedidoId}`, 'true');
+              setCodigoValidado(true);
+              setCodigoSolicitado(false);
+              await deleteSecureItem('codigoValidado');
+              console.log('Código confirmado retornado da VerificationScreen para pedido:', pedidoId);
+            }
           }
         } catch (error) {
           console.error('Erro ao verificar código validado:', error);
@@ -86,7 +156,7 @@ export default function ExemploSacolaScreen() {
       };
       
       verificarCodigoValidado();
-    }, [])
+    }, [isIfood, pedidoId])
   );
 
   const handleCobrar = () => {
@@ -97,6 +167,50 @@ export default function ExemploSacolaScreen() {
     setPagamentoConfirmado(true);
     setMostrarAvisoMetodo(false);
     console.log('Pagamento confirmado:', metodoSelecionado);
+  };
+
+  // Função para avançar para a próxima entrega
+  const handleProximaEntrega = async () => {
+    const podeLiberar = codigoValidado && (pagamentoConfirmado || jaFoiPago);
+    
+    if (!podeLiberar) {
+      if (isIfood && !codigoValidado) {
+        alert('Você precisa validar o código do iFood primeiro!');
+        return;
+      }
+      if (precisaCobrar && !pagamentoConfirmado) {
+        alert('Você precisa confirmar o pagamento primeiro!');
+        return;
+      }
+      return;
+    }
+
+    const lista = await getSecureItem('pedidosCompletos');
+    const indiceAtualStr = await getSecureItem('indiceAtual');
+    if (lista && indiceAtualStr) {
+      const pedidos = JSON.parse(lista);
+      let indiceAtual = parseInt(indiceAtualStr, 10);
+      await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
+      
+      if (indiceAtual < pedidos.length - 1) {
+        // Avança para próxima entrega
+        indiceAtual += 1;
+        await setSecureItem('indiceAtual', indiceAtual.toString());
+        router.replace('/');
+      } else {
+        // Finaliza rota
+        await handleFinalizarRota();
+      }
+    }
+  };
+
+  const handleFinalizarRota = async () => {
+    await deleteSecureItem('emEntrega');
+    await deleteSecureItem('indiceAtual');
+    await deleteSecureItem('pedidosCompletos');
+    await deleteSecureItem('destinos');
+    await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
+    router.replace('/');
   };
   const handleAcaoTelefone = (acao: "ligar" | "whatsapp") => {
     // Em RN puro, usar Linking; mantendo stub por enquanto
@@ -183,59 +297,31 @@ export default function ExemploSacolaScreen() {
   // Constante para margem do conteúdo
   const CONTENT_TOP_MARGIN = 8;
 
-  const renderBackdrop = useCallback((props: any) => (
-    <BottomSheetBackdrop
-      {...props}
-      appearsOnIndex={1}
-      disappearsOnIndex={0}
-      pressBehavior="none"
-    />
-  ), []);
-
-  // Dados mock para o mapa
-  const pedidosMock = [
-    {
-      id: 12345678,
-      id_ifood: 0,
-      id_estabelecimento: 2123,
-      cliente: 'Maria Silva',
-      pagamento: 'Dinheiro',
-      statusPagamento: 'a_receber',
-      valorTotal: 20.00,
-      endereco: 'Rua das Flores, 1234',
-      bairro: 'Vila Madalena',
-      distanciaKm: 1.2,
-      horario: '19:30',
-      troco: '',
-      coordinates: { latitude: -23.5505, longitude: -46.6333 },
-      itens: [
-        { nome: 'Big Mac', tipo: 'comida', quantidade: 1, valor: 18.90 },
-        { nome: 'Batata Frita Média', tipo: 'acompanhamento', quantidade: 1, valor: 12.90 },
-        { nome: 'Coca-Cola 500ml', tipo: 'bebida', quantidade: 1, valor: 8.90 }
-      ]
-    }
-  ];
+  // Removendo o backdrop para que o mapa fique visível por trás
+// Remove duplicate declaration since renderBackdrop is already defined below
+  const renderBackdrop = useCallback(() => null, []);
 
   return (
     <View style={styles.container}>
-      <Stack.Screen options={{ headerShown: false }} />
-      
-      {/* Mapa como background */}
-      <Mapa 
-        pedidos={pedidosMock} 
-        emEntrega={false} 
-        recenterToken={0}
+      <Stack.Screen
+        options={{
+          headerShown: false,
+          presentation: 'transparentModal',
+          animation: 'fade',
+          contentStyle: { backgroundColor: 'transparent' },
+        }}
       />
 
       <BottomSheet
         ref={sheetRef}
-        index={0}
+        index={1}
         snapPoints={snapPoints}
         enableContentPanningGesture={true}
         enablePanDownToClose={false}
         keyboardBehavior={Platform.OS === 'ios' ? 'interactive' : 'extend'}
         bottomInset={0}
         backdropComponent={renderBackdrop}
+        backgroundComponent={TransparentBackground}
         handleComponent={() => null}
         style={styles.sheet}
         detached={false}
@@ -261,8 +347,8 @@ export default function ExemploSacolaScreen() {
                   <MapPin size={16} color="#3B82F6" />
                 </View>
                 <View>
-                  <Text style={styles.addrTitle}>Rua das Flores, 1234</Text>
-                  <Text style={styles.addrSub}>Vila Madalena - São Paulo, SP</Text>
+                  <Text style={styles.addrTitle}>{endereco}</Text>
+                  <Text style={styles.addrSub}>{bairro}</Text>
                 </View>
               </View>
 
@@ -290,11 +376,15 @@ export default function ExemploSacolaScreen() {
             {/* Header restaurante */}
             <View style={[styles.rowBetween, { marginBottom: 12 }]}>
               <View style={{ flexDirection: "row", alignItems: "center" }}>
-                <Text style={styles.clientName}>Maria Silva</Text>
-                <Text style={styles.ifoodTag}>iFood</Text>
+                <Text style={styles.clientName}>{nomeCliente}</Text>
+                <Text style={styles.ifoodTag}>{isIfood ? 'iFood' : 'Estabelecimento'}</Text>
               </View>
               <View style={styles.avatar}>
-                <Text style={styles.avatarTxt}>MS</Text>
+                <Text style={styles.avatarTxt}>
+                  {typeof nomeCliente === 'string' 
+                    ? nomeCliente.split(' ').map(n => n[0]).join('').toUpperCase()
+                    : nomeCliente[0]?.[0]?.toUpperCase() || ''}
+                </Text>
               </View>
             </View>
 
@@ -302,11 +392,11 @@ export default function ExemploSacolaScreen() {
             <View style={[styles.rowBetween, { marginBottom: 12 }]}>
               <View style={styles.infoBox}>
                 <Text style={styles.infoLabel}>ID do Pedido</Text>
-                <Text style={styles.infoValue}>#12345678</Text>
+                <Text style={styles.infoValue}>#{pedidoId}</Text>
               </View>
               <View style={styles.infoBox}>
                 <Text style={styles.infoLabel}>Itens</Text>
-                <Text style={styles.infoValue}>3 itens</Text>
+                <Text style={styles.infoValue}>{itens.length} {itens.length === 1 ? 'item' : 'itens'}</Text>
               </View>
             </View>
 
@@ -390,7 +480,7 @@ export default function ExemploSacolaScreen() {
                       <CreditCard size={16} color="#6B7280" />
                     </View>
                     <View style={styles.entregaLiberadaResumoTexto}>
-                      <Text style={styles.entregaLiberadaResumoValor}>R$ 20,00</Text>
+                      <Text style={styles.entregaLiberadaResumoValor}>R$ {valorTotal.toFixed(2).replace('.', ',')}</Text>
                       <Text style={styles.entregaLiberadaResumoMetodo}>
                         {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
                          metodoSelecionado === "pix" ? "PIX" : 
@@ -693,15 +783,12 @@ export default function ExemploSacolaScreen() {
               <TouchableOpacity 
                 activeOpacity={0.8} 
                 style={[styles.primaryBtn, { backgroundColor: "#22C55E" }]}
-                onPress={() => {
-                  // TODO: Navegar para próxima entrega
-                  console.log('Navegando para próxima entrega');
-                }}
+                onPress={handleProximaEntrega}
               >
                 <View style={[styles.squareIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}> 
                   <View style={[styles.squareDot, { backgroundColor: "#fff" }]} />
                 </View>
-                <Text style={[styles.primaryBtnTxt, { color: "#fff" }]}>Próxima Entrega</Text>
+                <Text style={[styles.primaryBtnTxt, { color: "#fff" }]}>{isUltimaEntrega ? 'Finalizar rota' : 'Próxima Entrega'}</Text>
               </TouchableOpacity>
             ) : (
               /* Estado: Aguardando */
@@ -719,7 +806,7 @@ export default function ExemploSacolaScreen() {
                   <View style={styles.squareIcon}>
                     <View style={styles.squareDot} />
                   </View>
-                  <Text style={styles.primaryBtnTxt}>Próxima Entrega</Text>
+                  <Text style={styles.primaryBtnTxt}>{isUltimaEntrega ? 'Finalizar rota' : 'Próxima Entrega'}</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -733,10 +820,16 @@ export default function ExemploSacolaScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'transparent',
     width: '100%',
     margin: 0,
     padding: 0,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 1000,
   },
   sheet: {
     zIndex: 1000,

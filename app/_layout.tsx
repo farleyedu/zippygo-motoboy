@@ -82,8 +82,17 @@ function RootLayoutNav() {
         {/* Tela de divisão de pagamento */}
         <Stack.Screen name="dividirPagamento" options={{ headerShown: false }} />
 
-        {/* Nova tela de exemplo da sacola */}
-        <Stack.Screen name="ExemploSacolaScreen" options={{ headerShown: false }} />
+        {/* Nova tela de exemplo da sacola (como modal transparente sobre o mapa) */}
+        <Stack.Screen
+          name="ExemploSacolaScreen"
+          options={{
+            headerShown: false,
+            presentation: 'transparentModal',
+            animation: 'fade',
+            contentStyle: { backgroundColor: 'transparent' },
+            statusBarTranslucent: true,
+          }}
+        />
         
         {/* Aqui você pode adicionar outras rotas normalmente */}
         {/* <Stack.Screen name="outraTela" options={{ headerShown: true }} /> */}
