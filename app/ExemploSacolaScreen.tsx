@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Animated as RNAnimated } from 'react-native';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, useFocusEffect } from 'expo-router';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, useBottomSheet } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { Extrapolation, interpolate, useAnimatedStyle } from 'react-native-reanimated';
@@ -63,7 +63,31 @@ export default function ExemploSacolaScreen() {
   const handleSolicitarCodigo = () => {
     setCodigoSolicitado(true);
     console.log('Código solicitado');
+    // Navegar para VerificationScreen
+    router.push('/VerificationScreen');
   };
+
+  // Detectar retorno da VerificationScreen com código confirmado
+  useFocusEffect(
+    useCallback(() => {
+      const verificarCodigoValidado = async () => {
+        try {
+          const { getSecureItem, deleteSecureItem } = await import('../utils/secureStorage');
+          const codigoValidado = await getSecureItem('codigoValidado');
+          if (codigoValidado === 'true') {
+            setCodigoValidado(true);
+            setCodigoSolicitado(false);
+            await deleteSecureItem('codigoValidado');
+            console.log('Código confirmado retornado da VerificationScreen');
+          }
+        } catch (error) {
+          console.error('Erro ao verificar código validado:', error);
+        }
+      };
+      
+      verificarCodigoValidado();
+    }, [])
+  );
 
   const handleCobrar = () => {
     if (!metodoSelecionado) {
@@ -210,10 +234,12 @@ export default function ExemploSacolaScreen() {
         enableContentPanningGesture={true}
         enablePanDownToClose={false}
         keyboardBehavior={Platform.OS === 'ios' ? 'interactive' : 'extend'}
-        bottomInset={Math.max(insets.bottom, 0)}
+        bottomInset={0}
         backdropComponent={renderBackdrop}
         handleComponent={() => null}
         style={styles.sheet}
+        detached={false}
+        animateOnMount={true}
       >
         <SacolaHeader onClose={() => router.back()} />
 
@@ -335,7 +361,7 @@ export default function ExemploSacolaScreen() {
             {codigoValidado && pagamentoConfirmado ? (
               /* Card de Entrega Liberada */
               <TouchableOpacity onPress={handleReverterPagamento} activeOpacity={0.9}>
-                <Animated.View
+                <RNAnimated.View
                   style={[
                     styles.entregaLiberadaCard,
                     {
@@ -343,11 +369,11 @@ export default function ExemploSacolaScreen() {
                       backgroundColor: glowAnim.interpolate({
                         inputRange: [0, 1],
                         outputRange: ['#F0FDF4', '#ECFDF5'],
-                      }) as any,
+                      }),
                       borderColor: glowAnim.interpolate({
                         inputRange: [0, 1], 
                         outputRange: ['#BBF7D0', '#22C55E'],
-                      }) as any,
+                      }),
                     },
                   ]}
                 >
@@ -381,7 +407,7 @@ export default function ExemploSacolaScreen() {
                 {/* Barra de progresso */}
                  {isProcessingRefund && (
                    <View style={styles.progressContainer}>
-                     <Animated.View 
+                     <RNAnimated.View 
                                            style={[
                      styles.progressBar, 
 {
@@ -389,14 +415,14 @@ export default function ExemploSacolaScreen() {
   backgroundColor: glowAnim.interpolate({
     inputRange: [0, 1],
     outputRange: ['rgb(34, 197, 94)', 'rgb(22, 163, 74)']
-  }) as any
+  })
 }
                                            ]} 
                      />
                    </View>
                  )}
                 {/* Removido progresso por hold; ação agora é toque único */}
-                </Animated.View>
+                </RNAnimated.View>
               </TouchableOpacity>
           ) : pagamentoConfirmado ? (
             /* Card de Pagamento Confirmado */
@@ -1236,7 +1262,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", 
     alignItems: "center", 
     justifyContent: "center", 
-    marginBottom: 8 
+    marginBottom: 8, 
   },
   secondaryTxt: { color: "#fff", fontSize: 16, fontWeight: "700", marginLeft: 8 },
   entregaLiberadaInstrucao: {
@@ -1267,10 +1293,9 @@ const styles = StyleSheet.create({
   },
   bottomBar: {
     position: "absolute",
+    bottom: 70,
     left: 0,
     right: 0,
-    bottom: 0,
-    alignSelf: "center",
     width: "100%",
     maxWidth: 480,
     backgroundColor: "#fff",
@@ -1278,6 +1303,16 @@ const styles = StyleSheet.create({
     borderTopColor: "#E5E7EB",
     paddingHorizontal: 16,
     paddingVertical: 12,
+    zIndex: 99999,
+    elevation: 30,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: -2,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    minHeight: 80,
   },
 });
 
