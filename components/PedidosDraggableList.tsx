@@ -16,6 +16,7 @@ type Pedido = {
   cliente: string;
   pagamento: string;
   statusPagamento: 'pago' | 'a_receber';
+  tipoPagamento?: string;
   valorTotal: number;
   endereco: string;
   bairro: string;
@@ -32,11 +33,13 @@ type Props = {
   dragEnabled?: boolean;
 };
 
-const getPagamentoColor = (pagamento: string, status: string) => {
-  if (status === 'pago') return '#4CAF50';
+const getPagamentoColor = (pagamento: string, status: string, tipoPagamento?: string) => {
+  // pagoApp sempre deve ser tratado como pago
+  if (status === 'pago' || tipoPagamento === 'pagoApp') return '#4CAF50';
   if (pagamento.toLowerCase() === 'dinheiro') return '#FFC107';
   if (pagamento.toLowerCase() === 'crédito') return '#2196F3';
   if (pagamento.toLowerCase() === 'débito') return '#00BCD4';
+  if (pagamento.toLowerCase() === 'pix') return '#4CAF50';
   return '#ccc';
 };
 
@@ -48,8 +51,9 @@ const getPagamentoIcon = (pagamento: string) => {
   return <MaterialCommunityIcons name="credit-card-outline" size={14} color="#ccc" style={{ marginRight: 2 }} />;
 };
 
-const getStatusSelo = (status: string) => {
-  if (status === 'pago') return <View style={styles.seloPago}><Text style={styles.seloPagoText}>PAGO</Text></View>;
+const getStatusSelo = (status: string, tipoPagamento?: string) => {
+  // pagoApp sempre deve ser tratado como pago
+  if (status === 'pago' || tipoPagamento === 'pagoApp') return <View style={styles.seloPago}><Text style={styles.seloPagoText}>PAGO</Text></View>;
   return <View style={styles.seloReceber}><Text style={styles.seloReceberText}>A RECEBER</Text></View>;
 };
 
@@ -132,10 +136,10 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
                   </>
                 ) : null}
                 {getPagamentoIcon(item.pagamento)}
-                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento), marginRight: 6 }]}>
+                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento, item.tipoPagamento), marginRight: 6 }]}>
                   {item.pagamento}
                 </Text>
-                {getStatusSelo(item.statusPagamento)}
+                {getStatusSelo(item.statusPagamento, item.tipoPagamento)}
               </View>
             </View>
             <View style={styles.iconsRight}>
@@ -148,7 +152,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
             </View>
           </View>
           {isExpanded && (
-            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento) }]}>
+            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento, item.tipoPagamento) }]}>
               <Text style={styles.itensTitle}>Itens do pedido:</Text>
               {item.itens.map((it, idx) => (
                 <View key={idx} style={styles.itemLinha}>

@@ -81,8 +81,10 @@ export default function ExemploSacolaScreen() {
   const origem = isIfood ? 'ifood' : 'estabelecimento';
   
   // Determina se precisa cobrar baseado no status de pagamento
-  const precisaCobrar = statusPagamento === 'a_receber';
-  const jaFoiPago = statusPagamento === 'pago';
+  // pagoApp sempre deve ser tratado como pago
+  const tipoPagamento = params.tipoPagamento || '';
+  const precisaCobrar = statusPagamento === 'a_receber' && tipoPagamento !== 'pagoApp';
+  const jaFoiPago = statusPagamento === 'pago' || tipoPagamento === 'pagoApp';
   
   // Estados para controle de última entrega
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
@@ -450,7 +452,7 @@ export default function ExemploSacolaScreen() {
 
             {codigoValidado && pagamentoConfirmado ? (
               /* Card de Entrega Liberada */
-              <TouchableOpacity onPress={handleReverterPagamento} activeOpacity={0.9}>
+              <TouchableOpacity onPress={jaFoiPago ? undefined : handleReverterPagamento} activeOpacity={jaFoiPago ? 1 : 0.9}>
                 <RNAnimated.View
                   style={[
                     styles.entregaLiberadaCard,
@@ -473,7 +475,7 @@ export default function ExemploSacolaScreen() {
                 <View style={styles.entregaLiberadaContent}>
                   <Text style={styles.entregaLiberadaTitulo}>Entrega Liberada! ✨</Text>
                   <Text style={styles.entregaLiberadaSubtitulo}>
-                    Código validado e pagamento registrado com sucesso.
+                    {jaFoiPago ? 'Código validado e pagamento no app já confirmado.' : 'Código validado e pagamento registrado com sucesso.'}
                   </Text>
                   <View style={styles.entregaLiberadaResumo}>
                     <View style={styles.entregaLiberadaResumoIcon}>
@@ -482,14 +484,19 @@ export default function ExemploSacolaScreen() {
                     <View style={styles.entregaLiberadaResumoTexto}>
                       <Text style={styles.entregaLiberadaResumoValor}>R$ {valorTotal.toFixed(2).replace('.', ',')}</Text>
                       <Text style={styles.entregaLiberadaResumoMetodo}>
-                        {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
-                         metodoSelecionado === "pix" ? "PIX" : 
-                         metodoSelecionado === "debito" ? "Débito" : "Crédito"}
+                        {jaFoiPago
+                          ? 'Pago no app'
+                          : metodoSelecionado === 'dinheiro' ? 'Dinheiro'
+                          : metodoSelecionado === 'pix' ? 'PIX'
+                          : metodoSelecionado === 'debito' ? 'Débito'
+                          : 'Crédito'}
                       </Text>
                     </View>
                   </View>
                 </View>
-                <Text style={styles.entregaLiberadaInstrucao}>Toque para desfazer a cobrança</Text>
+                {!jaFoiPago && (
+                  <Text style={styles.entregaLiberadaInstrucao}>Toque para desfazer a cobrança</Text>
+                )}
                 <Text style={styles.entregaLiberadaProximo}>
                   Tudo pronto. Avance para a próxima entrega.
                 </Text>
@@ -522,23 +529,29 @@ export default function ExemploSacolaScreen() {
                   <CreditCard size={16} color="#fff" />
                 </View>
                 <View style={styles.pagamentoConfirmadoTexto}>
-                  <Text style={styles.pagamentoConfirmadoTitulo}>Pagamento Confirmado</Text>
+                  <Text style={styles.pagamentoConfirmadoTitulo}>{jaFoiPago ? 'Pago no app' : 'Pagamento Confirmado'}</Text>
                   <View style={styles.pagamentoConfirmadoResumo}>
-                    <Text style={styles.pagamentoConfirmadoValor}>R$ 20,00</Text>
-                    <Text style={styles.pagamentoConfirmadoMetodo}>
-                      {metodoSelecionado === "dinheiro" ? "Dinheiro" : 
-                                metodoSelecionado === "pix" ? "PIX" : 
-                                metodoSelecionado === "debito" ? "Débito" : "Crédito"}
-                    </Text>
+                    <Text style={styles.pagamentoConfirmadoValor}>R$ {valorTotal.toFixed(2).replace('.', ',')}</Text>
+                    {jaFoiPago ? (
+                      <Text style={styles.pagamentoConfirmadoMetodo}>Este pedido já foi pago anteriormente.</Text>
+                    ) : (
+                      <Text style={styles.pagamentoConfirmadoMetodo}>
+                        {metodoSelecionado === 'dinheiro' ? 'Dinheiro' :
+                         metodoSelecionado === 'pix' ? 'PIX' :
+                         metodoSelecionado === 'debito' ? 'Débito' : 'Crédito'}
+                      </Text>
+                    )}
                   </View>
                 </View>
               </View>
-              <TouchableOpacity 
-                onPress={handleEditarPagamento}
-                style={styles.pagamentoConfirmadoEditBtn}
-              >
-                <Edit3 size={16} color="#9CA3AF" />
-              </TouchableOpacity>
+              {!jaFoiPago && (
+                <TouchableOpacity 
+                  onPress={handleEditarPagamento}
+                  style={styles.pagamentoConfirmadoEditBtn}
+                >
+                  <Edit3 size={16} color="#9CA3AF" />
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             /* Seção de Cobrança Original */

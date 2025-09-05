@@ -15,6 +15,7 @@ type Pedido = {
   horario: string;
   pagamento: string;
   statusPagamento: string;
+  tipoPagamento?: string;
   valorTotal: number;
   troco: string;
   coordinates: {

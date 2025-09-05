@@ -42,6 +42,46 @@ interface PagamentoResumo {
   }>;
 }
 
+// Novas tipagens padronizadas
+type TipoPagamento = 'na_entrega' | 'pago_app';
+
+interface PagamentoInfo {
+  tipo: TipoPagamento;
+  metodo?: MetodoPagamento;
+  valor?: number;
+  statusInicial?: PagamentoStatus;
+}
+
+interface PedidoItem {
+  nome: string;
+  tipo?: string;
+  quantidade: number;
+  valor: number;
+}
+
+interface Pedido {
+  id?: number;
+  id_ifood?: number;
+  id_estabelecimento?: number;
+  cliente: string;
+  endereco: string;
+  bairro: string;
+  cidade?: string;
+  uf?: string;
+  cep?: string;
+  latitude?: number;
+  longitude?: number;
+  itens: PedidoItem[];
+  pagamento: PagamentoInfo;
+  precisaCodigo: boolean;
+  codigoEsperado?: string;
+  // Retrocompat (aceitas na origem)
+  precisaCobrar?: boolean;
+  valorCobrar?: number;
+  pagamentoStatusInicial?: PagamentoStatus;
+  requerCodigo?: boolean;
+}
+
 export default function ConfirmacaoEntrega() {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
@@ -49,8 +89,26 @@ export default function ConfirmacaoEntrega() {
   const params = useLocalSearchParams();
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Extrai dados do pedido dos params
-  const nomeCliente = params.nome || 'Cliente';
+  // Carregamento dinâmico: pedidos + índice (SecureStore)
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
+  const [indiceAtual, setIndiceAtual] = useState<number>(0);
+  const [usandoSeeds, setUsandoSeeds] = useState<boolean>(false);
+
+  const pedido: Pedido | undefined = pedidos[indiceAtual];
+
+  // Variáveis de UI derivadas (mantêm retrocompat com params quando necessário)
+  const uiNomeCliente = pedido?.cliente ?? (params.nome as string) ?? 'Cliente';
+  const uiBairro = pedido?.bairro ?? (params.bairro as string) ?? 'Bairro';
+  const uiEndereco = pedido?.endereco ?? (params.endereco as string) ?? 'Endereço';
+  const uiValorTotal = typeof pedido?.pagamento?.valor === 'number'
+    ? Number(pedido?.pagamento?.valor)
+    : (parseFloat(params.valorTotal as string) || 0);
+  const precisaCodigoUI = pedido?.precisaCodigo ?? false;
+  const precisaCobrarUI = pedido?.pagamento?.tipo === 'na_entrega';
+  const jaFoiPagoUI = pedido?.pagamento?.tipo === 'pago_app';
+
+  // Derivados do pedido atual
+  const nomeCliente = pedido?.cliente ?? 'Cliente';
   const bairro = params.bairro || 'Bairro';
   const endereco = params.endereco || 'Endereço';
   const id_ifood = parseInt(params.id_ifood as string, 10) || 0;
@@ -74,11 +132,9 @@ export default function ConfirmacaoEntrega() {
   const jaFoiPago = statusPagamento === 'pago';
 
   // Estados
-  const [codigoStatus, setCodigoStatus] = useState<CodigoStatus>(!isIfood ? 'validado' : 'pendente');
+  const [codigoStatus, setCodigoStatus] = useState<CodigoStatus>('pendente');
   const [codigoValor, setCodigoValor] = useState('');
-  const [pagamentoStatus, setPagamentoStatus] = useState<PagamentoStatus>(
-    statusPagamento === 'pago' ? 'confirmado' : 'nao_iniciado'
-  );
+  const [pagamentoStatus, setPagamentoStatus] = useState<PagamentoStatus>('nao_iniciado');
     const [pagamentoResumo, setPagamentoResumo] = useState<PagamentoResumo | null>(null);
   const [modalCodigo, setModalCodigo] = useState(false);
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
@@ -121,6 +177,90 @@ export default function ConfirmacaoEntrega() {
     return () => sliderX.removeListener(id);
   }, [sliderX]);
 
+  // Carrega pedidos e índice do SecureStore; se não existir, cria seeds
+  useEffect(() => {
+    (async () => {
+      try {
+        const listaStr = await getSecureItem('pedidos_atual');
+        let lista: Pedido[] | null = null;
+        if (listaStr) {
+          try {
+            const arr = JSON.parse(listaStr);
+            if (Array.isArray(arr)) {
+              lista = arr.map(mapearRetrocompatPedido);
+            }
+          } catch {}
+        }
+        if (!lista) {
+          lista = criarSeedsPedidos();
+          setUsandoSeeds(true);
+          await setSecureItem('pedidos_atual', JSON.stringify(lista));
+        }
+        setPedidos(lista);
+        const idxStr = await getSecureItem('indice_atual');
+        let idx = parseInt(idxStr || '0', 10);
+        if (isNaN(idx) || idx < 0 || idx >= lista.length) idx = 0;
+        setIndiceAtual(idx);
+        const p = lista[idx];
+        setCodigoStatus(p.precisaCodigo ? 'pendente' : 'pendente');
+        setPagamentoStatus(p.pagamento?.tipo === 'pago_app' ? 'confirmado' : (p.pagamento?.statusInicial ?? 'nao_iniciado'));
+        if (p.pagamento?.metodo) setMetodoPagamento(p.pagamento.metodo);
+        setIsUltimaEntrega(idx >= (lista.length - 1));
+      } catch (e) {
+        console.warn('Erro ao carregar pedidos_atual:', e);
+      }
+    })();
+  }, []);
+
+  // Quando o índice mudar, persiste e reseta estados baseados no novo pedido
+  useEffect(() => {
+    (async () => {
+      try { await setSecureItem('indice_atual', String(indiceAtual)); } catch {}
+    })();
+    const p = pedidos[indiceAtual];
+    if (p) {
+      setCodigoStatus(p.precisaCodigo ? 'pendente' : 'pendente');
+      setPagamentoStatus(p.pagamento?.tipo === 'pago_app' ? 'confirmado' : (p.pagamento?.statusInicial ?? 'nao_iniciado'));
+      if (p.pagamento?.metodo) setMetodoPagamento(p.pagamento.metodo);
+      setIsUltimaEntrega(indiceAtual >= (pedidos.length - 1));
+    }
+  }, [indiceAtual]);
+
+  // Retrocompat mapping helper
+  function mapearRetrocompatPedido(src: any): Pedido {
+    const precisaCodigo: boolean = src.precisaCodigo ?? Boolean(src.requerCodigo);
+    const pagamento: PagamentoInfo = src.pagamento?.tipo
+      ? { tipo: src.pagamento.tipo, metodo: src.pagamento.metodo, valor: src.pagamento.valor, statusInicial: src.pagamento.statusInicial }
+      : { tipo: src.precisaCobrar ? 'na_entrega' : 'pago_app', valor: typeof src.valorCobrar === 'number' ? src.valorCobrar : undefined, statusInicial: src.pagamentoStatusInicial ?? 'nao_iniciado' };
+    return {
+      id: src.id,
+      id_ifood: src.id_ifood,
+      id_estabelecimento: src.id_estabelecimento,
+      cliente: src.cliente ?? src.nome ?? 'Cliente',
+      endereco: src.endereco ?? 'Endereço',
+      bairro: src.bairro ?? 'Bairro',
+      cidade: src.cidade,
+      uf: src.uf,
+      cep: src.cep,
+      latitude: src.latitude,
+      longitude: src.longitude,
+      itens: Array.isArray(src.itens) ? src.itens : [],
+      pagamento,
+      precisaCodigo,
+      codigoEsperado: src.codigoEsperado,
+    } as Pedido;
+  }
+
+  function criarSeedsPedidos(): Pedido[] {
+    return [
+      { id: 1001, cliente: 'João da Silva', endereco: 'Rua das Palmeiras, 120 - Centro, Uberlândia - MG, 38400-000', bairro: 'Centro', latitude: -18.912774, longitude: -48.275522, itens: [{ nome: 'Pizza Calabresa', quantidade: 1, valor: 39.9 }], pagamento: { tipo: 'pago_app', statusInicial: 'confirmado', valor: 39.9, metodo: 'PIX' }, precisaCodigo: false },
+      { id_ifood: 2002, cliente: 'Maria Souza', endereco: 'Av. Paulista, 900 - Bela Vista, São Paulo - SP, 01310-100', bairro: 'Bela Vista', latitude: -23.561684, longitude: -46.655981, itens: [{ nome: 'Pizza Portuguesa', quantidade: 1, valor: 49.9 }], pagamento: { tipo: 'pago_app', statusInicial: 'confirmado', valor: 49.9, metodo: 'Crédito' }, precisaCodigo: true, codigoEsperado: '1234' },
+      { id: 3003, cliente: 'Carlos Lima', endereco: 'Rua do Comércio, 45 - Centro, Belo Horizonte - MG, 30111-000', bairro: 'Centro', itens: [{ nome: 'Pizza Frango c/ Catupiry', quantidade: 1, valor: 61.9 }], pagamento: { tipo: 'na_entrega', statusInicial: 'nao_iniciado', valor: 61.9, metodo: 'PIX' }, precisaCodigo: false },
+      { id_estabelecimento: 4004, cliente: 'Ana Paula', endereco: 'Rua Flores do Campo, 75 - Jardim, Curitiba - PR, 80000-000', bairro: 'Jardim', itens: [{ nome: 'Pizza Marguerita', quantidade: 1, valor: 49.9 }], pagamento: { tipo: 'na_entrega', statusInicial: 'nao_iniciado', valor: 49.9, metodo: 'Dinheiro' }, precisaCodigo: true, codigoEsperado: '4321' },
+      { id: 5005, cliente: 'Beatriz Santos', endereco: 'Av. Brasil, 1500 - Centro, Rio de Janeiro - RJ, 20040-002', bairro: 'Centro', itens: [{ nome: 'Pizza Quatro Queijos', quantidade: 1, valor: 37.5 }], pagamento: { tipo: 'pago_app', statusInicial: 'confirmado', valor: 37.5, metodo: 'Débito' }, precisaCodigo: true, codigoEsperado: '2468' },
+    ];
+  }
+
   const panResponder = useRef(
     PanResponder.create({
       onMoveShouldSetPanResponder: () => true,
@@ -160,7 +300,7 @@ export default function ConfirmacaoEntrega() {
       }
 
       // Se não for iFood, código já está confirmado
-      if (!isIfood) {
+      if (!precisaCodigoUI) {
         setCodigoStatus('validado');
       } else {
         // Checa status de código confirmado individual por pedido
@@ -188,13 +328,13 @@ export default function ConfirmacaoEntrega() {
         setPagamentoResumo(JSON.parse(pagamentoResumoSalvo));
       }
     })();
-  }, [pedidoId, isIfood, jaFoiPago, precisaCobrar]);
+  }, [pedidoId, precisaCodigoUI, jaFoiPagoUI, precisaCobrarUI]);
 
   // Monitora quando a tela volta ao foco para verificar se o código foi validado
   useFocusEffect(
     React.useCallback(() => {
       const verificarCodigoValidado = async () => {
-        if (isIfood) {
+        if (precisaCodigoUI) {
           const codigoValidado = await getSecureItem('codigoValidado');
       if (codigoValidado === 'true') {
         await setSecureItem(`codigoConfirmado_${pedidoId}`, 'true');
@@ -204,7 +344,7 @@ export default function ConfirmacaoEntrega() {
         }
       };
       verificarCodigoValidado();
-    }, [isIfood, pedidoId])
+  }, [precisaCodigoUI, pedidoId])
   );
 
   // Monitora quando volta da tela de divisão de pagamento
@@ -237,7 +377,7 @@ export default function ConfirmacaoEntrega() {
     const resumo: PagamentoResumo = {
       tipo: 'simples',
       metodo: metodoPagamento,
-      valor: valorTotal,
+      valor: uiValorTotal,
     };
 
     await setSecureItem(`pagamentoResumo_${pedidoId}`, JSON.stringify(resumo));
@@ -264,11 +404,11 @@ export default function ConfirmacaoEntrega() {
   // Função para avançar para a próxima entrega
   const handleProximaEntrega = async () => {
     if (!podeLiberar) {
-      if (isIfood && codigoStatus !== 'validado') {
+      if (precisaCodigoUI && codigoStatus !== 'validado') {
         alert('Você precisa validar o código do iFood primeiro!');
         return;
       }
-      if (precisaCobrar && pagamentoStatus !== 'confirmado') {
+      if (precisaCobrarUI && pagamentoStatus !== 'confirmado') {
         alert('Você precisa confirmar o pagamento primeiro!');
         return;
       }
@@ -305,6 +445,30 @@ export default function ConfirmacaoEntrega() {
     router.replace('/');
   };
 
+  // Nova função: avançar para próxima entrega usando pedidos_atual/indice_atual
+  const handleProximaEntregaV2 = async () => {
+    if (!podeLiberar) {
+      const pendencias: string[] = [];
+      if (precisaCodigoUI && codigoStatus !== 'validado') pendencias.push('Falta validar código.');
+      if (precisaCobrarUI && pagamentoStatus !== 'confirmado') pendencias.push('Falta confirmar pagamento.');
+      if (pendencias.length) alert(pendencias.join('\n'));
+      return;
+    }
+    const listaStr = await getSecureItem('pedidos_atual');
+    const idxStr = await getSecureItem('indice_atual');
+    if (!listaStr) return;
+    const arr = JSON.parse(listaStr);
+    let idx = parseInt(idxStr || '0', 10);
+    if (isNaN(idx)) idx = 0;
+    if (idx < arr.length - 1) {
+      idx += 1;
+      await setSecureItem('indice_atual', String(idx));
+      setIndiceAtual(idx);
+    } else {
+      alert('Todas as entregas concluídas');
+    }
+  };
+
   // Renderização do código de entrega
   const renderCodigoEntrega = () => (
     codigoStatus !== 'validado' ? (
@@ -334,13 +498,47 @@ export default function ConfirmacaoEntrega() {
     )
   );
 
+  // Nova versão com regra de precisaCodigo
+  const renderCodigoEntregaV2 = () => (
+    !precisaCodigoUI ? (
+      <View style={{
+        backgroundColor: '#ECFDF5',
+        borderColor: '#D1FAE5',
+        borderWidth: 1,
+        paddingHorizontal: 12,
+        paddingVertical: 10,
+        borderRadius: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 12,
+      }}>
+        <Ionicons name="checkmark-circle" size={20} color="#16A34A" />
+        <View style={{ marginLeft: 8, flex: 1 }}>
+          <Text style={{ color: '#166534', fontWeight: '700' }}>
+            Este pedido não exige código de entrega.
+          </Text>
+          <Text style={{ color: '#6B7280', fontSize: 12 }}>
+            Entrega liberada assim que as demais condições forem atendidas.
+          </Text>
+        </View>
+      </View>
+    ) : (
+      renderCodigoEntrega()
+    )
+  );
+
   // Status "Cobrar/Pago" agora baseado em pagamentoStatus
   const renderStatusPago = () => (
     <View style={styles.statusItem}>
-      {pagamentoStatus === 'confirmado' ? (
+      {jaFoiPagoUI ? (
+        <>
+          <Ionicons name="checkmark-circle" size={16} color="#16A34A" />
+          <Text style={[styles.statusTexto, { color: '#16A34A', fontWeight: 'bold' }]}>Pago no app</Text>
+        </>
+      ) : pagamentoStatus === 'confirmado' ? (
         <>
           <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
-          <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>pago</Text>
+          <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Pago</Text>
         </>
       ) : (
         <>
@@ -399,6 +597,29 @@ export default function ConfirmacaoEntrega() {
           </TouchableOpacity>
         </View>
 
+        {/* Dev-only: trocar pedido rapidamente quando usando seeds */}
+        {usandoSeeds && pedidos.length > 0 && (
+          <View style={{ flexDirection: 'row', justifyContent: 'center', paddingVertical: 6 }}>
+            {pedidos.map((_, i) => (
+              <TouchableOpacity
+                key={i}
+                onPress={() => setIndiceAtual(i)}
+                style={{
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  marginHorizontal: 4,
+                  borderRadius: 12,
+                  borderWidth: 1,
+                  borderColor: i === indiceAtual ? '#111827' : '#E5E7EB',
+                  backgroundColor: i === indiceAtual ? '#111827' : '#fff',
+                }}
+              >
+                <Text style={{ color: i === indiceAtual ? '#fff' : '#111827', fontSize: 12, fontWeight: '700' }}>{i}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {/* Modal de chat */}
         <Modal transparent visible={modalVisible} animationType="fade">
           <TouchableOpacity style={styles.overlay} onPress={() => setModalVisible(false)}>
@@ -432,7 +653,7 @@ export default function ConfirmacaoEntrega() {
         </View>
 
         {/* Aviso de solicitação de código */}
-        {isIfood && (
+        {precisaCodigoUI && (
           <View style={styles.alertaCodigo}>
             <Ionicons name="alert-circle-outline" size={18} color="#888" />
             <Text style={styles.textoAlerta}>Solicite o código de entrega</Text>
@@ -443,7 +664,7 @@ export default function ConfirmacaoEntrega() {
         <View style={styles.cardCliente}>
           <View style={styles.linhaTopo}>
             <View>
-              <Text style={styles.nomeCliente}>{nomeCliente}</Text>
+              <Text style={styles.nomeCliente}>{uiNomeCliente}</Text>
               <Text style={styles.bairro}>{bairro}</Text>
               <View style={styles.statusLinha}>
                 <View style={styles.statusItem}>
@@ -452,28 +673,33 @@ export default function ConfirmacaoEntrega() {
                     {quantidadePedidos} pedido{quantidadePedidos > 1 ? 's' : ''}
                   </Text>
                 </View>
-                {isIfood ? renderStatusValidar() : (
+                {precisaCodigoUI ? renderStatusValidar() : (
                   <View style={styles.statusItem}>
                     <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
                     <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Validado</Text>
                   </View>
                 )}
-                {precisaCobrar ? renderStatusPago() : (
+                {precisaCobrarUI ? renderStatusPago() : (
                   <View style={styles.statusItem}>
                     <FontAwesome name="check-circle-o" size={14} color="#4caf50" />
                     <Text style={[styles.statusTexto, { color: '#4caf50', fontWeight: 'bold' }]}>Pago</Text>
                   </View>
                 )}
               </View>
+              {jaFoiPagoUI && (
+                <Text style={{ marginTop: 4, color: '#6B7280', fontSize: 12 }}>
+                  Este pedido já foi pago anteriormente.
+                </Text>
+              )}
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
               <View style={[
                 styles.badgeOrigem,
-                isIfood ? styles.badgeIfood : styles.badgeEstabelecimento,
+                precisaCodigoUI ? styles.badgeIfood : styles.badgeEstabelecimento,
                 { marginRight: 8, marginTop: 2 }
               ]}>
                 <Text style={styles.badgeOrigemTexto}>
-                  {isIfood ? 'iFood' : 'Estabelecimento'}
+                  {precisaCodigoUI ? 'iFood' : 'Estabelecimento'}
                 </Text>
               </View>
               <TouchableOpacity onPress={toggleExpand} style={[styles.iconeContainer, { marginTop: 2 }]}>
@@ -496,7 +722,7 @@ export default function ConfirmacaoEntrega() {
               </View>
               <View style={styles.detalheLinha}>
                 <FontAwesome name="money" size={16} color="#888" style={{ marginRight: 6 }} />
-                <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {valorTotal.toFixed(2)}</Text></Text>
+                <Text style={styles.detalheLabel}>Valor: <Text style={styles.detalheValor}>R$ {uiValorTotal.toFixed(2)}</Text></Text>
               </View>
               <View style={styles.detalheLinha}>
                 <FontAwesome name="list" size={16} color="#888" style={{ marginRight: 6 }} />
@@ -528,6 +754,17 @@ export default function ConfirmacaoEntrega() {
             </Text>
           )}
 
+          {!podeLiberar && (
+            <View style={{ alignItems: 'center', marginBottom: 8 }}>
+              {precisaCobrarUI && pagamentoStatus !== 'confirmado' && (
+                <Text style={{ color: '#B45309', fontSize: 12, fontWeight: '600' }}>Falta confirmar pagamento.</Text>
+              )}
+              {precisaCodigoUI && codigoStatus !== 'validado' && (
+                <Text style={{ color: '#B45309', fontSize: 12, fontWeight: '600' }}>Falta validar código.</Text>
+              )}
+            </View>
+          )}
+
           {/* Cards compactos */}
           {isIfood ? (
             codigoStatus === 'validado' ? (
@@ -535,7 +772,7 @@ export default function ConfirmacaoEntrega() {
                 <Ionicons name="checkmark-circle-outline" size={16} color="#4caf50" />
                 <Text style={styles.cardConfirmacaoTxt} numberOfLines={1}>Código confirmado</Text>
               </View>
-            ) : renderCodigoEntrega()
+            ) : renderCodigoEntregaV2()
           ) : (
             <View style={styles.cardConfirmacao}>
               <Ionicons name="checkmark-circle-outline" size={16} color="#4caf50" />
@@ -547,19 +784,38 @@ export default function ConfirmacaoEntrega() {
             <View style={styles.cardConfirmado}>
               <Ionicons name="checkmark-circle" size={18} color="#4caf50" style={{ marginRight: 6 }} />
               <View style={{ flex: 1 }}>
-                <Text style={styles.cardConfirmadoTitulo}>Pagamento confirmado</Text>
-                {pagamentoResumo.tipo === 'simples' && (
-                  <Text style={styles.cardConfirmadoValor}>
-                    💵 {pagamentoResumo.metodo} — R$ {pagamentoResumo.valor?.toFixed(2).replace('.', ',')}
-                    {pagamentoResumo.trocoPara && ` (Troco p/ ${pagamentoResumo.trocoPara.toFixed(2).replace('.', ',')})`}
-                  </Text>
-                )}
-                {pagamentoResumo.tipo === 'dividido' && pagamentoResumo.partes && (
-                  <Text style={styles.cardConfirmadoValor}>
-                    {pagamentoResumo.partes.map((parte, index) => (
-                      `${parte.metodo} R$ ${parte.valor.toFixed(2).replace('.', ',')}${parte.trocoPara ? ` (Troco p/ ${parte.trocoPara.toFixed(2).replace('.', ',')})` : ''}${parte.confirmado ? ' (Confirmado)' : ''}`
-                    )).join(' + ')}
-                  </Text>
+                {/* Verificar se é pagoApp para mostrar mensagens específicas */}
+                {pedido?.pagamento?.tipo === 'pago_app' ? (
+                  <>
+                    <Text style={styles.cardConfirmadoTitulo}>Entrega Liberada! ✨</Text>
+                    <Text style={styles.cardConfirmadoSubtitulo}>Pagamento confirmado no app.</Text>
+                    {/* Badge verde para pagoApp */}
+                    <View style={styles.badgePagoApp}>
+                      <Ionicons name="checkmark" size={12} color="#fff" />
+                      <Text style={styles.badgePagoAppTexto}>Pago pelo app</Text>
+                    </View>
+                    {/* Mostrar forma de pagamento e valor em modo somente leitura */}
+                    <Text style={styles.cardConfirmadoValorReadOnly}>
+                      💵 {pedido?.pagamento?.metodo || 'App'} — R$ {uiValorTotal.toFixed(2).replace('.', ',')}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.cardConfirmadoTitulo}>Pagamento confirmado</Text>
+                    {pagamentoResumo.tipo === 'simples' && (
+                      <Text style={styles.cardConfirmadoValor}>
+                        💵 {pagamentoResumo.metodo} — R$ {pagamentoResumo.valor?.toFixed(2).replace('.', ',')}
+                        {pagamentoResumo.trocoPara && ` (Troco p/ ${pagamentoResumo.trocoPara.toFixed(2).replace('.', ',')})`}
+                      </Text>
+                    )}
+                    {pagamentoResumo.tipo === 'dividido' && pagamentoResumo.partes && (
+                      <Text style={styles.cardConfirmadoValor}>
+                        {pagamentoResumo.partes.map((parte, index) => (
+                          `${parte.metodo} R$ ${parte.valor.toFixed(2).replace('.', ',')}${parte.trocoPara ? ` (Troco p/ ${parte.trocoPara.toFixed(2).replace('.', ',')})` : ''}${parte.confirmado ? ' (Confirmado)' : ''}`
+                        )).join(' + ')}
+                      </Text>
+                    )}
+                  </>
                 )}
               </View>
             </View>
@@ -576,12 +832,12 @@ export default function ConfirmacaoEntrega() {
             </View>
           )}
 
-          {pagamentoStatus !== 'confirmado' && precisaCobrar && (
+          {pagamentoStatus !== 'confirmado' && precisaCobrarUI && (
             <TouchableOpacity
-              style={[styles.botaoOutline, { borderColor: '#2e7d32' }]}
+              style={[styles.botaoOutline, { borderColor: '#EF4444' }]}
               onPress={() => setPagamentoExpandido(v => !v)}
             >
-              <Text style={[styles.textoBotaoOutline, { color: '#2e7d32' }]}>Cobrar</Text>
+              <Text style={[styles.textoBotaoOutline, { color: '#EF4444' }]}>Cobrar</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -596,7 +852,7 @@ export default function ConfirmacaoEntrega() {
               <View style={styles.confirmarPagamentoWrapper} onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}>
                 {/* Valor total no rodapé */}
                 <Text style={styles.valorPagamentoTxt}>
-                  Total: R$ {valorTotal.toFixed(2)}
+                  Total: R$ {uiValorTotal.toFixed(2)}
                 </Text>
 
                 {/* Chips de método de pagamento */}
@@ -645,7 +901,7 @@ export default function ConfirmacaoEntrega() {
                   onPress={() =>
                     router.push({
                       pathname: '/dividirPagamento',
-                      params: { total: valorTotal.toString(), pedidoId: String(pedidoId) },
+                      params: { total: uiValorTotal.toString(), pedidoId: String(pedidoId) },
                     })
                   }
                   activeOpacity={0.85}
@@ -658,7 +914,7 @@ export default function ConfirmacaoEntrega() {
               // 🔹 Estado: Pagamento confirmado → mostrar resumo fixo
               <View style={styles.resumoPagamentoWrapper}>
                 <Text style={styles.resumoPagamentoTxt}>
-                  Pagamento confirmado: {metodoPagamento} - R$ {valorTotal.toFixed(2)}
+                  Pagamento confirmado: {metodoPagamento} - R$ {uiValorTotal.toFixed(2)}
                 </Text>
               </View>
             ) : (
@@ -669,7 +925,7 @@ export default function ConfirmacaoEntrega() {
                   styles.botaoProximaEntrega,
                   podeLiberar ? styles.botaoProximaEntregaAtivo : styles.botaoProximaEntregaDesabilitado,
                 ]}
-                onPress={isUltimaEntrega ? handleFinalizarRota : handleProximaEntrega}
+                onPress={isUltimaEntrega ? handleFinalizarRota : handleProximaEntregaV2}
               >
                 <Text style={styles.textoProximaEntrega}>
                   {isUltimaEntrega ? 'Finalizar rota' : 'Próxima entrega'}
@@ -1234,6 +1490,37 @@ const styles = StyleSheet.create({
     color: '#444',
   },
 
+  // Estilos específicos para pagoApp
+  cardConfirmadoSubtitulo: {
+    fontSize: 14,
+    color: '#4caf50',
+    marginBottom: 8,
+    fontWeight: '500',
+  },
+
+  badgePagoApp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4caf50',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+
+  badgePagoAppTexto: {
+    fontSize: 12,
+    color: '#fff',
+    fontWeight: 'bold',
+    marginLeft: 4,
+  },
+
+  cardConfirmadoValorReadOnly: {
+    fontSize: 14,
+    color: '#666',
+    fontWeight: '500',
+  },
 
 });
 

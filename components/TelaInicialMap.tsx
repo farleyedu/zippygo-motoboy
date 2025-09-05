@@ -30,6 +30,7 @@ const pedidosMock = [
     id_estabelecimento: 2123,
     id_ifood: 0,
     cliente: 'Rafael Andrade',
+    tipoPagamento: 'pagoApp',
     pagamento: 'Pix',
     statusPagamento: 'pago',
     valorTotal: 32.00,
@@ -37,7 +38,7 @@ const pedidosMock = [
     bairro: 'Grand Ville',
     distanciaKm: 1.8,
     horario: '20:30',
-    troco: 'R$50',
+    troco: '',
     telefone: '(34) 99123-4567',
     coordinates: { latitude: -18.906376273263426, longitude: -48.215105388963835 },
     itens: [
@@ -52,6 +53,7 @@ const pedidosMock = [
     id_ifood: 8263,
     cliente: 'Maria Souza',
     pagamento: 'Dinheiro',
+    tipoPagamento: 'coleta',
     statusPagamento: 'a_receber',
     valorTotal: 15.00,
     endereco: 'Av. Manuel Lúcio, 355',
@@ -71,6 +73,7 @@ const pedidosMock = [
     id_estabelecimento: 2125,
     id_ifood: 0,
     cliente: 'João Pedro',
+    tipoPagamento: 'pagoApp',
     pagamento: 'Crédito',
     statusPagamento: 'pago',
     valorTotal: 8.00,
@@ -91,6 +94,7 @@ const pedidosMock = [
     id_ifood: 0,
     cliente: 'Ana Paula',
     pagamento: 'Débito',
+    tipoPagamento: 'coleta',
     statusPagamento: 'a_receber',
     valorTotal: 14.00,
     endereco: 'Av. Anselmo Alves dos Santos, 4925',
@@ -110,6 +114,7 @@ const pedidosMock = [
     id_estabelecimento: 0,
     id_ifood: 6389,
     cliente: 'Carlos Lima',
+    tipoPagamento: 'pagoApp',
     pagamento: 'Pix',
     statusPagamento: 'pago',
     valorTotal: 12.00,
@@ -518,13 +523,6 @@ export default function TelaInicialMap() {
       <TouchableOpacity style={[styles.valorPainel, { top: insets.top + 10 }]}> 
         <Text style={styles.valorTexto}>R$130,40</Text>
       </TouchableOpacity>
-
-      {/* <TouchableOpacity
-  style={[styles.novaEntregaButton, { top: insets.top + 60 }]}
-  onPress={handleNovaEntrega}
->
-  <Text style={styles.novaEntregaButtonText}>Nova Entrega (layout novo)</Text>
-</TouchableOpacity> */}
 
       {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device - só visível quando em rota */}
       {emEntrega && (

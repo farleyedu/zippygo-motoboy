@@ -10,6 +10,7 @@ type Pedido = {
   cliente: string;
   pagamento: string;
   statusPagamento: string;
+  tipoPagamento?: string;
   valorTotal: number;
   endereco: string;
   bairro?: string;
