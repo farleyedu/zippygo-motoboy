@@ -86,6 +86,91 @@ export default function ExemploSacolaScreen() {
   const precisaCobrar = statusPagamento === 'a_receber' && tipoPagamento !== 'pagoApp';
   const jaFoiPago = statusPagamento === 'pago' || tipoPagamento === 'pagoApp';
   
+  // Cria o objeto pedidoAtual com dados mock completos
+  const pedidoAtual = {
+    id: pedidoId,
+    id_ifood: id_ifood,
+    id_estabelecimento: id_estabelecimento,
+    cliente: {
+      nome: nomeCliente,
+      telefone: telefone,
+      endereco: endereco,
+      bairro: bairro
+    },
+    itens: [
+      {
+        id: 1,
+        nome: "Big Mac",
+        quantidade: 2,
+        valor: 15.90,
+        tipo: "lanche",
+        observacoes: "Sem cebola"
+      },
+      {
+        id: 2,
+        nome: "Batata Frita Grande",
+        quantidade: 1,
+        valor: 8.50,
+        tipo: "acompanhamento",
+        observacoes: ""
+      },
+      {
+        id: 3,
+        nome: "Coca-Cola 500ml",
+        quantidade: 2,
+        valor: 5.00,
+        tipo: "bebida",
+        observacoes: "Gelada"
+      }
+    ],
+    timeline: [
+      {
+        id: 1,
+        evento: "Pedido confirmado",
+        horario: "14:30",
+        local: "Zippy Food",
+        status: "concluido"
+      },
+      {
+        id: 2,
+        evento: "Preparando pedido",
+        horario: "14:35",
+        local: "Zippy Food",
+        status: "concluido"
+      },
+      {
+        id: 3,
+        evento: "Saiu para entrega",
+        horario: "14:45",
+        local: "Zippy Food",
+        status: "concluido"
+      },
+      {
+        id: 4,
+        evento: "A caminho",
+        horario: "14:50",
+        local: "Em trânsito",
+        status: "em_andamento"
+      },
+      {
+        id: 5,
+        evento: "Entregue",
+        horario: "15:10",
+        local: endereco,
+        status: "pendente"
+      }
+    ],
+    pagamento: {
+      metodo: pagamento || 'dinheiro',
+      status: statusPagamento,
+      valor: valorTotal,
+      troco: troco
+    },
+    origem: origem,
+    horario: horario,
+    observacoes: "Apartamento 45, interfone 4501"
+  };
+  
   // Estados para controle de última entrega
   const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
 
@@ -638,79 +723,60 @@ export default function ExemploSacolaScreen() {
         <View style={styles.cardOuter}>
           <Text style={styles.sectionTitle}>Itens do Pedido</Text>
 
-          <View style={styles.itemRow}>
-            <View style={styles.itemLeft}>
-              <View style={styles.itemIcon}>
-                <Utensils size={16} color="#6b7280" />
+          {pedidoAtual?.itens?.map((item, index) => (
+            <View key={index} style={styles.itemRow}>
+              <View style={styles.itemLeft}>
+                <View style={styles.itemIcon}>
+                  {item.tipo === 'bebida' ? (
+                    <Coffee size={16} color="#6b7280" />
+                  ) : item.tipo === 'acompanhamento' ? (
+                    <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: "#9CA3AF" }} />
+                  ) : (
+                    <Utensils size={16} color="#6b7280" />
+                  )}
+                </View>
+                <View>
+                  <Text style={styles.itemTitle}>{item.nome}</Text>
+                  <Text style={styles.itemSub}>Quantidade: {item.quantidade}</Text>
+                </View>
               </View>
-              <View>
-                <Text style={styles.itemTitle}>Big Mac</Text>
-                <Text style={styles.itemSub}>Quantidade: 1</Text>
-              </View>
+              <Text style={styles.itemPrice}>R$ {(item.quantidade * item.valor).toFixed(2).replace('.', ',')}</Text>
             </View>
-            <Text style={styles.itemPrice}>R$ 18,90</Text>
-          </View>
-
-          <View style={styles.itemRow}>
-            <View style={styles.itemLeft}>
-              <View style={styles.itemIcon}>
-                <View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: "#9CA3AF" }} />
-              </View>
-              <View>
-                <Text style={styles.itemTitle}>Batata Frita Média</Text>
-                <Text style={styles.itemSub}>Quantidade: 1</Text>
-              </View>
-            </View>
-            <Text style={styles.itemPrice}>R$ 12,90</Text>
-          </View>
-
-          <View style={styles.itemRow}>
-            <View style={styles.itemLeft}>
-              <View style={styles.itemIcon}>
-                <Coffee size={16} color="#6b7280" />
-              </View>
-              <View>
-                <Text style={styles.itemTitle}>Coca-Cola 500ml</Text>
-                <Text style={styles.itemSub}>Quantidade: 1</Text>
-              </View>
-            </View>
-            <Text style={styles.itemPrice}>R$ 8,90</Text>
-          </View>
+          )) || (
+            <Text style={styles.itemSub}>Nenhum item encontrado</Text>
+          )}
         </View>
 
         {/* Linha do Tempo */}
         <View style={styles.cardOuter}>
           <Text style={styles.sectionTitle}>Linha do Tempo</Text>
 
-          <View style={styles.timelineRow}>
-            <View style={[styles.timelineDot, { backgroundColor: "#22C55E" }]}>
-              <Check size={14} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.timelineTitle}>Pedido coletado</Text>
-              <Text style={styles.timelineSub}>14:15 - McDonald's Vila Madalena</Text>
-            </View>
-          </View>
-
-          <View style={styles.timelineRow}>
-            <View style={[styles.timelineDot, { backgroundColor: "#22C55E" }]}>
-              <Check size={14} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.timelineTitle}>A caminho do cliente</Text>
-              <Text style={styles.timelineSub}>14:25 - Saiu para entrega</Text>
-            </View>
-          </View>
-
-          <View style={styles.timelineRow}>
-            <View style={[styles.timelineDot, { backgroundColor: "#3B82F6" }]}>
-              <MapPin size={14} color="#fff" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.timelineTitle}>No local de entrega</Text>
-              <Text style={styles.timelineSub}>14:35 - Aguardando confirmação</Text>
-            </View>
-          </View>
+          {pedidoAtual?.timeline?.map((evento, index) => {
+            const isCompleted = evento.status === 'concluido';
+            const isCurrent = evento.status === 'atual';
+            
+            return (
+              <View key={index} style={styles.timelineRow}>
+                <View style={[styles.timelineDot, { 
+                  backgroundColor: isCompleted ? "#22C55E" : isCurrent ? "#3B82F6" : "#E5E7EB" 
+                }]}>
+                  {isCompleted ? (
+                    <Check size={14} color="#fff" />
+                  ) : isCurrent ? (
+                    <MapPin size={14} color="#fff" />
+                  ) : (
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#9CA3AF" }} />
+                  )}
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.timelineTitle}>{evento.evento}</Text>
+                  <Text style={styles.timelineSub}>{evento.horario} - {evento.local}</Text>
+                </View>
+              </View>
+            );
+          }) || (
+            <Text style={styles.itemSub}>Timeline não disponível</Text>
+          )}
         </View>
 
         {/* Informações do Cliente */}

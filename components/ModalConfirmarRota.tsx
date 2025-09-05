@@ -8,16 +8,24 @@ type Pedido = {
   id: number;
   id_ifood: number;
   cliente: string;
+  telefone?: string;
   pagamento: string;
   statusPagamento: string;
   tipoPagamento?: string;
   valorTotal: number;
   endereco: string;
   bairro?: string;
+  complemento?: string;
   distanciaKm: number;
   horario: string;
   troco: string;
   coordinates: { latitude: number; longitude: number };
+  timeline?: Array<{
+    status: string;
+    label?: string;
+    hora: string;
+    local: string;
+  }>;
   itens: {
     nome: string;
     tipo: string;

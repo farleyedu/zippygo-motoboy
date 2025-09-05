@@ -14,15 +14,23 @@ type ItemPedido = { nome: string; tipo: 'comida' | 'bebida'; quantidade: number;
 type Pedido = {
   id: number;
   cliente: string;
+  telefone?: string;
   pagamento: string;
   statusPagamento: 'pago' | 'a_receber';
   tipoPagamento?: string;
   valorTotal: number;
   endereco: string;
   bairro: string;
+  complemento?: string;
   distanciaKm: number;
   horario: string;
   troco: string;
+  timeline?: Array<{
+    status: string;
+    label?: string;
+    hora: string;
+    local: string;
+  }>;
   itens: ItemPedido[];
 };
 
