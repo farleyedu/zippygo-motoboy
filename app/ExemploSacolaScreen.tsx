@@ -65,20 +65,34 @@ export default function ExemploSacolaScreen() {
   const nomeCliente = params.nome || 'Cliente';
   const bairro = params.bairro || 'Bairro';
   const endereco = params.endereco || 'Endereço';
-  const id_ifood = parseInt(params.id_ifood as string, 10) || 0;
-  const id_estabelecimento = parseInt(params.id_estabelecimento as string, 10) || 0;
-  const pedidoId = (id_ifood && id_ifood > 0) ? id_ifood : id_estabelecimento;
+  
+  // Nova lógica de identificação de pedidos conforme regras
+  const id_ifood = Number.parseInt(String(params.id_ifood ?? '0'), 10) || 0;
+  const id_estabelecimento = Number.parseInt(String(params.id_estabelecimento ?? '0'), 10) || 0;
+  const hasIfood = id_ifood > 0;
+  const hasEstab = id_estabelecimento > 0;
+  if (hasIfood === hasEstab) {
+    console.warn('[PedidoId] Inconsistência: id_ifood e id_estabelecimento devem ser exclusivos.');
+  }
+  const pedidoId = hasIfood ? id_ifood : (hasEstab ? id_estabelecimento : 0);
+  const isIfood = hasIfood;
+  const origem = isIfood ? 'ifood' : 'estabelecimento';
+  
   const statusPagamento = params.statusPagamento || 'a_receber';
-  const valorTotal = parseFloat(params.valorTotal as string) || 0;
-  const telefone = params.telefone || '';
+  
+  // Garantir valorTotal dinâmico
+  const valorTotal = Number.parseFloat(String(params.valorTotal ?? '0')) || 0;
+  
+  // Usar itens de params e remover mocks
+  const itens = params.itens ? JSON.parse(String(params.itens)) : [];
+  
+  // Telefone e observações de params (sem hardcode)
+  const telefone = String(params.telefone ?? '');
+  const observacoes = String(params.observacoes ?? '');
+  
   const pagamento = params.pagamento || '';
   const horario = params.horario || '';
   const troco = params.troco || '';
-  const itens = params.itens ? JSON.parse(params.itens as string) : [];
-  
-  // Determina se é iFood ou estabelecimento baseado no id_ifood
-  const isIfood = id_ifood > 0;
-  const origem = isIfood ? 'ifood' : 'estabelecimento';
   
   // Determina se precisa cobrar baseado no status de pagamento
   // pagoApp sempre deve ser tratado como pago
@@ -86,7 +100,7 @@ export default function ExemploSacolaScreen() {
   const precisaCobrar = statusPagamento === 'a_receber' && tipoPagamento !== 'pagoApp';
   const jaFoiPago = statusPagamento === 'pago' || tipoPagamento === 'pagoApp';
   
-  // Cria o objeto pedidoAtual com dados mock completos
+  // Cria o objeto pedidoAtual com dados reais (sem mocks)
   const pedidoAtual = {
     id: pedidoId,
     id_ifood: id_ifood,
@@ -97,32 +111,7 @@ export default function ExemploSacolaScreen() {
       endereco: endereco,
       bairro: bairro
     },
-    itens: [
-      {
-        id: 1,
-        nome: "Big Mac",
-        quantidade: 2,
-        valor: 15.90,
-        tipo: "lanche",
-        observacoes: "Sem cebola"
-      },
-      {
-        id: 2,
-        nome: "Batata Frita Grande",
-        quantidade: 1,
-        valor: 8.50,
-        tipo: "acompanhamento",
-        observacoes: ""
-      },
-      {
-        id: 3,
-        nome: "Coca-Cola 500ml",
-        quantidade: 2,
-        valor: 5.00,
-        tipo: "bebida",
-        observacoes: "Gelada"
-      }
-    ],
+    itens: itens, // Usando itens reais dos params
     timeline: [
       {
         id: 1,
@@ -168,7 +157,7 @@ export default function ExemploSacolaScreen() {
     },
     origem: origem,
     horario: horario,
-    observacoes: "Apartamento 45, interfone 4501"
+    observacoes: observacoes
   };
   
   // Estados para controle de última entrega
@@ -643,7 +632,7 @@ export default function ExemploSacolaScreen() {
             <>
               {/* Valor + título seção */}
               <View style={{ alignItems: "center", marginBottom: 16 }}>
-                <Text style={styles.totalValue}>R$ 20,00</Text>
+                <Text style={styles.totalValue}>{`R$ ${valorTotal.toFixed(2).replace('.', ',')}`}</Text>
                 <Text style={styles.totalCaption}>Valor a cobrar</Text>
                 <Text style={styles.payMethodTitle}>Método de Pagamento</Text>
               </View>
@@ -712,7 +701,7 @@ export default function ExemploSacolaScreen() {
                     !metodoSelecionado && { color: "#6B7280" },
                   ]}
                 >
-                  Cobrar R$ 20,00
+                  {`Cobrar R$ ${valorTotal.toFixed(2).replace('.', ',')}`}
                 </Text>
               </TouchableOpacity>
             </>
@@ -723,7 +712,7 @@ export default function ExemploSacolaScreen() {
         <View style={styles.cardOuter}>
           <Text style={styles.sectionTitle}>Itens do Pedido</Text>
 
-          {pedidoAtual?.itens?.map((item, index) => (
+          {pedidoAtual?.itens?.map((item: { tipo: string; nome: string; quantidade: number; valor: number }, index: number) => (
             <View key={index} style={styles.itemRow}>
               <View style={styles.itemLeft}>
                 <View style={styles.itemIcon}>
@@ -795,7 +784,7 @@ export default function ExemploSacolaScreen() {
                   <Phone size={16} color="#3B82F6" />
                 </View>
                 <View>
-                  <Text style={styles.phoneTitle}>(11) 99999-9999</Text>
+                  <Text style={styles.phoneTitle}>{telefone || 'Sem telefone'}</Text>
                   <Text style={styles.phoneSub}>Toque para escolher ação</Text>
                 </View>
               </View>
@@ -828,9 +817,7 @@ export default function ExemploSacolaScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.obsLabel}>Observações</Text>
-              <Text style={styles.obsText}>
-                Apartamento 302, interfone não funciona. Favor ligar quando chegar.
-              </Text>
+              <Text style={styles.obsText}>{observacoes || 'Sem observações.'}</Text>
             </View>
           </View>
 

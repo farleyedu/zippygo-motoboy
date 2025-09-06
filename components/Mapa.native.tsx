@@ -10,32 +10,23 @@ type Pedido = {
   id_ifood: number;
   endereco: string;
   bairro?: string;
-  complemento?: string;
   cliente: string;
-  telefone?: string;
   distanciaKm: number;
   horario: string;
   pagamento: string;
   statusPagamento: string;
-  tipoPagamento?: string;
   valorTotal: number;
   troco: string;
   coordinates: {
     latitude: number;
     longitude: number;
   };
-  timeline?: Array<{
-    status: string;
-    label?: string;
-    hora: string;
-    local: string;
-  }>;
   itens: {
-     nome: string;
-     tipo: string;
-     quantidade: number;
-     valor: number;
-   }[];
+    nome: string;
+    tipo: string;
+    quantidade: number;
+    valor: number;
+  }[];
 };
 
 type Props = {

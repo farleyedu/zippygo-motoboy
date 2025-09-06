@@ -340,11 +340,15 @@ export default function TelaInicialMap() {
     // COLOCAR NO LUGAR (RECOMENDADO)
     if (!pedidoAtual) return;
 
+    // Validar exclusividade antes de navegar
+    const hasIfood = (pedidoAtual.id_ifood ?? 0) > 0;
+    const hasEstab = (pedidoAtual.id_estabelecimento ?? 0) > 0;
+    if (hasIfood === hasEstab) console.warn('[Navegação] id_ifood e id_estabelecimento devem ser exclusivos.');
+
     router.push({
       pathname: '/confirmacaoEntrega',
       params: {
         // Identificadores (um deles > 0, o outro 0)
-        id: String(pedidoAtual.id),
         id_ifood: String(pedidoAtual.id_ifood || 0),
         id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
 
@@ -383,11 +387,15 @@ export default function TelaInicialMap() {
     
     if (!pedidoAtual) return;
 
+    // Validar exclusividade antes de navegar
+    const hasIfood = (pedidoAtual.id_ifood ?? 0) > 0;
+    const hasEstab = (pedidoAtual.id_estabelecimento ?? 0) > 0;
+    if (hasIfood === hasEstab) console.warn('[Navegação] id_ifood e id_estabelecimento devem ser exclusivos.');
+
     router.push({
       pathname: '/ExemploSacolaScreen',
       params: {
         // Identificadores (um deles > 0, o outro 0)
-        id: String(pedidoAtual.id),
         id_ifood: String(pedidoAtual.id_ifood || 0),
         id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
 
