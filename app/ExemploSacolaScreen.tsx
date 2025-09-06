@@ -59,7 +59,7 @@ export default function ExemploSacolaScreen() {
   const params = useLocalSearchParams();
 
   const sheetRef = useRef<React.ElementRef<typeof BottomSheet>>(null);
-  const snapPoints = useMemo(() => ['100%', '70%', '35%'], []);
+  const snapPoints = useMemo(() => ['100%', '85%', '35%'], []);
 
   // Extrai dados do pedido dos params
   const nomeCliente = params.nome || 'Cliente';
@@ -417,12 +417,12 @@ export default function ExemploSacolaScreen() {
             onScroll={(e) => { scrollYRef.current = e.nativeEvent.contentOffset.y; }}
           > */}
           <View style={[styles.cardOuter, { marginTop: CONTENT_TOP_MARGIN }]}>
-            <View style={styles.rowBetween}>
-              <View style={{ flexDirection: "row" }}>
+            <View style={styles.addressContainer}>
+              <View style={styles.addressContent}>
                 <View style={styles.pinCircle}>
                   <MapPin size={16} color="#3B82F6" />
                 </View>
-                <View>
+                <View style={styles.addressTextContainer}>
                   <Text style={styles.addrTitle}>{endereco}</Text>
                   <Text style={styles.addrSub}>{bairro}</Text>
                 </View>
@@ -1097,8 +1097,25 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
   rowCenter: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
 
+  addressContainer: { 
+    flexDirection: "row", 
+    alignItems: "flex-start", 
+    justifyContent: "space-between" 
+  },
+  addressContent: { 
+    flexDirection: "row", 
+    alignItems: "flex-start", 
+    flex: 1, 
+    minWidth: 0, 
+    marginRight: 12 
+  },
+  addressTextContainer: { 
+    flex: 1, 
+    minWidth: 0 
+  },
+
   pinCircle: { width: 32, height: 32, borderRadius: 16, backgroundColor: "#DBEAFE", alignItems: "center", justifyContent: "center", marginRight: 12 },
-  addrTitle: { fontSize: 16, fontWeight: "700", color: "#111827" },
+  addrTitle: { fontSize: 16, fontWeight: "700", color: "#111827", flexWrap: "wrap", lineHeight: 22 },
   addrSub: { fontSize: 14, color: "#4B5563", marginTop: 2 },
 
   mapBtn: { backgroundColor: "#3B82F6", paddingHorizontal: 12, paddingVertical: 8, borderRadius: 8, flexDirection: "row", alignItems: "center" },
