@@ -18,6 +18,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import ModalConfirmarRota from './ModalConfirmarRota';
 import PedidosDraggableList from './PedidosDraggableList';
+import { useAuth } from '../src/contexts/AuthContext';
 
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -134,6 +135,7 @@ export default function TelaInicialMap() {
   const insets = useSafeAreaInsets();
   const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
   const router = useRouter();
+  const { user } = useAuth();
   const [recenterToken, setRecenterToken] = useState(0);
   const [minSnapHeight, setMinSnapHeight] = useState(MIN_HEIGHT);
   const iniciarOpacity = useRef(new Animated.Value(1)).current;
@@ -529,7 +531,7 @@ export default function TelaInicialMap() {
 
 
       <TouchableOpacity style={[styles.valorPainel, { top: insets.top + 10 }]}> 
-        <Text style={styles.valorTexto}>R$130,40</Text>
+        <Text style={styles.valorTexto}>Olá, {user?.nome || 'Motoboy'}</Text>
       </TouchableOpacity>
 
       {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device - só visível quando em rota */}

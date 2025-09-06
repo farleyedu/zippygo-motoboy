@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
+import { AuthProvider } from '@/src/contexts/AuthContext';
 
 export {
   ErrorBoundary,
@@ -37,10 +38,35 @@ export default function RootLayout() {
   }, [loaded]);
 
   useEffect(() => {
-    Notifications.setNotificationChannelAsync('default', {
-      name: 'default',
-      importance: Notifications.AndroidImportance.HIGH,
+    // 🔔 Configura handler para notificações recebidas
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: false,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
     });
+
+    const configurarNotificacoes = async () => {
+      // 1. Solicita permissão de notificação (obrigatório no Android 13+)
+      const { status } = await Notifications.requestPermissionsAsync();
+      if (status !== 'granted') {
+        console.warn('[ZIPPY] Notificações não permitidas');
+      }
+
+      // 2. Cria canal com antecedência
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'ZippyGo Notificações',
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: 'default',
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: '#2C79FF',
+      });
+    };
+
+    configurarNotificacoes();
   }, []);
 
   useEffect(() => {
@@ -58,9 +84,11 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <RootLayoutNav />
-    </GestureHandlerRootView>
+    <AuthProvider>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <RootLayoutNav />
+      </GestureHandlerRootView>
+    </AuthProvider>
   );
 }
 
@@ -70,6 +98,9 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
+        {/* Telas de autenticação */}
+        <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         
