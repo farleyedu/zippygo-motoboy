@@ -26,6 +26,7 @@ import {
 } from 'lucide-react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
+import { useFetchPedidoById } from '../hooks/useFetchPedidos';
 
 // Componente de background transparente customizado
 const TransparentBackground: React.FC<BottomSheetBackgroundProps> = ({ style }) => {
@@ -61,35 +62,24 @@ export default function ExemploSacolaScreen() {
   const sheetRef = useRef<React.ElementRef<typeof BottomSheet>>(null);
   const snapPoints = useMemo(() => ['100%', '85%', '35%'], []);
 
-  // Extrai dados do pedido dos params
-  const nomeCliente = params.nome || 'Cliente';
-  const bairro = params.bairro || 'Bairro';
-  const endereco = params.endereco || 'Endereço';
+  // Extrai ID do pedido dos params
+  const pedidoId = Number.parseInt(String(params.id ?? '0'), 10) || 0;
+  const origem = 'estabelecimento';
   
-  // Nova lógica de identificação de pedidos conforme regras
-  const id_ifood = Number.parseInt(String(params.id_ifood ?? '0'), 10) || 0;
-  const id_estabelecimento = Number.parseInt(String(params.id_estabelecimento ?? '0'), 10) || 0;
-  const hasIfood = id_ifood > 0;
-  const hasEstab = id_estabelecimento > 0;
-  if (hasIfood === hasEstab) {
-    console.warn('[PedidoId] Inconsistência: id_ifood e id_estabelecimento devem ser exclusivos.');
-  }
-  const pedidoId = hasIfood ? id_ifood : (hasEstab ? id_estabelecimento : 0);
-  const isIfood = hasIfood;
-  const origem = isIfood ? 'ifood' : 'estabelecimento';
+  // Hook para buscar dados reais do pedido da API
+  const { pedido: pedidoAPI, loading: loadingPedido, error: errorPedido, refetch } = useFetchPedidoById(pedidoId);
   
+  // Fallback para dados dos params (compatibilidade durante transição)
+  const nomeCliente = pedidoAPI?.nomeCliente || pedidoAPI?.cliente_nome || params.nome || 'Cliente';
+  const bairro = pedidoAPI?.bairro || params.bairro || 'Bairro';
+  const endereco = pedidoAPI?.endereco || pedidoAPI?.enderecoEntrega || params.endereco || 'Endereço';
+  const telefone = pedidoAPI?.telefoneCliente || String(params.telefone ?? '');
+  const itens = pedidoAPI?.itens || (params.itens ? JSON.parse(String(params.itens)) : []);
+  
+  // Dados que ainda vêm dos params (serão migrados posteriormente)
   const statusPagamento = params.statusPagamento || 'a_receber';
-  
-  // Garantir valorTotal dinâmico
   const valorTotal = Number.parseFloat(String(params.valorTotal ?? '0')) || 0;
-  
-  // Usar itens de params e remover mocks
-  const itens = params.itens ? JSON.parse(String(params.itens)) : [];
-  
-  // Telefone e observações de params (sem hardcode)
-  const telefone = String(params.telefone ?? '');
   const observacoes = String(params.observacoes ?? '');
-  
   const pagamento = params.pagamento || '';
   const horario = params.horario || '';
   const troco = params.troco || '';
@@ -100,17 +90,16 @@ export default function ExemploSacolaScreen() {
   const precisaCobrar = statusPagamento === 'a_receber' && tipoPagamento !== 'pagoApp';
   const jaFoiPago = statusPagamento === 'pago' || tipoPagamento === 'pagoApp';
   
+  // Determina se é pedido do iFood baseado no ID do iFood
+  const isIfood = Boolean(pedidoAPI?.idIfood || params.id_ifood);
+  
   // Cria o objeto pedidoAtual com dados reais (sem mocks)
   const pedidoAtual = {
     id: pedidoId,
-    id_ifood: id_ifood,
-    id_estabelecimento: id_estabelecimento,
-    cliente: {
-      nome: nomeCliente,
-      telefone: telefone,
-      endereco: endereco,
-      bairro: bairro
-    },
+    nomeCliente: nomeCliente,
+    telefoneCliente: telefone,
+    endereco: endereco,
+    bairro: bairro,
     itens: itens, // Usando itens reais dos params
     timeline: [
       {
@@ -207,7 +196,7 @@ export default function ExemploSacolaScreen() {
     // Navegar para VerificationScreen
     router.push({
       pathname: '/VerificationScreen',
-      params: { id_ifood: String(id_ifood) }
+      params: { id: String(pedidoId) }
     });
   };
 

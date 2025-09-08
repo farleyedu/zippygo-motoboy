@@ -9,22 +9,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type ItemPedido = { nome: string; tipo: 'comida' | 'bebida'; quantidade: number; valor: number };
-
-type Pedido = {
-  id: number;
-  cliente: string;
-  pagamento: string;
-  statusPagamento: 'pago' | 'a_receber';
-  tipoPagamento?: string;
-  valorTotal: number;
-  endereco: string;
-  bairro: string;
-  distanciaKm: number;
-  horario: string;
-  troco: string;
-  itens: ItemPedido[];
-};
+import { Pedido } from '../types/pedido';
 
 type Props = {
   pedidos: Pedido[];
@@ -33,14 +18,9 @@ type Props = {
   dragEnabled?: boolean;
 };
 
-const getPagamentoColor = (pagamento: string, status: string, tipoPagamento?: string) => {
-  // pagoApp sempre deve ser tratado como pago
-  if (status === 'pago' || tipoPagamento === 'pagoApp') return '#4CAF50';
-  if (pagamento.toLowerCase() === 'dinheiro') return '#FFC107';
-  if (pagamento.toLowerCase() === 'crédito') return '#2196F3';
-  if (pagamento.toLowerCase() === 'débito') return '#00BCD4';
-  if (pagamento.toLowerCase() === 'pix') return '#4CAF50';
-  return '#ccc';
+const getPagamentoColor = (statusPagamento: string) => {
+  if (statusPagamento === 'pago') return '#4CAF50';
+  return '#FFC107';
 };
 
 const getPagamentoIcon = (pagamento: string) => {
@@ -51,9 +31,8 @@ const getPagamentoIcon = (pagamento: string) => {
   return <MaterialCommunityIcons name="credit-card-outline" size={14} color="#ccc" style={{ marginRight: 2 }} />;
 };
 
-const getStatusSelo = (status: string, tipoPagamento?: string) => {
-  // pagoApp sempre deve ser tratado como pago
-  if (status === 'pago' || tipoPagamento === 'pagoApp') return <View style={styles.seloPago}><Text style={styles.seloPagoText}>PAGO</Text></View>;
+const getStatusSelo = (statusPagamento: string) => {
+  if (statusPagamento === 'pago') return <View style={styles.seloPago}><Text style={styles.seloPagoText}>PAGO</Text></View>;
   return <View style={styles.seloReceber}><Text style={styles.seloReceberText}>A RECEBER</Text></View>;
 };
 
@@ -115,31 +94,24 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
                 <Text style={styles.cardId}>{item.id}</Text>
                 <View style={styles.dot} />
                 <Ionicons name="person-outline" size={13} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardCliente}>{item.cliente}</Text>
+                <Text style={styles.cardCliente}>{item.cliente_nome || item.nomeCliente || 'Cliente'}</Text>
                 <View style={styles.dot} />
                 <Ionicons name="time-outline" size={13} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardHorario}>{item.horario}</Text>
+                <Text style={styles.cardHorario}>{item.horario_formatado || item.horario || '20:00'}</Text>
                 <View style={styles.dot} />
                 <MaterialCommunityIcons name="map-marker-distance" size={15} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardDistancia}>{item.distanciaKm} km</Text>
+                <Text style={styles.cardDistancia}>1.5 km</Text>
               </View>
               <View style={styles.infoRowCompact}>
                 <Ionicons name="location-outline" size={15} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardEndereco}>{item.endereco} - {item.bairro}</Text>
+                <Text style={styles.cardEndereco}>{item.endereco || item.enderecoEntrega || 'Endereço'} - {item.bairro || 'Bairro'}</Text>
               </View>
               <View style={styles.infoRowCompact}>
-                {item.troco ? (
-                  <>
-                    <Ionicons name="cash-outline" size={14} color="#FF7043" style={styles.infoIcon} />
-                    <Text style={styles.cardTroco}>Troco {item.troco}</Text>
-                    <View style={styles.dot} />
-                  </>
-                ) : null}
-                {getPagamentoIcon(item.pagamento)}
-                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.pagamento, item.statusPagamento, item.tipoPagamento), marginRight: 6 }]}>
-                  {item.pagamento}
+                <MaterialCommunityIcons name="qrcode" size={14} color="#4CAF50" style={{ marginRight: 2 }} />
+                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.statusPagamento || 'pago'), marginRight: 6 }]}>
+                  Pago
                 </Text>
-                {getStatusSelo(item.statusPagamento, item.tipoPagamento)}
+                {getStatusSelo(item.statusPagamento || 'pago')}
               </View>
             </View>
             <View style={styles.iconsRight}>
@@ -152,9 +124,9 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
             </View>
           </View>
           {isExpanded && (
-            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.pagamento, item.statusPagamento, item.tipoPagamento) }]}>
+            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.statusPagamento || 'pago') }]}>
               <Text style={styles.itensTitle}>Itens do pedido:</Text>
-              {item.itens.map((it, idx) => (
+              {item.itens?.map((it, idx) => (
                 <View key={idx} style={styles.itemLinha}>
                   {getItemIcon(it.tipo)}
                   <Text style={styles.itemNome}>{it.nome}</Text>

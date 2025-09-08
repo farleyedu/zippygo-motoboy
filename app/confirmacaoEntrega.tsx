@@ -12,6 +12,7 @@ import { useRouter } from 'expo-router';
 import { FontAwesome } from '@expo/vector-icons';
 import { useAuth } from '../src/contexts/AuthContext';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
+import { useFetchPedidoById } from '../hooks/useFetchPedidos';
 
 interface PedidoEntrega {
   id: number;
@@ -28,8 +29,11 @@ export default function ConfirmacaoEntrega() {
   const router = useRouter();
   const { user } = useAuth();
   const [pedido, setPedido] = useState<PedidoEntrega | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [pedidoId, setPedidoId] = useState<number | null>(null);
   const [confirmando, setConfirmando] = useState(false);
+  
+  // Hook para buscar dados reais do pedido da API
+  const { pedido: pedidoAPI, loading: loadingAPI, error: errorAPI, refetch } = useFetchPedidoById(pedidoId);
 
   // Redireciona para login se não estiver autenticado
   useEffect(() => {
@@ -39,19 +43,42 @@ export default function ConfirmacaoEntrega() {
     }
   }, [user]);
 
-  // Carrega dados do pedido em entrega
+  // Carrega ID do pedido e dados do pedido em entrega
   useEffect(() => {
     carregarPedidoEntrega();
   }, []);
+  
+  // Atualiza dados do pedido quando a API retorna
+  useEffect(() => {
+    if (pedidoAPI) {
+      const pedidoFormatado: PedidoEntrega = {
+        id: pedidoAPI.id,
+        cliente: pedidoAPI.nomeCliente || pedidoAPI.cliente_nome || '',
+        endereco: pedidoAPI.endereco || pedidoAPI.enderecoEntrega || '',
+        bairro: pedidoAPI.bairro || '',
+        valor: pedidoAPI.valor || pedidoAPI.total_valor || 0,
+        formaPagamento: 'Pix',
+        observacoes: 'Sem observações',
+        codigoEntrega: '1234',
+      };
+      setPedido(pedidoFormatado);
+    }
+  }, [pedidoAPI]);
 
   const carregarPedidoEntrega = async () => {
     try {
-      setLoading(true);
       const pedidoData = await getSecureItem('pedidoAtual');
       
       if (pedidoData) {
         const pedidoObj = JSON.parse(pedidoData);
-        setPedido(pedidoObj);
+        // Extrai o ID do pedido para buscar dados reais da API
+        const id = pedidoObj.id;
+        if (id) {
+          setPedidoId(id);
+        } else {
+          // Fallback para dados do SecureStore se não houver ID
+          setPedido(pedidoObj);
+        }
       } else {
         // Se não há pedido, volta para tela inicial
         Alert.alert('Aviso', 'Nenhum pedido em entrega encontrado.');
@@ -60,8 +87,6 @@ export default function ConfirmacaoEntrega() {
     } catch (error) {
       console.error('Erro ao carregar pedido:', error);
       Alert.alert('Erro', 'Erro ao carregar dados do pedido.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -119,21 +144,47 @@ export default function ConfirmacaoEntrega() {
     return null; // Aguarda redirecionamento
   }
 
-  if (loading) {
+  // Renderização de loading
+  if (loadingAPI && !pedido) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#2E7D32" />
-        <Text style={styles.loadingText}>Carregando dados da entrega...</Text>
+        <Text style={styles.loadingText}>Carregando pedido...</Text>
       </View>
     );
   }
 
+  // Renderização de erro da API
+  if (errorAPI && !pedido) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={voltarParaMapa} style={styles.backIcon}>
+            <FontAwesome name="arrow-left" size={20} color="#333" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Erro ao Carregar</Text>
+          <View style={styles.placeholder} />
+        </View>
+        <View style={styles.content}>
+          <Text style={styles.errorText}>Erro ao carregar dados do pedido</Text>
+          <TouchableOpacity style={styles.backButton} onPress={refetch}>
+            <Text style={styles.backButtonText}>Tentar Novamente</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.backButton} onPress={voltarParaMapa}>
+            <Text style={styles.backButtonText}>Voltar ao Mapa</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // Renderização de erro geral
   if (!pedido) {
     return (
       <View style={styles.container}>
-        <Text style={styles.errorText}>Nenhum pedido encontrado</Text>
-        <TouchableOpacity style={styles.backButton} onPress={() => router.replace('/')}>
-          <Text style={styles.backButtonText}>Voltar ao Início</Text>
+        <Text style={styles.errorText}>Pedido não encontrado</Text>
+        <TouchableOpacity style={styles.backButton} onPress={voltarParaMapa}>
+          <Text style={styles.backButtonText}>Voltar ao Mapa</Text>
         </TouchableOpacity>
       </View>
     );

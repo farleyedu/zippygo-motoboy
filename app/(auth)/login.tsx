@@ -96,7 +96,7 @@ export default function LoginScreen() {
 
           <View style={styles.testUsers}>
             <Text style={styles.testTitle}>Usuários de Teste:</Text>
-            <Text style={styles.testUser}>admin@zippygo.com - Teste@12345</Text>
+            <Text style={styles.testUser}>1 - 1</Text>
             <Text style={styles.testUser}>natan@zippygo.com - Teste@12345</Text>
           </View>
         </View>

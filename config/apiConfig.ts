@@ -1,7 +1,13 @@
 // Configurações da API
+const getBaseUrl = () => {
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://zippy-api.onrender.com';
+  // Normalizar URL para evitar // duplos
+  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+};
+
 export const API_CONFIG = {
   // 🚀 CONFIGURAÇÃO OFICIAL - API ZIPPY NO RENDER
-  BASE_URL: 'https://zippy-api.onrender.com/api',
+  BASE_URL: `${getBaseUrl()}/api`,
   
   // Timeout para requisições (em milissegundos)
   TIMEOUT: 10000,
@@ -12,23 +18,28 @@ export const API_CONFIG = {
     'Accept': 'application/json',
   },
   
-  // Endpoints da API
+  // Endpoints da API (baseados no swagger real)
   ENDPOINTS: {
-    // Teste de conexão
-    HEALTH_CHECK: '/health',
+    // Teste de conexão - usando endpoint válido
+    HEALTH_CHECK: '/Motoboy',
     
-    // Pedidos
-    PEDIDOS: '/pedidos',
-    PEDIDOS_BY_ID: (id: number) => `/pedidos/${id}`,
+    // Pedidos (corrigido para maiúsculo conforme swagger)
+    PEDIDOS: '/Pedido',
+    PEDIDOS_BY_ID: (id: number) => `/Pedido/${id}`,
     
     // Entregas
-    ENTREGAS: '/entregas',
-    CONFIRMAR_ENTREGA: '/entregas/confirmar',
+    ENTREGAS: '/Entregas',
+    CONFIRMAR_ENTREGA: '/Entregas/confirmar',
     
-    // Localização do motorista
-    LOCALIZACAO: '/motorista/localizacao',
+    // Localização
+    LOCALIZACAO: '/Localizacao',
     
-    // Autenticação
+    // Motoboy
+    MOTOBOY: '/Motoboy',
+    MOTOBOY_COM_PEDIDOS: '/Motoboy/com-pedidos',
+    MOTOBOY_CONVIDAR: '/Motoboy/convidar',
+    
+    // Autenticação (mantido para compatibilidade)
     LOGIN: '/auth/login',
     REFRESH_TOKEN: '/auth/refresh',
   },

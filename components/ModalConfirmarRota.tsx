@@ -1,29 +1,9 @@
 import { View, Text, Modal, StyleSheet, TouchableOpacity, Dimensions } from 'react-native';
 import React from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { Pedido } from '../types/pedido';
 
 const { width } = Dimensions.get('window');
-
-type Pedido = {
-  id: number;
-  id_ifood: number;
-  cliente: string;
-  pagamento: string;
-  statusPagamento: string;
-  valorTotal: number;
-  endereco: string;
-  bairro?: string;
-  distanciaKm: number;
-  horario: string;
-  troco: string;
-  coordinates: { latitude: number; longitude: number };
-  itens: {
-    nome: string;
-    tipo: string;
-    quantidade: number;
-    valor: number;
-  }[];
-};
 
 
 type Destino = {
@@ -45,17 +25,17 @@ type ModalConfirmarRotaProps = {
 
 export default function ModalConfirmarRota({ visible, onAceitar, onRecusar, pedidos }: ModalConfirmarRotaProps) {
   const destinos: Destino[] = pedidos.map((pedido) => ({
-    tempo: pedido.horario || '5min',
-    distancia: `${pedido.distanciaKm.toFixed(1)} km`,
-    endereco: pedido.endereco,
+    tempo: pedido.horario_formatado || pedido.horario || '20:00',
+    distancia: `1.5 km`,
+    endereco: pedido.endereco || pedido.enderecoEntrega || 'Endereço não informado',
     cor: '#1ecb7b',
-    numeroPedido: pedido.id_ifood.toString(),
+    numeroPedido: pedido.id.toString(),
     bairro: pedido.bairro || 'Sem bairro',
-    valor: pedido.valorTotal?.toFixed(2).replace('.', ',') || '',
+    valor: (pedido.valor || pedido.total_valor || 0).toFixed(2).replace('.', ','),
   }));
   
 
-  const valorTotal = pedidos.reduce((acc, p) => acc + (p.valorTotal || 0), 0);
+  const valorTotal = pedidos.reduce((acc, p) => acc + (p.valor || p.total_valor || 0), 0);
   const valorFormatado = `R$${valorTotal.toFixed(2).replace('.', ',')}`;
 
   return (

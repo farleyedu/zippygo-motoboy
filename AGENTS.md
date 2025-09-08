@@ -3,7 +3,15 @@
 > **Projeto-alvo (deste repositório):** **ZippyGo — App do Motoboy (React Native/Expo)**  
 > **Caminho local (Farley):** `D:\TI\Aplicativos\front end\MotoboyApp\zippygo-motoboy`  
 > **Módulos correlatos (fora deste repo):** Painel da Pizzaria (Next.js), Backend (.NET Core + SQL Server), Futuro front/app do Cliente.  
-> **Regra-mestra para o agente:** **Responda e documente sempre em português do Brasil.** Antes de editar/rodar: **mostre o plano, liste arquivos, exiba o diff e peça aprovação** para comandos de shell.
+> **Regra-mestra para o agente:** **Responda e documente sempre em português do Brasil.** Antes de editar/rodar: **mostre o plano, liste arquivos e exiba o diff**. **Comandos de shell e patches são auto‑aprovados (sem prompt)**, exceto ações claramente destrutivas (ex.: apagar arquivos/pastas, `git reset --hard`) ou quando o usuário solicitar confirmação explícita.
+
+---
+
+### Política de Execução e Aprovação (Auto‑approve)
+- Auto‑aprovação: comandos de shell e `apply_patch` são aplicados sem pedir confirmação.
+- Transparência: sempre apresentar plano resumido, arquivos envolvidos e o diff das mudanças.
+- Exceções: pedir confirmação apenas para ações destrutivas ou potencialmente irreversíveis.
+- Ambiente recomendado (TRAE): Approval = `Never/Auto‑approve`, Filesystem = `Full access`, Network = `Enabled`, Tools = `Auto‑apply patches`, Shell = execução sem prompts.
 
 ---
 

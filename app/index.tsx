@@ -19,118 +19,14 @@ import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureS
 import ModalConfirmarRota from '../components/ModalConfirmarRota';
 import PedidosDraggableList from '../components/PedidosDraggableList';
 import { useAuth } from '../src/contexts/AuthContext';
+import { useFetchPedidos } from '../hooks/useFetchPedidos';
 
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MIN_HEIGHT = 100;
 const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
 
-const pedidosMock = [
-  {
-    id: 123,
-    id_estabelecimento: 2123,
-    id_ifood: 0,
-    cliente: 'Rafael Andrade',
-    tipoPagamento: 'pagoApp',
-    pagamento: 'Pix',
-    statusPagamento: 'pago',
-    valorTotal: 32.00,
-    endereco: 'Alameda dos Mandarins, 500',
-    bairro: 'Grand Ville',
-    distanciaKm: 1.8,
-    horario: '20:30',
-    troco: '',
-    telefone: '(34) 99123-4567',
-    coordinates: { latitude: -18.906376273263426, longitude: -48.215105388963835 },
-    itens: [
-      { nome: 'X-Burguer', tipo: 'comida', quantidade: 1, valor: 18 },
-      { nome: 'Coca 2L', tipo: 'bebida', quantidade: 1, valor: 10 },
-      { nome: 'Batata Frita', tipo: 'comida', quantidade: 1, valor: 4 },
-    ],
-  },
-  {
-    id: 124,
-    id_estabelecimento: 0,
-    id_ifood: 8263,
-    cliente: 'Maria Souza',
-    pagamento: 'Dinheiro',
-    tipoPagamento: 'coleta',
-    statusPagamento: 'a_receber',
-    valorTotal: 15.00,
-    endereco: 'Av. Manuel Lúcio, 355',
-    bairro: 'Grand Ville',
-    distanciaKm: 2.6,
-    horario: '19:22',
-    troco: 'R$10',
-    telefone: '(34) 99876-5432',
-    coordinates: { latitude: -18.910321782284516, longitude: -48.21741885096243 },
-    itens: [
-      { nome: 'Guaraná', tipo: 'bebida', quantidade: 1, valor: 7 },
-      { nome: 'Água', tipo: 'bebida', quantidade: 2, valor: 4 },
-    ],
-  },
-  {
-    id: 125,
-    id_estabelecimento: 2125,
-    id_ifood: 0,
-    cliente: 'João Pedro',
-    tipoPagamento: 'pagoApp',
-    pagamento: 'Crédito',
-    statusPagamento: 'pago',
-    valorTotal: 8.00,
-    endereco: 'Av. Manuel Lúcio, 155',
-    bairro: 'Grand Ville',
-    distanciaKm: 0.9,
-    horario: '20:00',
-    troco: '',
-    telefone: '(34) 99555-1234',
-    coordinates: { latitude: -18.90887126021788, longitude: -48.21877699273963 },
-    itens: [
-      { nome: 'Sprite', tipo: 'bebida', quantidade: 1, valor: 8 },
-    ],
-  },
-  {
-    id: 126,
-    id_estabelecimento: 2126,
-    id_ifood: 0,
-    cliente: 'Ana Paula',
-    pagamento: 'Débito',
-    tipoPagamento: 'coleta',
-    statusPagamento: 'a_receber',
-    valorTotal: 14.00,
-    endereco: 'Av. Anselmo Alves dos Santos, 4925',
-    bairro: 'Grand Ville',
-    distanciaKm: 3.2,
-    horario: '19:55',
-    troco: '',
-    telefone: '(34) 99333-7890',
-    coordinates: { latitude: -18.905433401263668, longitude: -48.218426601132954 },
-    itens: [
-      { nome: 'Fanta', tipo: 'bebida', quantidade: 1, valor: 8 },
-      { nome: 'Porção de Nuggets', tipo: 'comida', quantidade: 1, valor: 6 },
-    ],
-  },
-  {
-    id: 127,
-    id_estabelecimento: 0,
-    id_ifood: 6389,
-    cliente: 'Carlos Lima',
-    tipoPagamento: 'pagoApp',
-    pagamento: 'Pix',
-    statusPagamento: 'pago',
-    valorTotal: 12.00,
-    endereco: 'Alameda dos Mandarins, 200',
-    bairro: 'Grand Ville',
-    distanciaKm: 2.1,
-    horario: '21:10',
-    troco: '',
-    telefone: '(34) 99777-2468',
-    coordinates: { latitude: -18.908385204055833, longitude: -48.21598084877664 },
-    itens: [
-      { nome: 'Coca L.', tipo: 'bebida', quantidade: 1, valor: 12 },
-    ],
-  },
-];
+// Dados mockados removidos - agora usando dados reais da API
 export default function TelaInicialMap() {
   const insets = useSafeAreaInsets();
   const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
@@ -149,6 +45,9 @@ export default function TelaInicialMap() {
   const [pedidosAceitos, setPedidosAceitos] = useState<any[]>([]);
   const [organizandoRota, setOrganizandoRota] = useState(false);
 
+  // Hook para buscar pedidos reais da API
+  const { pedidos: pedidosDisponiveis, loading: loadingPedidos, error: errorPedidos, refetch } = useFetchPedidos({ status: 'disponivel' });
+
   let lastHeight = MIN_HEIGHT;
 
   // Eleva a altura inicial do painel para fora da área de gestos do sistema
@@ -165,7 +64,7 @@ export default function TelaInicialMap() {
     const destinos = pedidosAceitos.map(p => ({
       latitude: p.coordinates.latitude,
       longitude: p.coordinates.longitude,
-      id_ifood: p.id_ifood,
+      id: p.id,
     }));
     await setSecureItem('destinos', JSON.stringify(destinos));
     await setSecureItem('indiceAtual', '0');
@@ -223,17 +122,20 @@ export default function TelaInicialMap() {
 
       const onlineStatus = await getSecureItem('online');
       setOnline(onlineStatus === 'true');
-
-      // Fecha modal se o estado não permitir mais receber pedidos
-      if ((!online && modalRotaVisible) || (emEntregaStatus === 'true' && modalRotaVisible) || (organizandoRota && modalRotaVisible)) {
-        setModalRotaVisible(false);
-      }
     };
 
     verificarStatus();
-    const interval = setInterval(verificarStatus, 2000);
+    const interval = setInterval(verificarStatus, 10000); // Reduzido de 2s para 10s
     return () => clearInterval(interval);
   }, []);
+
+  // useEffect separado para controlar o modal baseado nos estados
+  useEffect(() => {
+    // Fecha modal se o estado não permitir mais receber pedidos
+    if (modalRotaVisible && (!online || emEntrega || organizandoRota)) {
+      setModalRotaVisible(false);
+    }
+  }, [online, emEntrega, organizandoRota, modalRotaVisible]);
 
   // Ao focar novamente esta tela (voltar de confirmacaoEntrega), recentraliza no usuário
   useFocusEffect(
@@ -342,34 +244,18 @@ export default function TelaInicialMap() {
     // COLOCAR NO LUGAR (RECOMENDADO)
     if (!pedidoAtual) return;
 
-    // Validar exclusividade antes de navegar
-    const hasIfood = (pedidoAtual.id_ifood ?? 0) > 0;
-    const hasEstab = (pedidoAtual.id_estabelecimento ?? 0) > 0;
-    if (hasIfood === hasEstab) console.warn('[Navegação] id_ifood e id_estabelecimento devem ser exclusivos.');
-
     router.push({
       pathname: '/confirmacaoEntrega',
       params: {
-        // Identificadores (um deles > 0, o outro 0)
-        id_ifood: String(pedidoAtual.id_ifood || 0),
-        id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
-
-        // Campos usados na tela de confirmação
-        nome: pedidoAtual.cliente,
+        id: String(pedidoAtual.id || 0),
+        nome: pedidoAtual.nomeCliente,
         bairro: pedidoAtual.bairro,
         endereco: pedidoAtual.endereco,
-        statusPagamento: pedidoAtual.statusPagamento,        // 'pago' | 'a_receber'
-        valorTotal: String(pedidoAtual.valorTotal),
-        pagamento: pedidoAtual.pagamento || '',
-        horario: pedidoAtual.horario || '',
-
-        // Opcionais
+        statusPagamento: pedidoAtual.statusPagamento,
+        valorTotal: String(pedidoAtual.valor),
         telefone: pedidoAtual.telefone || '',
-        troco: pedidoAtual.troco || '',
-        distanciaKm: String(pedidoAtual.distanciaKm ?? ''),
-
-        // Sempre como string (expo-router params)
-        quantidadePedidos: String(pedidoAtual.quantidadePedidos ?? 1),
+        horario: pedidoAtual.horario_formatado || '',
+        observacoes: pedidoAtual.observacoes || '',
         itens: JSON.stringify(pedidoAtual.itens || []),
         coordinates: JSON.stringify(pedidoAtual.coordinates || null),
       },
@@ -389,32 +275,18 @@ export default function TelaInicialMap() {
     
     if (!pedidoAtual) return;
 
-    // Validar exclusividade antes de navegar
-    const hasIfood = (pedidoAtual.id_ifood ?? 0) > 0;
-    const hasEstab = (pedidoAtual.id_estabelecimento ?? 0) > 0;
-    if (hasIfood === hasEstab) console.warn('[Navegação] id_ifood e id_estabelecimento devem ser exclusivos.');
-
     router.push({
       pathname: '/ExemploSacolaScreen',
       params: {
-        // Identificadores (um deles > 0, o outro 0)
-        id_ifood: String(pedidoAtual.id_ifood || 0),
-        id_estabelecimento: String(pedidoAtual.id_estabelecimento || 0),
-
-        // Campos usados na tela da sacola
-        nome: pedidoAtual.cliente,
+        id: String(pedidoAtual.id || 0),
+        nome: pedidoAtual.nomeCliente,
         bairro: pedidoAtual.bairro,
         endereco: pedidoAtual.endereco,
-        statusPagamento: pedidoAtual.statusPagamento,        // 'pago' | 'a_receber'
-        valorTotal: String(pedidoAtual.valorTotal),
-        pagamento: pedidoAtual.pagamento || '',
-        horario: pedidoAtual.horario || '',
-
-        // Opcionais
+        statusPagamento: pedidoAtual.statusPagamento,
+        valorTotal: String(pedidoAtual.valor),
         telefone: pedidoAtual.telefone || '',
-        troco: pedidoAtual.troco || '',
-
-        // Sempre como string (expo-router params)
+        horario: pedidoAtual.horario_formatado || '',
+        observacoes: pedidoAtual.observacoes || '',
         itens: JSON.stringify(pedidoAtual.itens || []),
         coordinates: JSON.stringify(pedidoAtual.coordinates || null),
       },
@@ -518,7 +390,7 @@ export default function TelaInicialMap() {
             visible={true}
             onAceitar={handleAceitarPedido}
             onRecusar={handleRecusar}
-            pedidos={pedidosMock}
+            pedidos={loadingPedidos ? [] : pedidosDisponiveis}
           />
         </View>
       )}
@@ -607,6 +479,31 @@ export default function TelaInicialMap() {
             bottomInset={72}
             dragEnabled={!emEntrega}
           />
+        )}
+
+        {online && !organizandoRota && !emEntrega && (
+          loadingPedidos ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ color: '#fff', fontSize: 16 }}>Carregando pedidos...</Text>
+            </View>
+          ) : errorPedidos ? (
+            <View style={{ padding: 20, alignItems: 'center' }}>
+              <Text style={{ color: '#ff6b6b', fontSize: 16, marginBottom: 10 }}>Erro ao carregar pedidos</Text>
+              <TouchableOpacity 
+                onPress={refetch}
+                style={{ backgroundColor: '#2C79FF', padding: 10, borderRadius: 8 }}
+              >
+                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Tentar novamente</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <PedidosDraggableList
+              pedidos={pedidosDisponiveis}
+              onAtualizarPedidosAceitos={setPedidosAceitos}
+              bottomInset={72}
+              dragEnabled={false}
+            />
+          )
         )}
 
 

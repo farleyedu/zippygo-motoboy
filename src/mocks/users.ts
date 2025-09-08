@@ -11,7 +11,7 @@ export const mockUsers: MockUser[] = [
   {
     id: '1',
     nome: 'Admin Pizzaria',
-    email: 'admin@zippygo.com',
+    email: 'teste@zippygo.com',
     senha: 'Teste@12345',
     role: 'pizzaria',
     telefone: '(11) 99999-9999'
