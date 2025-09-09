@@ -43,6 +43,9 @@
       // 🔧 Garante Hermes no Android
       "jsEngine": "hermes",
 
+      // 🔧 Permite comunicação HTTP não criptografada para desenvolvimento
+      "usesCleartextTraffic": true,
+
       "config": {
         "googleMaps": {
           "apiKey": "AIzaSyBGZgGgmNMq6Vew5M6NMS_6DRt5QiGc30U"

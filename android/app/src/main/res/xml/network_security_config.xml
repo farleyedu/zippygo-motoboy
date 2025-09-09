@@ -1,10 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+    <!-- Permitir HTTP para desenvolvimento local -->
     <domain-config cleartextTrafficPermitted="true">
         <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">127.0.0.1</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
         <domain includeSubdomains="true">10.0.3.2</domain>
-        <domain includeSubdomains="true">192.168.1.1</domain>
+        <domain includeSubdomains="true">192.168.0.0</domain>
+        <domain includeSubdomains="true">192.168.1.0</domain>
+        <domain includeSubdomains="true">192.168.2.0</domain>
+        <domain includeSubdomains="true">192.168.3.0</domain>
+        <domain includeSubdomains="true">192.168.4.0</domain>
+        <!-- IP específico do Metro atual -->
+        <domain includeSubdomains="false">192.168.3.56</domain>
+        <domain includeSubdomains="true">192.168.5.0</domain>
+        <domain includeSubdomains="true">192.168.10.0</domain>
+        <domain includeSubdomains="true">192.168.15.0</domain>
+        <domain includeSubdomains="true">192.168.20.0</domain>
+        <domain includeSubdomains="true">192.168.25.0</domain>
+        <domain includeSubdomains="true">192.168.43.0</domain>
+        <domain includeSubdomains="true">192.168.100.0</domain>
     </domain-config>
     
     <!-- Permitir HTTPS para APIs externas -->

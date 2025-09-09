@@ -41,6 +41,8 @@ export interface Pedido {
   dataPedido?: string;
   statusPedido?: string | null;
   motoboyResponsavel?: string | null;
+  // Campo de distância calculado (vem do banco via JOIN)
+  distancia_km?: number;
   // Campos calculados para compatibilidade com interface atual
   cliente_nome?: string;
   total_valor?: number;

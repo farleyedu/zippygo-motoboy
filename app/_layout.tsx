@@ -11,6 +11,10 @@ import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 import { AuthProvider } from '@/src/contexts/AuthContext';
 
+import { testApiHealth } from '../services/apiService';
+
+// 🔍 DEBUG: Network debug removido - interceptação limpa ativada
+
 export {
   ErrorBoundary,
 } from 'expo-router';
@@ -34,6 +38,11 @@ export default function RootLayout() {
   useEffect(() => {
     if (loaded) {
       SplashScreen.hideAsync();
+      
+      // 🏥 Testar conectividade da API após carregar o app
+      setTimeout(() => {
+        testApiHealth();
+      }, 1000);
     }
   }, [loaded]);
 

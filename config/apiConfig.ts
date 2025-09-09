@@ -1,8 +1,16 @@
 // Configurações da API
 const getBaseUrl = () => {
   const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL || 'https://zippy-api.onrender.com';
+  
+  // LOG: Debug da configuração da URL
+  console.log('🔧 ENV EXPO_PUBLIC_API_BASE_URL:', process.env.EXPO_PUBLIC_API_BASE_URL);
+  console.log('🔧 Base URL final:', baseUrl);
+  
   // Normalizar URL para evitar // duplos
-  return baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  const normalizedUrl = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  console.log('🔧 URL normalizada:', normalizedUrl);
+  
+  return normalizedUrl;
 };
 
 export const API_CONFIG = {

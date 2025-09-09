@@ -1,11 +1,17 @@
+// ARQUIVO DESABILITADO - CAUSAVA CONFLITO COM CLEARTEXT HTTP
+// Este arquivo estava tentando conectar via HTTP em localhost:5000
+// O que causava o erro "CLEARTEXT communication not permitted"
+// A configuração correta está em config/apiConfig.ts usando HTTPS
+
+/*
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-// URL fictícia para o backend (será substituída quando o backend estiver pronto)
+// Configuração da API
 const BASE_URL = 'http://localhost:5000';
 
 // Criar instância do axios
-export const api = axios.create({
+const api = axios.create({
   baseURL: BASE_URL,
   timeout: 10000,
   headers: {
@@ -13,11 +19,11 @@ export const api = axios.create({
   },
 });
 
-// Interceptor para adicionar token de autorização
+// Interceptor para adicionar token de autenticação
 api.interceptors.request.use(
   async (config) => {
     try {
-      const token = await SecureStore.getItemAsync('zippygo.token');
+      const token = await SecureStore.getItemAsync('userToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -30,7 +36,12 @@ api.interceptors.request.use(
     return Promise.reject(error);
   }
 );
+*/
 
+// ARQUIVO COMPLETAMENTE DESABILITADO
+// Use services/apiService.ts que está configurado corretamente
+
+/*
 // Interceptor para tratar respostas e erros
 api.interceptors.response.use(
   (response) => {
@@ -53,3 +64,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+*/
