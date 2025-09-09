@@ -32,8 +32,8 @@ export default function LoginScreen() {
     setIsLoading(false);
 
     if (result.success) {
-      // Redirecionar para tela principal
-      router.replace('/(tabs)');
+      // Redirecionar para tela principal (mapa inicial)
+      router.replace('/');
     } else {
       Alert.alert('Erro no Login', result.error || 'Erro desconhecido');
     }

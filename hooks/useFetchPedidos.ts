@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { fetchPedidos, fetchPedidoById } from '../services/apiService';
+import { fetchPedidosMotoboy as fetchPedidos, fetchPedidoById } from '../services/apiService';
 import { Pedido, PedidosResponse, BuscarPedidosParams, ApiState } from '../types/pedido';
 
 // Hook para buscar lista de pedidos

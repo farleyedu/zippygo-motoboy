@@ -4,30 +4,7 @@ import { getSecureItem, setSecureItem } from '../utils/secureStorage';
 import { StyleSheet, Text, View, Image } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-
-type Pedido = {
-  id: number;
-  id_ifood: number;
-  endereco: string;
-  bairro?: string;
-  cliente: string;
-  distanciaKm: number;
-  horario: string;
-  pagamento: string;
-  statusPagamento: string;
-  valorTotal: number;
-  troco: string;
-  coordinates: {
-    latitude: number;
-    longitude: number;
-  };
-  itens: {
-    nome: string;
-    tipo: string;
-    quantidade: number;
-    valor: number;
-  }[];
-};
+import { Pedido } from '../types/pedido';
 
 type Props = {
   pedidos: Pedido[];
@@ -223,13 +200,13 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       return pedidos.map((p, i) => (
         <React.Fragment key={`${p.id}-${i}`}>
           <Marker
-            coordinate={p.coordinates}
+            coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
             anchor={{ x: 0.5, y: 1 }}
             image={require('../assets/images/alfinete_85x85.png')}
             tracksViewChanges={false}
           />
           <Marker
-            coordinate={p.coordinates}
+            coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
             anchor={{ x: 0, y: 0.5 }}
             centerOffset={{ x: 8, y: 6 }}
             tracksViewChanges={trackMarkers}
@@ -250,7 +227,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         return (
           <Marker
             key={`${p.id}-atual`}
-            coordinate={p.coordinates}
+            coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
             anchor={{ x: 0.5, y: 1 }}
             pinColor="#d32f2f"
             tracksViewChanges={false}
@@ -263,7 +240,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         return (
           <React.Fragment key={`${p.id}-${i}`}>
             <Marker
-              coordinate={p.coordinates}
+              coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
               anchor={{ x: 0.5, y: 1 }}
               image={require('../assets/images/alfinete_32x23.png')}
               tracksViewChanges={false}

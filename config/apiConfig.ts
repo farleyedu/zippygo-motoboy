@@ -50,6 +50,8 @@ export const API_CONFIG = {
     // Autenticação (mantido para compatibilidade)
     LOGIN: '/auth/login',
     REFRESH_TOKEN: '/auth/refresh',
+    // Novo endpoint de pedidos completos para o motoboy
+    PEDIDOS_MOTOBOY_COMPLETOS: '/Pedido/motoboy',
   },
   
   // Configurações de retry

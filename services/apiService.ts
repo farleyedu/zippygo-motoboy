@@ -427,3 +427,43 @@ export const testApiHealth = async (): Promise<boolean> => {
 
 export default apiClient;
 export { apiClient };
+
+// Novo: buscar pedidos completos do motoboy sem transformações
+export const fetchPedidosMotoboy = async (params?: BuscarPedidosParams): Promise<PedidosResponse> => {
+  try {
+    const queryParams = new URLSearchParams();
+    
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.estabelecimentoId) queryParams.append('estabelecimentoId', params.estabelecimentoId.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    if (params?.limit) queryParams.append('limit', params.limit.toString());
+    
+    const url = `${API_CONFIG.ENDPOINTS.PEDIDOS_MOTOBOY_COMPLETOS}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    
+    const response = await apiClient.get(url);
+    const payload: any = response.data;
+    
+    // A API retorna: { success: true, data: [...], traceId: "..." }
+    // Extrair os dados do campo 'data'
+    let lista: any[] = [];
+    
+    if (payload?.success && payload?.data) {
+      lista = Array.isArray(payload.data) ? payload.data : [];
+    } else if (Array.isArray(payload)) {
+      lista = payload;
+    } else if (payload?.pedidos) {
+      lista = payload.pedidos;
+    }
+
+    return {
+      pedidos: lista,
+      total: lista.length,
+      page: (payload?.page ?? 1),
+      limit: (payload?.limit ?? lista.length ?? 0),
+      hasMore: Boolean(payload?.hasMore ?? false),
+    };
+  } catch (error) {
+    console.error('Erro ao buscar pedidos (motoboy):', error);
+    throw error;
+  }
+};

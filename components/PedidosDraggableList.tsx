@@ -94,24 +94,24 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
                 <Text style={styles.cardId}>{item.id}</Text>
                 <View style={styles.dot} />
                 <Ionicons name="person-outline" size={13} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardCliente}>{item.cliente_nome || item.nomeCliente || 'Cliente'}</Text>
+                <Text style={styles.cardCliente}>{item.nomeCliente ?? '--'}</Text>
                 <View style={styles.dot} />
                 <Ionicons name="time-outline" size={13} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardHorario}>{item.horario_formatado || item.horario || '20:00'}</Text>
+                <Text style={styles.cardHorario}>{item.dataPedido ?? '--'}</Text>
                 <View style={styles.dot} />
                 <MaterialCommunityIcons name="map-marker-distance" size={15} color="#999" style={styles.infoIcon} />
                 <Text style={styles.cardDistancia}>1.5 km</Text>
               </View>
               <View style={styles.infoRowCompact}>
                 <Ionicons name="location-outline" size={15} color="#999" style={styles.infoIcon} />
-                <Text style={styles.cardEndereco}>{item.endereco || item.enderecoEntrega || 'Endereço'} - {item.bairro || 'Bairro'}</Text>
+                <Text style={styles.cardEndereco}>{(item.enderecoEntrega ?? '--') + (item.bairro ? ` - ${item.bairro}` : '')}</Text>
               </View>
               <View style={styles.infoRowCompact}>
                 <MaterialCommunityIcons name="qrcode" size={14} color="#4CAF50" style={{ marginRight: 2 }} />
-                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.statusPagamento || 'pago'), marginRight: 6 }]}>
-                  Pago
+                <Text style={[styles.cardPagamento, { color: getPagamentoColor(item.statusPagamento || ''), marginRight: 6 }]}>
+                  {item.statusPagamento ?? '--'}
                 </Text>
-                {getStatusSelo(item.statusPagamento || 'pago')}
+                {getStatusSelo(item.statusPagamento || '')}
               </View>
             </View>
             <View style={styles.iconsRight}>
@@ -124,7 +124,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
             </View>
           </View>
           {isExpanded && (
-            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.statusPagamento || 'pago') }]}>
+            <View style={[styles.itensBox, { borderLeftColor: getPagamentoColor(item.statusPagamento || '') }]}>
               <Text style={styles.itensTitle}>Itens do pedido:</Text>
               {item.itens?.map((it, idx) => (
                 <View key={idx} style={styles.itemLinha}>

@@ -45,7 +45,7 @@ export default function TelaInicialMap() {
   const [pedidosAceitos, setPedidosAceitos] = useState<any[]>([]);
   const [organizandoRota, setOrganizandoRota] = useState(false);
 
-  // Hook para buscar pedidos reais da API
+  // Hook para buscar pedidos disponíveis
   const { pedidos: pedidosDisponiveis, loading: loadingPedidos, error: errorPedidos, refetch } = useFetchPedidos({ status: 'disponivel' });
 
   let lastHeight = MIN_HEIGHT;
@@ -62,8 +62,8 @@ export default function TelaInicialMap() {
     // grava pedidos e destinos no SecureStore
     await setSecureItem('pedidosCompletos', JSON.stringify(pedidosAceitos));
     const destinos = pedidosAceitos.map(p => ({
-      latitude: p.coordinates.latitude,
-      longitude: p.coordinates.longitude,
+      latitude: p.coordinates.lat,
+      longitude: p.coordinates.lng,
       id: p.id,
     }));
     await setSecureItem('destinos', JSON.stringify(destinos));
@@ -248,16 +248,16 @@ export default function TelaInicialMap() {
       pathname: '/confirmacaoEntrega',
       params: {
         id: String(pedidoAtual.id || 0),
-        nome: pedidoAtual.nomeCliente,
-        bairro: pedidoAtual.bairro,
-        endereco: pedidoAtual.endereco,
-        statusPagamento: pedidoAtual.statusPagamento,
-        valorTotal: String(pedidoAtual.valor),
-        telefone: pedidoAtual.telefone || '',
-        horario: pedidoAtual.horario_formatado || '',
-        observacoes: pedidoAtual.observacoes || '',
-        itens: JSON.stringify(pedidoAtual.itens || []),
-        coordinates: JSON.stringify(pedidoAtual.coordinates || null),
+        nome: pedidoAtual.nomeCliente ?? '--',
+        bairro: pedidoAtual.bairro ?? '',
+        endereco: pedidoAtual.enderecoEntrega ?? '--',
+        statusPagamento: pedidoAtual.statusPagamento ?? '',
+        valorTotal: String(pedidoAtual.valorTotal ?? 0),
+        telefone: pedidoAtual.telefoneCliente ?? '',
+        horario: pedidoAtual.dataPedido ?? '',
+        observacoes: pedidoAtual.observacoes ?? '',
+        itens: JSON.stringify(pedidoAtual.itens ?? []),
+        coordinates: JSON.stringify(pedidoAtual.coordinates ?? null),
       },
     });
 
@@ -279,16 +279,16 @@ export default function TelaInicialMap() {
       pathname: '/ExemploSacolaScreen',
       params: {
         id: String(pedidoAtual.id || 0),
-        nome: pedidoAtual.nomeCliente,
-        bairro: pedidoAtual.bairro,
-        endereco: pedidoAtual.endereco,
-        statusPagamento: pedidoAtual.statusPagamento,
-        valorTotal: String(pedidoAtual.valor),
-        telefone: pedidoAtual.telefone || '',
-        horario: pedidoAtual.horario_formatado || '',
-        observacoes: pedidoAtual.observacoes || '',
-        itens: JSON.stringify(pedidoAtual.itens || []),
-        coordinates: JSON.stringify(pedidoAtual.coordinates || null),
+        nome: pedidoAtual.nomeCliente ?? '--',
+        bairro: pedidoAtual.bairro ?? '',
+        endereco: pedidoAtual.enderecoEntrega ?? '--',
+        statusPagamento: pedidoAtual.statusPagamento ?? '',
+        valorTotal: String(pedidoAtual.valorTotal ?? 0),
+        telefone: pedidoAtual.telefoneCliente ?? '',
+        horario: pedidoAtual.dataPedido ?? '',
+        observacoes: pedidoAtual.observacoes ?? '',
+        itens: JSON.stringify(pedidoAtual.itens ?? []),
+        coordinates: JSON.stringify(pedidoAtual.coordinates ?? null),
       },
     });
   };
