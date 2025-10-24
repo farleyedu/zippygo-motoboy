@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -20,6 +21,11 @@ public class ToolExecutorService
 
     private const string TentativaReservaContextKey = "tentativa_reserva";
     private const string DecisaoConflitoContextKey = "decisao_reserva_conflito";
+    private const string ReservaSelecionadaContextKey = "reserva_atual";
+
+    private static readonly TimeZoneInfo FusoSaoPaulo = RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+        ? TimeZoneInfo.FindSystemTimeZoneById("E. South America Standard Time")
+        : TimeZoneInfo.FindSystemTimeZoneById("America/Sao_Paulo");
 
     private readonly ReservaService _reservaService;
     private readonly ConversationContextService _contextService;
@@ -156,6 +162,15 @@ public class ToolExecutorService
                 return ToolExecutionResult.Falha("Não encontrei nenhuma reserva com esse código. Pode conferir?");
             }
 
+            if (decisao.IdConversa.HasValue)
+            {
+                await _contextService.SalvarAsync(decisao.IdConversa.Value, ReservaSelecionadaContextKey, new ReservaSelecionadaContextDto
+                {
+                    ReservaId = reserva.Id,
+                    Codigo = reserva.CodigoFormatado
+                }, TimeSpan.FromHours(2), cancellationToken);
+            }
+
             var resumo = _reservaService.MontarResumoReserva(reserva);
             return ToolExecutionResult.Sucesso($"Aqui estão os detalhes da sua reserva {reserva.CodigoFormatado}:\n{resumo}");
         }
@@ -165,13 +180,17 @@ public class ToolExecutorService
             return ToolExecutionResult.Falha("Para consultar sem código preciso confirmar quem é você. Pode me informar seu nome ou documento cadastrado?");
         }
 
-        var reservas = await _reservaService.ObterReservasAtivasDoClienteAsync(decisao.IdCliente.Value, decisao.IdEstabelecimento.Value, DateTime.UtcNow, cancellationToken);
+        var reservas = await _reservaService.ObterReservasAtivasDoClienteAsync(decisao.IdCliente.Value, decisao.IdEstabelecimento.Value, ObterDataAtualSaoPaulo(), cancellationToken);
         if (reservas.Count == 0)
         {
             return ToolExecutionResult.Sucesso("Não encontrei reservas futuras ativas para você.");
         }
 
-        var linhas = reservas.Select(r => $"• {r.CodigoFormatado} — {r.Data:dd/MM/yyyy} às {r.Hora:hh\\:mm} para {r.QuantidadePessoas} pessoas").ToArray();
+        var linhas = reservas.Select(r =>
+        {
+            var dataFormatada = _reservaService.FormatarDataComDiaSemana(r.Data);
+            return $"• {r.CodigoFormatado} — {dataFormatada} às {r.Hora:hh\\:mm} para {r.QuantidadePessoas} pessoas";
+        }).ToArray();
         var mensagem = "Estas são as suas próximas reservas:\n" + string.Join('\n', linhas) + "\nSe quiser detalhes de alguma delas, é só me informar o código.";
         return ToolExecutionResult.Sucesso(mensagem);
     }
@@ -195,6 +214,23 @@ public class ToolExecutorService
             codigoReserva = codigoProp.GetString();
         }
 
+        if (decisao.IdConversa.HasValue)
+        {
+            var selecionada = await _contextService.LerAsync<ReservaSelecionadaContextDto>(decisao.IdConversa.Value, ReservaSelecionadaContextKey, cancellationToken);
+            if (selecionada != null)
+            {
+                if (selecionada.ReservaId.HasValue)
+                {
+                    reservaId ??= selecionada.ReservaId.Value;
+                }
+
+                if (string.IsNullOrWhiteSpace(codigoReserva) && !string.IsNullOrWhiteSpace(selecionada.Codigo))
+                {
+                    codigoReserva = selecionada.Codigo;
+                }
+            }
+        }
+
         if (!string.IsNullOrWhiteSpace(codigoReserva) && reservaId is null)
         {
             var reserva = await _reservaService.ObterReservaPorCodigoAsync(codigoReserva!, cancellationToken);
@@ -204,6 +240,14 @@ public class ToolExecutorService
                 decisao.IdEstabelecimento ??= reserva.IdEstabelecimento;
                 decisao.IdCliente ??= reserva.IdCliente;
                 decisao.Data ??= reserva.Data;
+                if (decisao.IdConversa.HasValue)
+                {
+                    await _contextService.SalvarAsync(decisao.IdConversa.Value, ReservaSelecionadaContextKey, new ReservaSelecionadaContextDto
+                    {
+                        ReservaId = reserva.Id,
+                        Codigo = reserva.CodigoFormatado
+                    }, TimeSpan.FromHours(2), cancellationToken);
+                }
             }
         }
 
@@ -235,11 +279,17 @@ public class ToolExecutorService
 
         await _contextService.RemoverAsync(decisao.IdConversa.Value, DecisaoConflitoContextKey, cancellationToken);
         await _contextService.RemoverAsync(decisao.IdConversa.Value, TentativaReservaContextKey, cancellationToken);
+        await _contextService.RemoverAsync(decisao.IdConversa.Value, ReservaSelecionadaContextKey, cancellationToken);
 
         var horaFormatada = decisao.Hora.Value.ToString("hh\\:mm");
-        var dataFormatada = decisao.Data?.ToString("dd/MM/yyyy") ?? "data combinada";
+        var dataFormatada = decisao.Data.HasValue ? _reservaService.FormatarDataComDiaSemana(decisao.Data.Value) : "data combinada";
         var mensagem = $"Tudo certo! Atualizei sua reserva para {dataFormatada} às {horaFormatada} para {decisao.QuantidadePessoas} pessoas.";
         return ToolExecutionResult.Sucesso(mensagem);
+    }
+
+    private static DateTime ObterDataAtualSaoPaulo()
+    {
+        return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, FusoSaoPaulo);
     }
 
     private static string? ValidarCampo(string? valor, string nomeCampo)
