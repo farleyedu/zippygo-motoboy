@@ -38,15 +38,17 @@ builder.Services.AddSingleton<ReservaService>();
 builder.Services.AddSingleton<ToolExecutorService>();
 builder.Services.AddSingleton<HandoverService>();
 builder.Services.AddSingleton<IAssistantService, AssistantService>();
+builder.Services.AddSingleton<AssistantDecisionQueue>();
+builder.Services.AddHostedService<AssistantProcessingHostedService>();
 
 var app = builder.Build();
 
 app.UseMiddleware<IdempotencyMiddleware>();
 
-app.MapPost("/wa/webhook", async (IAssistantService assistantService, AssistantDecision decisao, CancellationToken cancellationToken) =>
+app.MapPost("/wa/webhook", async (AssistantDecisionQueue queue, AssistantDecision decisao, CancellationToken _) =>
 {
-    await assistantService.ProcessarMensagemAsync(decisao, cancellationToken);
-    return Results.Ok();
+    await queue.QueueAsync(decisao);
+    return Results.Ok(new { status = "processing" });
 });
 
 app.Run();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,6 +14,7 @@ public class ReservaService
 {
     private readonly IReservaRepository _reservaRepository;
     private readonly ILogger<ReservaService> _logger;
+    private static readonly CultureInfo CulturaPtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     public ReservaService(IReservaRepository reservaRepository, ILogger<ReservaService> logger)
     {
@@ -63,7 +65,15 @@ public class ReservaService
 
     public string MontarResumoReserva(Reserva reserva)
     {
-        return $"📅 Data: {reserva.Data:dd/MM/yyyy}\n⏰ Horário: {reserva.Hora:hh\\:mm}\n👥 Pessoas: {reserva.QuantidadePessoas}";
+        var dataFormatada = FormatarDataComDiaSemana(reserva.Data);
+        return $"📅 Data: {dataFormatada}\n⏰ Horário: {reserva.Hora:hh\\:mm}\n👥 Pessoas: {reserva.QuantidadePessoas}";
+    }
+
+    public string FormatarDataComDiaSemana(DateTime data)
+    {
+        var diaSemana = data.ToString("dddd", CulturaPtBr);
+        diaSemana = CulturaPtBr.TextInfo.ToTitleCase(diaSemana);
+        return $"{diaSemana}, {data:dd/MM/yyyy}";
     }
 
     public Reserva? SelecionarReservaMesmoDia(IEnumerable<Reserva> reservas, DateTime data)
