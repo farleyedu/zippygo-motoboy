@@ -36,6 +36,7 @@ O **ZippyGo Motoboy** é parte do ecossistema **ZippyGo**, uma plataforma comple
 - **Rotas otimizadas** para entrega.
 - **Painel de pedidos** com status (retirado, concluído, pendente).
 - **Chat interno** com as pizzarias.
+- **Confirmação de entrega** com validação de código e pagamento persistente.
 - **Expansão de cards** com informações detalhadas ao toque ou arraste.
 
 ---
