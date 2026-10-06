@@ -58,6 +58,7 @@ export interface Pedido {
   bairro?: string;
   statusPagamento?: string;
   horario?: string;
+  observacoes?: string;
 }
 
 // Tipo para lista resumida de pedidos (estrutura real da API)
@@ -84,6 +85,7 @@ export interface PedidoResumo {
   endereco?: string;
   bairro?: string;
   statusPagamento?: string;
+  observacoes?: string;
 }
 
 // Parâmetros para busca de pedidos

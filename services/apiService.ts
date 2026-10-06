@@ -95,7 +95,12 @@ const apiClient: AxiosInstance = axios.create({
 apiClient.interceptors.request.use(
   async (config) => {
     try {
-      const token = await getSecureItem('authToken');
+      const endpoint = String(config.url ?? '');
+      const isOperationalEndpoint =
+        endpoint.startsWith('/v2/motoboys/me/session') &&
+        !endpoint.endsWith('/start') &&
+        !endpoint.endsWith('/switch');
+      const token = await getSecureItem(isOperationalEndpoint ? 'operationalAccessToken' : 'authToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -265,11 +270,10 @@ export const fetchPedidos = async (params?: BuscarPedidosParams): Promise<Pedido
     // Usar dados diretos da API sem adapter
     const pedidosRaw = Array.isArray(response.data) ? response.data : [];
     
-    // Simular dados de distância que viriam do JOIN com tabela distancia_pedido
+    // A distância só é exibida quando vier preenchida pelo backend.
     const pedidosComDistancia = pedidosRaw.map(pedido => ({
       ...pedido,
-      // Simular distancia_km que viria do banco via JOIN
-      distancia_km: pedido.distancia_km || (Math.random() * 20 + 1).toFixed(2)
+      distancia_km: pedido.distancia_km ?? undefined
     }));
     
     // Aplicar filtros diretamente nos dados da API
@@ -306,10 +310,9 @@ export const fetchPedidoById = async (id: number): Promise<Pedido> => {
   try {
     const response = await apiClient.get(API_CONFIG.ENDPOINTS.PEDIDOS_BY_ID(id));
     
-    // Simular distancia_km que viria do banco via JOIN
     const pedidoComDistancia = {
       ...response.data,
-      distancia_km: response.data.distancia_km || (Math.random() * 20 + 1).toFixed(2)
+      distancia_km: response.data.distancia_km ?? undefined
     };
     
     return pedidoComDistancia;
@@ -342,21 +345,6 @@ export const confirmarEntrega = async (pedidoId: number, dados: any): Promise<an
     return response.data;
   } catch (error) {
     console.error('Erro ao confirmar entrega:', error);
-    throw error;
-  }
-};
-
-// Função para atualizar localização
-export const atualizarLocalizacao = async (latitude: number, longitude: number): Promise<any> => {
-  try {
-    const response = await apiClient.post(API_CONFIG.ENDPOINTS.LOCALIZACAO, {
-      latitude,
-      longitude,
-      timestamp: new Date().toISOString(),
-    });
-    return response.data;
-  } catch (error) {
-    console.error('Erro ao atualizar localização:', error);
     throw error;
   }
 };
@@ -403,7 +391,7 @@ export const testApiHealth = async (): Promise<boolean> => {
   try {
     console.log('🏥 [HEALTHZ] Testando conectividade da API...');
     
-    const response = await apiClient.get('/api/Motoboy', {
+    const response = await apiClient.get(API_CONFIG.ENDPOINTS.HEALTH_CHECK, {
       timeout: 10000,
       headers: {
         'Accept': 'application/json',
@@ -427,43 +415,3 @@ export const testApiHealth = async (): Promise<boolean> => {
 
 export default apiClient;
 export { apiClient };
-
-// Novo: buscar pedidos completos do motoboy sem transformações
-export const fetchPedidosMotoboy = async (params?: BuscarPedidosParams): Promise<PedidosResponse> => {
-  try {
-    const queryParams = new URLSearchParams();
-    
-    if (params?.status) queryParams.append('status', params.status);
-    if (params?.estabelecimentoId) queryParams.append('estabelecimentoId', params.estabelecimentoId.toString());
-    if (params?.page) queryParams.append('page', params.page.toString());
-    if (params?.limit) queryParams.append('limit', params.limit.toString());
-    
-    const url = `${API_CONFIG.ENDPOINTS.PEDIDOS_MOTOBOY_COMPLETOS}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
-    
-    const response = await apiClient.get(url);
-    const payload: any = response.data;
-    
-    // A API retorna: { success: true, data: [...], traceId: "..." }
-    // Extrair os dados do campo 'data'
-    let lista: any[] = [];
-    
-    if (payload?.success && payload?.data) {
-      lista = Array.isArray(payload.data) ? payload.data : [];
-    } else if (Array.isArray(payload)) {
-      lista = payload;
-    } else if (payload?.pedidos) {
-      lista = payload.pedidos;
-    }
-
-    return {
-      pedidos: lista,
-      total: lista.length,
-      page: (payload?.page ?? 1),
-      limit: (payload?.limit ?? lista.length ?? 0),
-      hasMore: Boolean(payload?.hasMore ?? false),
-    };
-  } catch (error) {
-    console.error('Erro ao buscar pedidos (motoboy):', error);
-    throw error;
-  }
-};

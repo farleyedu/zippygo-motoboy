@@ -149,7 +149,7 @@ export default function PedidosDraggableList({ pedidos, onAtualizarPedidosAceito
         setData(data);
         onAtualizarPedidosAceitos(data);
       }}
-      keyExtractor={(item) => item.id?.toString() ?? Math.random().toString()}
+      keyExtractor={(item) => item.id.toString()}
       renderItem={(params) => renderItem(params, (params as any).index)}
       contentContainerStyle={{ padding: 14, paddingBottom: 160 + insets.bottom + bottomInset }}
       showsVerticalScrollIndicator={false}

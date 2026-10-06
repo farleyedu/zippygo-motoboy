@@ -30,7 +30,10 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     
     ios: {
       supportsTablet: true,
-      jsEngine: 'hermes'
+      jsEngine: 'hermes',
+      infoPlist: {
+        UIBackgroundModes: ['location']
+      }
     },
     
     android: {

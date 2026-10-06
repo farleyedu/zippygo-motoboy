@@ -1,678 +1,284 @@
-import React, { useRef, useEffect, useState } from 'react';
-import { iniciarMonitoramentoLocalizacao, pararMonitoramentoLocalizacao } from '../components/locationSetup';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Animated,
-  PanResponder,
-  Dimensions,
-  Alert,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import Mapa from '../components/Mapa';
-import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Alert, ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
+import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Mapa from '../components/Mapa';
 import ModalConfirmarRota from '../components/ModalConfirmarRota';
 import PedidosDraggableList from '../components/PedidosDraggableList';
+import { iniciarMonitoramentoLocalizacao, pararMonitoramentoLocalizacao } from '../components/locationSetup';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useFetchPedidos } from '../hooks/useFetchPedidos';
+import {
+  clearOperationalSession,
+  endOperationalSession,
+  getOperationalSession,
+  heartbeatOperationalSession,
+  queueToPedidos,
+  startOperationalSession,
+} from '../services/mobileApi';
+import {
+  clearTrackingMode,
+  flushLocationQueue,
+  setTrackingMode,
+} from '../services/trackingService';
 
-
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const MIN_HEIGHT = 100;
-const MAX_HEIGHT = SCREEN_HEIGHT * 0.85;
-
-// Dados mockados removidos - agora usando dados reais da API
 export default function TelaInicialMap() {
-  const insets = useSafeAreaInsets();
-  const animatedHeight = useRef(new Animated.Value(MIN_HEIGHT)).current;
   const router = useRouter();
-  const { user } = useAuth();
-  const [recenterToken, setRecenterToken] = useState(0);
-  const [minSnapHeight, setMinSnapHeight] = useState(MIN_HEIGHT);
-  const iniciarOpacity = useRef(new Animated.Value(1)).current;
-  const confirmarOpacity = useRef(new Animated.Value(0)).current;
-  const [mostrandoConfirmar, setMostrandoConfirmar] = useState(false);
-  const [emEntrega, setEmEntrega] = useState(false);
-  const [isUltimaEntrega, setIsUltimaEntrega] = useState(false);
-  const [modalRotaVisible, setModalRotaVisible] = useState(false);
-  const [painelNoTopo, setPainelNoTopo] = useState(false);
+  const insets = useSafeAreaInsets();
+  const { user, estabelecimentoAtual, isLoading: authLoading, needsEstablishmentSelection } = useAuth();
+  const {
+    pedidos: pedidosDaFila,
+    queue,
+    oferta,
+    loading,
+    error,
+    refetch,
+    acceptOffer,
+    rejectOffer,
+    reorderQueue,
+  } = useFetchPedidos();
   const [online, setOnline] = useState(false);
-  const [pedidosAceitos, setPedidosAceitos] = useState<any[]>([]);
+  const [activeRoute, setActiveRoute] = useState(false);
   const [organizandoRota, setOrganizandoRota] = useState(false);
-
-  // Hook para buscar pedidos disponíveis
-  const { pedidos: pedidosDisponiveis, loading: loadingPedidos, error: errorPedidos, refetch } = useFetchPedidos({ status: 'disponivel' });
-
-  let lastHeight = MIN_HEIGHT;
-
-  // Eleva a altura inicial do painel para fora da área de gestos do sistema
-  useEffect(() => {
-    const safeStart = MIN_HEIGHT + insets.bottom + 24; // sobe mais no estado inicial
-    animatedHeight.setValue(safeStart);
-    lastHeight = safeStart;
-    setMinSnapHeight(safeStart);
-  }, [insets.bottom]);
-
-  const handleIniciarRota = async () => {
-    // grava pedidos e destinos no SecureStore
-    await setSecureItem('pedidosCompletos', JSON.stringify(pedidosAceitos));
-    const destinos = pedidosAceitos.map(p => ({
-      latitude: p.coordinates.lat,
-      longitude: p.coordinates.lng,
-      id: p.id,
-    }));
-    await setSecureItem('destinos', JSON.stringify(destinos));
-    await setSecureItem('indiceAtual', '0');
-    await setSecureItem('emEntrega', 'true');
-
-    // começa o monitoramento
-    iniciarMonitoramentoLocalizacao();
-
-    // atualiza estados + ANIMAÇÕES
-    setEmEntrega(true);
-    setMostrandoConfirmar(true);
-    iniciarOpacity.setValue(0);       // <<-- esconde o botão início
-    confirmarOpacity.setValue(1);     // <<-- mostra o botão confirmar entrega
-    setOrganizandoRota(false);
-
-
-    Alert.alert('Rota iniciada', 'Agora você está em rota de entrega!');
-  };
-
-
+  const [pedidosAceitos, setPedidosAceitos] = useState(pedidosDaFila);
+  const [offerVisible, setOfferVisible] = useState(false);
+  const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const id = animatedHeight.addListener(({ value }) => {
-      setPainelNoTopo(value >= MAX_HEIGHT - 20);
-    });
-    return () => animatedHeight.removeListener(id);
-  }, [animatedHeight]);
+    if (authLoading) return;
+    if (!user) {
+      router.replace('/(auth)/login');
+      return;
+    }
+    if (needsEstablishmentSelection && !estabelecimentoAtual) {
+      router.replace('/selecionarRestaurante' as any);
+    }
+  }, [authLoading, user, needsEstablishmentSelection, estabelecimentoAtual, router]);
 
   useEffect(() => {
-    const verificarStatus = async () => {
-      const abrir = await getSecureItem('abrirConfirmacaoImediata');
-    if (abrir === 'true') {
-      const lista = await getSecureItem('pedidosCompletos');
-      const destinos = await getSecureItem('destinos');
-
-        if (lista && destinos) {
-          await deleteSecureItem('abrirConfirmacaoImediata');
-          router.push('/confirmacaoEntrega');
+    const restoreSession = async () => {
+      if (authLoading || !user || !estabelecimentoAtual) return;
+      try {
+        const session = await getOperationalSession();
+        if (session && !session.isEnded) {
+          await setTrackingMode('online_idle');
+          const started = await iniciarMonitoramentoLocalizacao('online_idle');
+          setOnline(started);
+          if (started) await refetch();
         }
+      } catch {
+        await clearOperationalSession();
       }
-
-      const emEntregaStatus = await getSecureItem('emEntrega');
-      setEmEntrega(emEntregaStatus === 'true');
-      if (emEntregaStatus === 'true') {
-        setMostrandoConfirmar(true);
-        iniciarOpacity.setValue(0);
-        confirmarOpacity.setValue(1);
-        // Recarrega pedidos no painel ao voltar para a tela
-        const pedidosStr = await getSecureItem('pedidosCompletos');
-        if (pedidosStr) {
-          const pedidos = JSON.parse(pedidosStr);
-          setPedidosAceitos(pedidos);
-        }
-      }
-
-      const onlineStatus = await getSecureItem('online');
-      setOnline(onlineStatus === 'true');
     };
+    restoreSession();
+  }, [authLoading, user, estabelecimentoAtual, refetch]);
 
-    verificarStatus();
-    const interval = setInterval(verificarStatus, 10000); // Reduzido de 2s para 10s
+  useEffect(() => {
+    setPedidosAceitos(pedidosDaFila);
+    if (queue?.current) setActiveRoute(true);
+    if (!queue?.current && activeRoute && !queue?.next?.length) setActiveRoute(false);
+    if (oferta && online && !activeRoute && !organizandoRota) setOfferVisible(true);
+  }, [pedidosDaFila, queue, oferta, online, activeRoute, organizandoRota]);
+
+  useFocusEffect(useCallback(() => {
+    refetch();
+  }, [refetch]));
+
+  useEffect(() => {
+    if (!online) return;
+    const interval = setInterval(() => {
+      refetch();
+    }, 15000);
     return () => clearInterval(interval);
-  }, []);
-
-  // useEffect separado para controlar o modal baseado nos estados
-  useEffect(() => {
-    // Fecha modal se o estado não permitir mais receber pedidos
-    if (modalRotaVisible && (!online || emEntrega || organizandoRota)) {
-      setModalRotaVisible(false);
-    }
-  }, [online, emEntrega, organizandoRota, modalRotaVisible]);
-
-  // Ao focar novamente esta tela (voltar de confirmacaoEntrega), recentraliza no usuário
-  useFocusEffect(
-    React.useCallback(() => {
-      setRecenterToken((t) => t + 1);
-      return () => { };
-    }, [])
-  );
+  }, [online, refetch]);
 
   useEffect(() => {
-    const checarUltimaEntrega = async () => {
-      const lista = await getSecureItem('pedidosCompletos');
-    const indiceAtualStr = await getSecureItem('indiceAtual');
-      if (lista && indiceAtualStr) {
-        const pedidos = JSON.parse(lista);
-        const indiceAtual = parseInt(indiceAtualStr, 10);
-        setIsUltimaEntrega(indiceAtual >= pedidos.length - 1);
-      } else {
-        setIsUltimaEntrega(false);
+    if (!online) return;
+    const interval = setInterval(() => {
+      heartbeatOperationalSession().catch((caught) => {
+        console.warn('[SESSION] Falha no heartbeat operacional:', caught);
+      });
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [online]);
+
+  const ficarOnline = async () => {
+    try {
+      setBusy(true);
+      await startOperationalSession();
+      await setTrackingMode('online_idle');
+      const started = await iniciarMonitoramentoLocalizacao('online_idle');
+      if (!started) {
+        await endOperationalSession('location_permission_denied');
+        Alert.alert('Localização necessária', 'Permita o acesso à localização para ficar online.');
+        return;
       }
-    };
-    checarUltimaEntrega();
-  }, [mostrandoConfirmar]);
-
-  const finalizarRota = async () => {
-    await deleteSecureItem('emEntrega');
-    await deleteSecureItem('indiceAtual');
-    await deleteSecureItem('pedidosCompletos');
-    await deleteSecureItem('destinos');
-    setMostrandoConfirmar(false);
-    iniciarOpacity.setValue(1);
-    confirmarOpacity.setValue(0);
-
-    // Para o monitoramento de localização
-    await pararMonitoramentoLocalizacao();
-
-    Alert.alert('Rota finalizada!', 'Todas as entregas foram concluídas.');
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 5,
-
-      onPanResponderMove: (_, gesture) => {
-        let newHeight = lastHeight - gesture.dy;
-        newHeight = Math.max(MIN_HEIGHT, Math.min(MAX_HEIGHT, newHeight));
-        animatedHeight.setValue(newHeight);
-      },
-
-      onPanResponderRelease: (_, gesture) => {
-        let finalHeight;
-
-        if (gesture.dy < -50) {
-          finalHeight = MAX_HEIGHT;
-        } else if (gesture.dy > 50) {
-          finalHeight = MIN_HEIGHT;
-        } else {
-          animatedHeight.stopAnimation((currentValue) => {
-            finalHeight = currentValue;
-            Animated.spring(animatedHeight, {
-              toValue: finalHeight,
-              useNativeDriver: false,
-            }).start();
-          });
-          return;
-        }
-
-        lastHeight = finalHeight;
-        Animated.spring(animatedHeight, {
-          toValue: finalHeight,
-          useNativeDriver: false,
-        }).start();
-      },
-    })
-  ).current;
-
-  const handleIniciar = async () => {
-    await setSecureItem('online', 'true');
-    setOnline(true);
-    Alert.alert('Você está online!', 'Agora pode receber pedidos.');
-  };
-  const handleAceitarPedido = (pedidosRecebidos: any[]) => {
-    const novosPedidos = [...pedidosRecebidos];
-    setPedidosAceitos(novosPedidos);
-    setModalRotaVisible(false);
-    setOrganizandoRota(true);
-    // Pequeno atraso para garantir layout antes do fit no mapa
-    setTimeout(() => setPedidosAceitos((prev) => [...novosPedidos]), 50);
-  };
-
-
-  const handleRecusar = () => {
-    setModalRotaVisible(false);
-  };
-
-
-  const handleConfirmar = async () => {
-    const lista = await getSecureItem('pedidosCompletos');
-    const indiceAtualStr = await getSecureItem('indiceAtual');
-    let pedidoAtual = null;
-    if (lista && indiceAtualStr) {
-      const pedidos = JSON.parse(lista);
-      const indiceAtual = parseInt(indiceAtualStr, 10);
-      pedidoAtual = pedidos[indiceAtual];
+      setOnline(true);
+      await refetch();
+    } catch (caught: any) {
+      await clearOperationalSession();
+      Alert.alert('Não foi possível ficar online', caught?.message ?? 'Tente novamente.');
+    } finally {
+      setBusy(false);
     }
-    // COLOCAR NO LUGAR (RECOMENDADO)
-    if (!pedidoAtual) return;
-
-    router.push({
-      pathname: '/confirmacaoEntrega',
-      params: {
-        id: String(pedidoAtual.id || 0),
-        nome: pedidoAtual.nomeCliente ?? '--',
-        bairro: pedidoAtual.bairro ?? '',
-        endereco: pedidoAtual.enderecoEntrega ?? '--',
-        statusPagamento: pedidoAtual.statusPagamento ?? '',
-        valorTotal: String(pedidoAtual.valorTotal ?? 0),
-        telefone: pedidoAtual.telefoneCliente ?? '',
-        horario: pedidoAtual.dataPedido ?? '',
-        observacoes: pedidoAtual.observacoes ?? '',
-        itens: JSON.stringify(pedidoAtual.itens ?? []),
-        coordinates: JSON.stringify(pedidoAtual.coordinates ?? null),
-      },
-    });
-
   };
 
-  const handleAbrirSacola = async () => {
-    const lista = await getSecureItem('pedidosCompletos');
-    const indiceAtualStr = await getSecureItem('indiceAtual');
-    let pedidoAtual = null;
-    if (lista && indiceAtualStr) {
-      const pedidos = JSON.parse(lista);
-      const indiceAtual = parseInt(indiceAtualStr, 10);
-      pedidoAtual = pedidos[indiceAtual];
+  const ficarOffline = async () => {
+    if (activeRoute || queue?.current) {
+      Alert.alert('Ação não permitida', 'Finalize a entrega atual antes de ficar offline.');
+      return;
     }
-    
-    if (!pedidoAtual) return;
-
-    router.push({
-      pathname: '/ExemploSacolaScreen',
-      params: {
-        id: String(pedidoAtual.id || 0),
-        nome: pedidoAtual.nomeCliente ?? '--',
-        bairro: pedidoAtual.bairro ?? '',
-        endereco: pedidoAtual.enderecoEntrega ?? '--',
-        statusPagamento: pedidoAtual.statusPagamento ?? '',
-        valorTotal: String(pedidoAtual.valorTotal ?? 0),
-        telefone: pedidoAtual.telefoneCliente ?? '',
-        horario: pedidoAtual.dataPedido ?? '',
-        observacoes: pedidoAtual.observacoes ?? '',
-        itens: JSON.stringify(pedidoAtual.itens ?? []),
-        coordinates: JSON.stringify(pedidoAtual.coordinates ?? null),
-      },
-    });
+    try {
+      setBusy(true);
+      await flushLocationQueue();
+      await pararMonitoramentoLocalizacao();
+      await endOperationalSession('motoboy_offline');
+    } catch (caught: any) {
+      Alert.alert('Erro ao ficar offline', caught?.message ?? 'Tente novamente.');
+    } finally {
+      await clearTrackingMode();
+      setOnline(false);
+      setOfferVisible(false);
+      setOrganizandoRota(false);
+      setBusy(false);
+      await refetch();
+    }
   };
 
-  
-  useEffect(() => {
-    const atualizarPedidosEmEntrega = async () => {
-      const pedidosStr = await getSecureItem('pedidosCompletos');
-    const indiceStr = await getSecureItem('indiceAtual');
-      if (pedidosStr && indiceStr) {
-        const pedidos = JSON.parse(pedidosStr);
-        // Não usar slice: manter a lista completa e usar indiceAtual no mapa
-        setPedidosAceitos(pedidos);
+  const aceitarOferta = async () => {
+    try {
+      setBusy(true);
+      const nextQueue = await acceptOffer();
+      setPedidosAceitos(queueToPedidos(nextQueue));
+      setOfferVisible(false);
+      setOrganizandoRota(true);
+    } catch {
+      Alert.alert('Oferta indisponível', 'A oferta mudou ou expirou. Atualize a fila.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recusarOferta = async () => {
+    try {
+      setBusy(true);
+      await rejectOffer('recusada_pelo_motoboy');
+      setOfferVisible(false);
+    } catch (caught: any) {
+      Alert.alert('Erro', caught?.message ?? 'Não foi possível recusar a oferta.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const iniciarRota = async () => {
+    setOrganizandoRota(false);
+    setActiveRoute(true);
+    await setTrackingMode('active_route');
+    await iniciarMonitoramentoLocalizacao('active_route');
+  };
+
+  const abrirConfirmacao = () => {
+    const current = queue?.current?.pedido;
+    if (!current) {
+      Alert.alert('Entrega ainda não iniciada', 'A API ainda não marcou um pedido como entrega atual.');
+      return;
+    }
+    router.push({ pathname: '/confirmacaoEntrega', params: { id: String(current.id) } });
+  };
+
+  const atualizarOrdem = async (items: typeof pedidosAceitos) => {
+    setPedidosAceitos(items);
+    if (!activeRoute && items.length > 0) {
+      try {
+        await reorderQueue(items.map((item) => item.id));
+      } catch {
+        Alert.alert('Fila alterada', 'A fila foi atualizada por outro usuário.');
+        await refetch();
       }
-    };
-
-    if (emEntrega) {
-      atualizarPedidosEmEntrega();
     }
-  }, [emEntrega])
+  };
+
+  if (authLoading || !user || !estabelecimentoAtual || needsEstablishmentSelection) return null;
+
+  const lista = activeRoute || organizandoRota ? pedidosAceitos : pedidosDaFila;
 
   return (
     <View style={styles.container}>
-      <Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} recenterToken={recenterToken} />
-      <View style={{ flexDirection: 'row', position: 'absolute', top: insets.top + 8, right: 20, zIndex: 20, alignItems: 'center' }}>
-        {!online && (
-          <TouchableOpacity
-            onPress={handleIniciar}
-            style={{
-              backgroundColor: '#2C79FF',
-              borderRadius: 12,
-              paddingVertical: 6,
-              paddingHorizontal: 10,
-              marginRight: 8,
-              elevation: 2,
-            }}
-          >
-            <Text style={{ color: '#fff', fontSize: 12, fontWeight: 'bold' }}>INICIAR</Text>
-          </TouchableOpacity>
-        )}
-        {online && (
-          <>
-            {(!emEntrega && !organizandoRota) && (
-              <TouchableOpacity
-                style={{ backgroundColor: '#23232b', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 10, marginLeft: 50, marginTop: 50 }}
-                onPress={() => {
-                  if (!online || emEntrega || organizandoRota) {
-                    Alert.alert('Indisponível', 'Você só pode aceitar pedidos quando estiver disponível.');
-                    return;
-                  }
-                  setModalRotaVisible(true);
-                }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Receber Pedidos</Text>
-              </TouchableOpacity>
-            )}
+      <Mapa pedidos={lista} emEntrega={activeRoute} recenterToken={0} />
 
-            <TouchableOpacity
-              style={{ backgroundColor: '#ff4444', borderRadius: 20, paddingVertical: 10, paddingHorizontal: 18 }}
-              onPress={async () => {
-                if (emEntrega) {
-                  Alert.alert('Ação não permitida', 'Você está em rota. Finalize a rota para ficar offline.');
-                  return;
-                }
-                if (organizandoRota && pedidosAceitos.length > 0) {
-                  Alert.alert(
-                    'Cancelar organização de rota',
-                    'Os pedidos serão devolvidos para a pizzaria. Deseja continuar?',
-                    [
-                      { text: 'Não' },
-                      {
-                        text: 'Sim',
-                        onPress: async () => {
-                          setPedidosAceitos([]);
-                          setOrganizandoRota(false);
-                          await setSecureItem('online', 'false');
-                          setOnline(false);
-                          Alert.alert('Status atualizado', 'Você está agora offline.');
-                        },
-                      },
-                    ]
-                  );
-                  return;
-                }
-                await setSecureItem('online', 'false');
-                setOnline(false);
-                Alert.alert('Status atualizado', 'Você está agora offline.');
-              }}
-            >
-              <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 15 }}>Ficar Offline</Text>
-            </TouchableOpacity>
-          </>
-        )}
+      <View style={[styles.topBar, { top: insets.top + 10 }]}>
+        <View style={styles.userBox}>
+          <Text style={styles.userName}>{user.nome}</Text>
+          <Text style={styles.establishmentName}>{estabelecimentoAtual.nome}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.statusButton, online ? styles.offlineButton : styles.onlineButton]}
+          onPress={online ? ficarOffline : ficarOnline}
+          disabled={busy}
+        >
+          {busy ? <ActivityIndicator color="#FFF" size="small" /> : <Text style={styles.statusText}>{online ? 'Ficar offline' : 'Ficar online'}</Text>}
+        </TouchableOpacity>
       </View>
 
-      {modalRotaVisible && online && !emEntrega && !organizandoRota && (
-        <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 100 }}>
-          <ModalConfirmarRota
-            visible={true}
-            onAceitar={handleAceitarPedido}
-            onRecusar={handleRecusar}
-            pedidos={loadingPedidos ? [] : pedidosDisponiveis}
-          />
-        </View>
+      {online && oferta && !activeRoute && !organizandoRota && (
+        <ModalConfirmarRota
+          visible={offerVisible}
+          onAceitar={aceitarOferta}
+          onRecusar={recusarOferta}
+          pedidos={queueToPedidos({ ...queue!, current: null, next: [], offer: oferta })}
+        />
       )}
 
-      <TouchableOpacity style={[styles.menuButton, { top: insets.top + 10 }]}>
-        <Ionicons name="menu" size={24} color="#000" />
-        <View style={styles.badge} />
-      </TouchableOpacity>
+      <View style={styles.panel}>
+        <Text style={styles.panelTitle}>
+          {activeRoute ? 'Entrega atual' : organizandoRota ? 'Organize sua rota' : online ? 'Fila do restaurante' : 'Você está offline'}
+        </Text>
 
-
-
-      <TouchableOpacity style={[styles.valorPainel, { top: insets.top + 10 }]}> 
-        <Text style={styles.valorTexto}>Olá, {user?.nome || 'Motoboy'}</Text>
-      </TouchableOpacity>
-
-      {/* Botão auxiliar (demo) para abrir a Sacola diretamente no device - só visível quando em rota */}
-      {emEntrega && (
-        <TouchableOpacity
-          style={[styles.sacolaDemoButton, { top: insets.top + 100 }]}
-          onPress={handleAbrirSacola}
-          accessibilityRole="button"
-          accessibilityLabel="Abrir Sacola (demo)"
-          testID="btn-abrir-sacola-demo-inline"
-        >
-          <Text style={styles.sacolaDemoButtonText}>Sacola (demo)</Text>
-        </TouchableOpacity>
-      )}
-
-
-      {emEntrega && (
-        <Animated.View
-          style={[
-            styles.confirmarButton,
-            {
-              // Posiciona logo acima da barra, sem duplicar o insets.bottom
-              bottom: Animated.add(animatedHeight, new Animated.Value(6)),
-              opacity: animatedHeight.interpolate({
-                // Visível quando a barra está minimizada (na altura mínima real)
-                inputRange: [minSnapHeight, minSnapHeight + 40],
-                outputRange: [1, 0],
-                extrapolate: 'clamp',
-              }),
-            },
-          ]}
-          pointerEvents="auto"
-        >
-          <TouchableOpacity onPress={handleConfirmar} disabled={!emEntrega}>
-            <Text style={styles.startButtonText}>CONFIRMAR PEDIDO</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      )}
-
-
-      <Animated.View style={[styles.panel, { height: animatedHeight }]} {...panResponder.panHandlers}>
-        <View style={styles.handle}>
-          <View style={styles.indicator} />
-        </View>
-
-        <View style={styles.sheetRow}>
-          <Ionicons name="options" size={22} color="#fff" />
-          <Text style={styles.bottomText}>
-            {!online
-              ? 'Você está offline'
-              : organizandoRota
-                ? 'Organize sua rota de entrega'
-                : 'Disponível para entregas'}
-          </Text>
-
-          <TouchableOpacity
-            onPress={() => {
-              const destino = painelNoTopo ? MIN_HEIGHT : MAX_HEIGHT;
-              Animated.spring(animatedHeight, {
-                toValue: destino,
-                useNativeDriver: false,
-              }).start();
-            }}
-          >
-            <Ionicons name="menu" size={22} color="#fff" />
-          </TouchableOpacity>
-        </View>
-
-        {online && (organizandoRota || emEntrega) && (
+        {online && loading && <ActivityIndicator color="#2C79FF" />}
+        {online && error && <Text style={styles.errorText}>{error}</Text>}
+        {online && !loading && !error && lista.length === 0 && (
+          <Text style={styles.emptyText}>Nenhum pedido disponível no momento.</Text>
+        )}
+        {online && lista.length > 0 && (
           <PedidosDraggableList
-            pedidos={pedidosAceitos}
-            onAtualizarPedidosAceitos={setPedidosAceitos}
-            bottomInset={72}
-            dragEnabled={!emEntrega}
+            pedidos={lista}
+            onAtualizarPedidosAceitos={atualizarOrdem}
+            dragEnabled={!activeRoute}
           />
         )}
 
-        {online && !organizandoRota && !emEntrega && (
-          loadingPedidos ? (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <Text style={{ color: '#fff', fontSize: 16 }}>Carregando pedidos...</Text>
-            </View>
-          ) : errorPedidos ? (
-            <View style={{ padding: 20, alignItems: 'center' }}>
-              <Text style={{ color: '#ff6b6b', fontSize: 16, marginBottom: 10 }}>Erro ao carregar pedidos</Text>
-              <TouchableOpacity 
-                onPress={refetch}
-                style={{ backgroundColor: '#2C79FF', padding: 10, borderRadius: 8 }}
-              >
-                <Text style={{ color: '#fff', fontWeight: 'bold' }}>Tentar novamente</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <PedidosDraggableList
-              pedidos={pedidosDisponiveis}
-              onAtualizarPedidosAceitos={setPedidosAceitos}
-              bottomInset={72}
-              dragEnabled={false}
-            />
-          )
+        {online && !activeRoute && organizandoRota && pedidosAceitos.length > 0 && (
+          <TouchableOpacity style={styles.primaryButton} onPress={iniciarRota}>
+            <Text style={styles.primaryButtonText}>Iniciar rota</Text>
+          </TouchableOpacity>
         )}
 
-
-
-        {organizandoRota && pedidosAceitos.length > 0 && (
-          <Animated.View
-            style={[
-              styles.fixedFooter,
-              {
-                opacity: animatedHeight.interpolate({
-                  inputRange: [MIN_HEIGHT, MIN_HEIGHT + 40],
-                  outputRange: [0, 1],
-                  extrapolate: 'clamp',
-                }),
-                bottom: 36 + insets.bottom,
-              },
-            ]}
-            pointerEvents="auto"
-          >
-            <TouchableOpacity style={styles.iniciarRotaButton} onPress={handleIniciarRota}>
-              <Text style={styles.iniciarRotaButtonText}>Iniciar Rota</Text>
-            </TouchableOpacity>
-          </Animated.View>
+        {online && activeRoute && queue?.current && (
+          <TouchableOpacity style={styles.primaryButton} onPress={abrirConfirmacao}>
+            <Text style={styles.primaryButtonText}>Confirmar entrega atual</Text>
+          </TouchableOpacity>
         )}
-      </Animated.View>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  menuButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    backgroundColor: '#fff',
-    padding: 10,
-    borderRadius: 50,
-    elevation: 5,
-    zIndex: 10,
-  },
-  fixedFooter: {
-    position: 'absolute',
-    bottom: 36,
-    left: 16,
-    right: 16,
-    zIndex: 50,
-    alignItems: 'center',
-  },
-
-
-  iniciarRotaButton: {
-    backgroundColor: '#2C79FF',
-    borderRadius: 24,
-    paddingVertical: 12,
-    paddingHorizontal: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 4,
-    marginTop: 8,
-  },
-  iniciarRotaButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  badge: {
-    width: 8,
-    height: 8,
-    backgroundColor: 'red',
-    borderRadius: 4,
-    position: 'absolute',
-    top: 8,
-    right: 8,
-  },
-  valorPainel: {
-    position: 'absolute',
-    top: 50,
-    alignSelf: 'center',
-    backgroundColor: '#2c264c',
-    paddingVertical: 6,
-    paddingHorizontal: 20,
-    borderRadius: 20,
-    zIndex: 10,
-  },
-  valorTexto: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  novaEntregaButton: {
-    position: 'absolute',
-    right: 20,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#2C79FF',
-    borderRadius: 16,
-    zIndex: 10,
-  },
-  novaEntregaButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  confirmarButton: {
-    position: 'absolute',
-    alignSelf: 'center',
-    backgroundColor: '#4CAF50',
-    width: 160,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    elevation: 8,
-    zIndex: 10,
-  },
-
-  startButtonText: {
-    color: '#fff',
-    fontWeight: 'bold',
-    fontSize: 14,         // um pouquinho menor
-  },
-  panel: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#121212',
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
-    overflow: 'hidden',
-    zIndex: 5,
-  },
-  handle: {
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  indicator: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#444',
-    borderRadius: 3,
-  },
-  sheetRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  bottomText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  sacolaDemoButton: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-    backgroundColor: '#111827',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    zIndex: 1000,
-    elevation: 12,
-  },
-  sacolaDemoButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-  },
+  container: { flex: 1, backgroundColor: '#F5F7FB' },
+  topBar: { position: 'absolute', left: 16, right: 16, zIndex: 20, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  userBox: { backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, elevation: 3 },
+  userName: { color: '#111827', fontSize: 14, fontWeight: '700' },
+  establishmentName: { color: '#6B7280', fontSize: 11, marginTop: 2 },
+  statusButton: { borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10, elevation: 3 },
+  onlineButton: { backgroundColor: '#2C79FF' },
+  offlineButton: { backgroundColor: '#EF4444' },
+  statusText: { color: '#FFF', fontSize: 12, fontWeight: '700' },
+  panel: { position: 'absolute', bottom: 0, left: 0, right: 0, maxHeight: '58%', minHeight: 170, backgroundColor: '#181820', borderTopLeftRadius: 22, borderTopRightRadius: 22, padding: 16 },
+  panelTitle: { color: '#FFF', fontSize: 18, fontWeight: '800', marginBottom: 10 },
+  errorText: { color: '#FCA5A5', textAlign: 'center', marginVertical: 12 },
+  emptyText: { color: '#9CA3AF', textAlign: 'center', marginVertical: 20 },
+  primaryButton: { backgroundColor: '#2C79FF', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 10 },
+  primaryButtonText: { color: '#FFF', fontWeight: '800' },
 });

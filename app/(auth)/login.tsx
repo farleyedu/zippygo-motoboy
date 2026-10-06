@@ -32,8 +32,7 @@ export default function LoginScreen() {
     setIsLoading(false);
 
     if (result.success) {
-      // Redirecionar para tela principal (mapa inicial)
-      router.replace('/');
+      router.replace((result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/') as any);
     } else {
       Alert.alert('Erro no Login', result.error || 'Erro desconhecido');
     }
@@ -94,11 +93,12 @@ export default function LoginScreen() {
             </View>
           </View>
 
-          <View style={styles.testUsers}>
+          {/* Usuários de teste removidos: o login usa somente a API. */}
+          {false && <View style={styles.testUsers}>
             <Text style={styles.testTitle}>Usuários de Teste:</Text>
             <Text style={styles.testUser}>1 - 1</Text>
             <Text style={styles.testUser}>natan@zippygo.com - Teste@12345</Text>
-          </View>
+          </View>}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

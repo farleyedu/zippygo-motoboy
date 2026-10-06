@@ -25,8 +25,8 @@ type ModalConfirmarRotaProps = {
 
 export default function ModalConfirmarRota({ visible, onAceitar, onRecusar, pedidos }: ModalConfirmarRotaProps) {
   const destinos: Destino[] = pedidos.map((pedido) => ({
-    tempo: pedido.horario_formatado || pedido.horario || '20:00',
-    distancia: `1.5 km`,
+    tempo: pedido.horario_formatado || pedido.horario || '--',
+    distancia: typeof pedido.distancia_km === 'number' ? `${pedido.distancia_km.toFixed(1)} km` : '--',
     endereco: pedido.endereco || pedido.enderecoEntrega || 'Endereço não informado',
     cor: '#1ecb7b',
     numeroPedido: pedido.id.toString(),

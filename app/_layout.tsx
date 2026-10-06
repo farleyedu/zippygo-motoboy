@@ -12,6 +12,7 @@ import * as Linking from 'expo-linking';
 import { AuthProvider } from '@/src/contexts/AuthContext';
 
 import { testApiHealth } from '../services/apiService';
+import '../components/locationTask';
 
 // 🔍 DEBUG: Network debug removido - interceptação limpa ativada
 
@@ -111,6 +112,7 @@ function RootLayoutNav() {
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         
         <Stack.Screen name="index" options={{ headerShown: false }} />
+        <Stack.Screen name="selecionarRestaurante" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         
         {/* ✅ Oculta o topo da tela confirmacaoEntrega */}

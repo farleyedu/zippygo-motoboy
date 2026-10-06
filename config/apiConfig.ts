@@ -50,8 +50,23 @@ export const API_CONFIG = {
     // Autenticação (mantido para compatibilidade)
     LOGIN: '/auth/login',
     REFRESH_TOKEN: '/auth/refresh',
-    // Novo endpoint de pedidos completos para o motoboy
-    PEDIDOS_MOTOBOY_COMPLETOS: '/Pedido/motoboy',
+    ESTABLISHMENTS: '/me/estabelecimentos',
+    SELECT_ESTABLISHMENT: '/auth/definir-estabelecimento',
+
+    OPERATIONAL_START: '/v2/motoboys/me/session/start',
+    OPERATIONAL_SESSION: '/v2/motoboys/me/session',
+    OPERATIONAL_QUEUE: '/v2/motoboys/me/session/queue',
+    OPERATIONAL_HEARTBEAT: '/v2/motoboys/me/session/heartbeat',
+    OPERATIONAL_LOCATION: '/v2/motoboys/me/session/location',
+    ACCEPT_OFFER: '/v2/motoboys/me/session/queue/offer/accept',
+    REJECT_OFFER: '/v2/motoboys/me/session/queue/offer/reject',
+    REORDER_QUEUE: '/v2/motoboys/me/session/queue/reorder',
+    RESUME_QUEUE: '/v2/motoboys/me/session/queue/resume',
+    ARRIVED_AT_STORE: '/v2/motoboys/me/session/queue/arrived-at-store',
+    PICKUP_CURRENT: '/v2/motoboys/me/session/stops/current/pickup',
+    ARRIVE_CURRENT: '/v2/motoboys/me/session/stops/current/arrive',
+    DELIVER_CURRENT: '/v2/motoboys/me/session/stops/current/deliver',
+    FAIL_CURRENT: '/v2/motoboys/me/session/stops/current/fail',
   },
   
   // Configurações de retry

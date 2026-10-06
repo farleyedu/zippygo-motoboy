@@ -12,6 +12,19 @@ type Props = {
   recenterToken?: number;
 };
 
+const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: number } | null => {
+  const coordinates = pedido.coordinates;
+  if (!coordinates) {
+    return null;
+  }
+
+  if (typeof coordinates.lat === 'number' && typeof coordinates.lng === 'number') {
+    return { latitude: coordinates.lat, longitude: coordinates.lng };
+  }
+
+  return null;
+};
+
 export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   const [destinoCoords, setDestinoCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const indiceAtualRef = useRef<number>(0);
@@ -143,7 +156,8 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
     if (!emEntrega && pedidos && pedidos.length > 0) {
       const coords = pedidos
         .filter((p) => p?.coordinates)
-        .map((p) => ({ latitude: p.coordinates.latitude, longitude: p.coordinates.longitude }));
+        .map(getPedidoCoordinate)
+        .filter((coord): coord is { latitude: number; longitude: number } => !!coord);
       if (coords.length > 0) {
         // 1) Tentativa com fitToCoordinates
         if (mapRef.current) {
@@ -197,29 +211,37 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   // Memoize os marcadores para evitar re-renders desnecessários
   const markers = useMemo(() => {
     if (!emEntrega) {
-      return pedidos.map((p, i) => (
-        <React.Fragment key={`${p.id}-${i}`}>
-          <Marker
-            coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
-            anchor={{ x: 0.5, y: 1 }}
-            image={require('../assets/images/alfinete_85x85.png')}
-            tracksViewChanges={false}
-          />
-          <Marker
-            coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
-            anchor={{ x: 0, y: 0.5 }}
-            centerOffset={{ x: 8, y: 6 }}
-            tracksViewChanges={trackMarkers}
-          >
-            <View style={[styles.floatingNumber, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
-              <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
-            </View>
-          </Marker>
-        </React.Fragment>
-      ));
+      return pedidos.map((p, i) => {
+        const coordinate = getPedidoCoordinate(p);
+        if (!coordinate) return null;
+
+        return (
+          <React.Fragment key={`${p.id}-${i}`}>
+            <Marker
+              coordinate={coordinate}
+              anchor={{ x: 0.5, y: 1 }}
+              image={require('../assets/images/alfinete_85x85.png')}
+              tracksViewChanges={false}
+            />
+            <Marker
+              coordinate={coordinate}
+              anchor={{ x: 0, y: 0.5 }}
+              centerOffset={{ x: 8, y: 6 }}
+              tracksViewChanges={trackMarkers}
+            >
+              <View style={[styles.floatingNumber, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
+                <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
+              </View>
+            </Marker>
+          </React.Fragment>
+        );
+      });
     }
 
     return pedidos.map((p, i) => {
+      const coordinate = getPedidoCoordinate(p);
+      if (!coordinate) return null;
+
       const isAtual = i === indiceAtualRef.current;
       const isFuturo = i > indiceAtualRef.current;
 
@@ -227,7 +249,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         return (
           <Marker
             key={`${p.id}-atual`}
-            coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
+            coordinate={coordinate}
             anchor={{ x: 0.5, y: 1 }}
             pinColor="#d32f2f"
             tracksViewChanges={false}
@@ -240,13 +262,13 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         return (
           <React.Fragment key={`${p.id}-${i}`}>
             <Marker
-              coordinate={{ latitude: p.coordinates.lat, longitude: p.coordinates.lng }}
+              coordinate={coordinate}
               anchor={{ x: 0.5, y: 1 }}
               image={require('../assets/images/alfinete_32x23.png')}
               tracksViewChanges={false}
             />
             <Marker
-              coordinate={p.coordinates}
+              coordinate={coordinate}
               anchor={{ x: 0, y: 0.5 }}
               centerOffset={{ x: 8, y: 6 }}
               tracksViewChanges={trackMarkers}
