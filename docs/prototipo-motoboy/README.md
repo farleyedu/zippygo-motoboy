@@ -53,6 +53,7 @@ A implementação nativa foi autorizada depois da aprovação do protótipo e j�
 - [PESQUISA.md](PESQUISA.md): fontes oficiais e prioridades de produto.
 - [CONTINUIDADE.md](CONTINUIDADE.md): contexto completo para outra IA continuar.
 - [IMPLEMENTACAO.md](IMPLEMENTACAO.md): contratos reutilizados, etapas e estado real da implementação.
+- [ETAPA-2.md](ETAPA-2.md): lote 2.1 de boas-vindas, login, cadastro e recuperação indisponível; estado e validações.
 - [CHECKLIST-IMPLEMENTACAO.md](CHECKLIST-IMPLEMENTACAO.md): acompanhamento das 61 telas, código inicial, API e validação.
 - [GUIA-MOTORES-CLAUDE.md](GUIA-MOTORES-CLAUDE.md): escolha de modelos com foco em economia.
 - [assets/ORIGEM.md](assets/ORIGEM.md): prompt do elemento 3D e licença da fonte.

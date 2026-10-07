@@ -1,5 +1,7 @@
 # Checklist de implementação — 61 telas
 
+> Rodada atual: etapa 2, lotes 2.1 e 2.2, documentados em [ETAPA-2.md](ETAPA-2.md). Entrada, cadastro, vínculos e convites implementados e revisados em Web com API interceptada; recuperação apresenta indisponibilidade por contrato ausente. Base e tela 19: [ETAPA-1.md](ETAPA-1.md). Android/API reais e lotes 2.3–2.4 continuam pendentes. Backend e painel sem alterações.
+
 Atualizado em 07/10/2026. Referência canônica: `rawScreens` em `prototype.js`; etapas e lotes em [IMPLEMENTACAO.md](IMPLEMENTACAO.md). Todas as telas têm desenho no HTML aprovado com a paleta azul.
 
 **Código inicial** significa que parte da nova tela/integração nativa existe; ainda precisa completar as interações e a revisão do lote. **Pendente** significa que o desenho aprovado ainda não foi implementado integralmente. Algumas telas têm versão legada: sua existência não comprova fidelidade ao protótipo.
@@ -10,15 +12,15 @@ Cada tela pertence a uma etapa principal. Recuperação de rede, permissões, ca
 
 | Nº | Tela e ID canônico | Etapa | Código do novo visual | API e regras | Validação do novo fluxo |
 | --- | --- | --- | --- | --- | --- |
-| 01 | Boas-vindas · `welcome` | 2 | Pendente | Navegação local | Pendente |
-| 02 | Entrar · `login` | 2 | Pendente | Reutilizar autenticação e refresh | Pendente |
-| 03 | Criar conta · `register` | 2 | Pendente | Reutilizar /motoboys/cadastro | Pendente |
-| 04 | Recuperar acesso · `recovery` | 2 | Pendente | Verificar contrato e completar recuperação | Pendente |
+| 01 | Boas-vindas · `welcome` | 2 | Implementado no Expo | Navegação e restauração da sessão existente | Web claro/escuro, 390/320 px; Android pendente — ETAPA-2.md |
+| 02 | Entrar · `login` | 2 | Implementado no Expo | Login, vínculos, seleção e refresh reutilizados | Web com API interceptada: erros/retry, zero/um/dois vínculos e refresh; API real/Android pendentes |
+| 03 | Criar conta · `register` | 2 | Implementado no Expo | /motoboys/cadastro reutilizado; confirma após resposta | Web com API interceptada: validação, conflito/retry e sucesso; API real/Android pendentes |
+| 04 | Recuperar acesso · `recovery` | 2 | Estado indisponível implementado | Contrato de solicitação/redefinição não encontrado; envio desabilitado | Estado indisponível e retorno revisados em Web; recuperação completa bloqueada pelo contrato |
 | 05 | Preparar o app · `permissions` | 2 | Pendente | Permissões do sistema e sessão | Pendente |
-| 06 | Escolher estabelecimento · `stores` | 2 | Pendente | Reutilizar vínculos e seleção de loja | Pendente |
-| 07 | Solicitar vínculo · `link` | 2 | Pendente | Reutilizar busca/solicitação de vínculo | Pendente |
-| 08 | Solicitação de vínculo · `link-status` | 2 | Pendente | Reutilizar solicitações e estados | Pendente |
-| 09 | Convite recebido · `invite` | 2 | Pendente | Reutilizar aceitar/recusar convite | Pendente |
+| 06 | Escolher estabelecimento · `stores` | 2 | Implementado no Expo — lote 2.2 | Vínculos e seleção existentes; bloqueio conservador de troca com contexto operacional local | Web/API interceptada: seleção única, ID retornado e bloqueio; API real/Android pendentes |
+| 07 | Solicitar vínculo · `link` | 2 | Implementado no Expo — lote 2.2 | Busca local e solicitação existente; estados reais | Web/API interceptada: busca/vazio, filtro, envio único, falha/retry; API real/Android pendentes |
+| 08 | Solicitação de vínculo · `link-status` | 2 | Implementado no Expo — lote 2.2 | Solicitações/status/motivo existentes; aprovação não equivale a vínculo ativo | Web/API interceptada: pendente/recusada/aprovada e vínculo revogado; API real/Android pendentes |
+| 09 | Convite recebido · `invite` | 2 | Implementado no Expo — lote 2.2 | Aceitar/recusar existentes; confirmação de recusa e resposta do servidor | Web/API interceptada: aceite/recusa, cancelamento, 404/retry e resposta atrasada; API real/Android pendentes |
 | 10 | Início · offline · `home` | 3 | Pendente | Reutilizar sessão; conectar resumo real | Pendente |
 | 11 | Início · online · `online` | 3 | Pendente | Reutilizar sessão/heartbeat/location | Pendente |
 | 12 | Pausa do turno · `pause` | 3 | Pendente | Verificar regra de pausa e persistência | Pendente |
@@ -28,7 +30,7 @@ Cada tela pertence a uma etapa principal. Recuperação de rede, permissões, ca
 | 16 | Organizar rota · `route` | 3 | Pendente | Reutilizar reorder/version/policies | Pendente |
 | 17 | Conferir retirada · `pickup` | 3 | Pendente | Reutilizar pickup; conferir contrato de volumes | Pendente |
 | 18 | Navegação · `navigate` | 3 | Código inicial | Câmera inicial; integrar trajetos e instruções | Pendente |
-| 19 | Detalhes do pedido · `order` | 1 | Código inicial | Consulta restrita adicionada; integrações finais pendentes | Backend + Web simulado; integração/Android pendentes |
+| 19 | Detalhes do pedido · `order` | 1 | Visual refinado no Expo | Consulta restrita e chegada por ID reutilizadas; backend sem alterações | Web com API interceptada revisado; TypeScript passou; API real/Android pendentes — ver ETAPA-1.md |
 | 20 | Chegada ao cliente · `arrive` | 4 | Pendente | Reutilizar arrive com proteção do ID adicionada | Regra do ID testada; fluxo/Android pendentes |
 | 21 | Finalizar entrega · `finish` | 4 | Pendente | Estender transação de entrega/cobrança | Pendente |
 | 22 | Código de entrega · `code` | 4 | Pendente | Criar validação antecipada usando regra existente | Pendente |

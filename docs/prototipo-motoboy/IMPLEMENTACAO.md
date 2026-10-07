@@ -1,5 +1,9 @@
 # Implementação do app aprovado
 
+> Escopo vigente em 07/10/2026: visual primeiro, integração somente com contratos existentes. Não alterar backend/painel nem publicar. Esta orientação substitui as autorizações históricas abaixo. Etapa 1: [ETAPA-1.md](ETAPA-1.md). Bloqueios futuros: [PENDENCIAS-BACKEND.md](PENDENCIAS-BACKEND.md).
+
+> Etapa 2: lotes 2.1 e 2.2 implementados e revisados em Web com aprovação explícita; entrada, cadastro, vínculos e convites. Recuperação indisponível por ausência de contrato. Detalhes: [ETAPA-2.md](ETAPA-2.md). Lotes 2.3–2.4 e validações Android/API reais continuam pendentes.
+
 Atualizado em 07/10/2026. **Autorizado pelo Farley: implementar todas as telas e funcionalidades do protótipo no app e backend, ajustando também o admin quando necessário.** Reaproveitar endpoints, catálogo e regras existentes. A autorização inicial de somente prototipar foi substituída por essa autorização. Não fazer deploy nem testar enviando mensagens/pagamentos reais.
 
 ## Referência obrigatória

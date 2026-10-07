@@ -1,0 +1,728 @@
+{
+  "completed": true,
+  "ambiente": "Exportação Expo Web local; Chrome headless; API interceptada; sem dados reais",
+  "results": [
+    "Quatro telas em claro/escuro, 390/320 px, movimento reduzido e texto ampliado sem overflow",
+    "Seleção local não envia POST; confirmação envia uma vez; troca com contexto operacional bloqueada e loja/token preservados",
+    "Busca por cidade sem acento, sem resultados e filtro DELIVERY; solicitação única; pendente/recusada/aprovada; aprovação sem vínculo não libera seleção",
+    "Convite: aceite após servidor; recusa com confirmação/cancelamento; ações bloqueadas durante envio e sem duplicidade",
+    "Indisponibilidade/retry; convite já respondido/404 sem sucesso fictício; seleção com ID errado não troca token; sem vínculos e convite ausente",
+    "Resposta de convite após sair da tela não apresenta confirmação na tela seguinte"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/definir-estabelecimento",
+      "body": {
+        "estabelecimentoId": "22222222-2222-2222-2222-222222222222"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/me/vinculos/solicitar",
+      "body": {
+        "estabelecimentoId": "33333333-3333-3333-3333-333333333333"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/me/vinculos/convites/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/aceitar",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/me/vinculos/convites/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/recusar",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/me/vinculos/solicitar",
+      "body": {
+        "estabelecimentoId": "33333333-3333-3333-3333-333333333333"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/me/vinculos/convites/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/aceitar",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/definir-estabelecimento",
+      "body": {
+        "estabelecimentoId": "22222222-2222-2222-2222-222222222222"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/me/vinculos/convites/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa/aceitar",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    }
+  ],
+  "errors": []
+}

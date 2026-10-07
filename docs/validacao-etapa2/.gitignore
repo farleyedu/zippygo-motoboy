@@ -1,0 +1,14 @@
+bundle/
+# Keep only screenshots referenced in README.md
+*.png
+!welcome-claro-390.png
+!welcome-escuro-390.png
+!login-claro-390.png
+!login-escuro-320.png
+!login-erro.png
+!register-claro-390.png
+!register-escuro-390.png
+!register-sucesso.png
+!register-texto-ampliado-320.png
+!recovery-claro-390.png
+!recovery-escuro-320.png

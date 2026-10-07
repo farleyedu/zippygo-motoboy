@@ -122,6 +122,8 @@ function RootLayoutNav() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="selecionarRestaurante" options={{ headerShown: false }} />
         <Stack.Screen name="solicitarRestaurante" options={{ headerShown: false }} />
+        <Stack.Screen name="solicitacoesVinculo" options={{ headerShown: false }} />
+        <Stack.Screen name="convite/[id]" options={{ headerShown: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         
         {/* ✅ Oculta o topo da tela confirmacaoEntrega */}

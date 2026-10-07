@@ -116,7 +116,7 @@ export default function TelaInicialMap() {
   useEffect(() => {
     if (authLoading) return;
     if (!user) {
-      router.replace('/(auth)/login');
+      router.replace('/(auth)/welcome');
       return;
     }
     if (needsLinkRequest) {

@@ -1,0 +1,11 @@
+# Keep only screenshots referenced in README.md
+*.png
+!pedido-claro-390.png
+!pedido-escuro-390.png
+!pedido-conferencia-claro.png
+!pedido-conferencia-escuro.png
+!pedido-escuro-320.png
+!pedido-fonte-ampliada-320.png
+!pedido-erro.png
+!pedido-sem-itens.png
+!conversas-base.png

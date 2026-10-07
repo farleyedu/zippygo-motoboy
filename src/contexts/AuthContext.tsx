@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { API_CONFIG } from '../../config/apiConfig';
 import { pararMonitoramentoLocalizacao } from '../../components/locationSetup';
 import { clearTrackingMode } from '../../services/trackingService';
@@ -44,6 +44,8 @@ interface AuthProviderProps {
 const ACTIVE_ESTABLISHMENT_KEY = 'zippygo.estabelecimentoAtual';
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const authEpoch = useRef(0);
+  const selecting = useRef(false);
   const [user, setUser] = useState<User | null>(null);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [estabelecimentos, setEstabelecimentos] = useState<EstablishmentLink[]>([]);
@@ -57,17 +59,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, []);
 
   const loadUserFromStorage = async () => {
+    authEpoch.current += 1;
     try {
       setIsLoading(true);
-      const storedUser = await SecureStore.getItemAsync('zippygo.user');
-      const storedToken = await SecureStore.getItemAsync('authToken')
-        ?? await SecureStore.getItemAsync('zippygo.token');
-      const storedEstablishment = await SecureStore.getItemAsync(ACTIVE_ESTABLISHMENT_KEY);
+      const storedUser = await getSecureItem('zippygo.user');
+      const storedToken = await getSecureItem('authToken')
+        ?? await getSecureItem('zippygo.token');
+      const storedEstablishment = await getSecureItem(ACTIVE_ESTABLISHMENT_KEY);
 
       if (!storedUser || !storedToken) return;
 
       // Compatibilidade com versoes antigas que salvavam apenas zippygo.token.
-      await SecureStore.setItemAsync('authToken', storedToken);
+      await setSecureItem('authToken', storedToken);
 
       const parsedUser = JSON.parse(storedUser) as User;
       setUser(parsedUser);
@@ -100,7 +103,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const refreshEstabelecimentos = async (): Promise<EstablishmentLink[]> => {
+    const epoch = authEpoch.current;
     const links = await listEstablishments();
+    if (epoch !== authEpoch.current) throw new Error('A sessão mudou. Atualize os vínculos.');
     const motoboyLinks = links.filter((item) => {
       const access = String(item.tipoAcesso ?? '').toLowerCase();
       const vinculo = String(item.statusVinculo ?? '').toLowerCase();
@@ -114,6 +119,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const signIn = async (email: string, senha: string) => {
+    authEpoch.current += 1;
     try {
       setIsLoading(true);
       const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`, {
@@ -136,14 +142,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
         telefone: apiUser.telefone,
       };
 
-      await SecureStore.setItemAsync('zippygo.user', JSON.stringify(userData));
-      await SecureStore.setItemAsync('zippygo.token', tokenData.accessToken);
-      await SecureStore.setItemAsync('authToken', tokenData.accessToken);
-      if (tokenData.refreshToken) await SecureStore.setItemAsync('refreshToken', tokenData.refreshToken);
+      await setSecureItem('zippygo.user', JSON.stringify(userData));
+      await setSecureItem('zippygo.token', tokenData.accessToken);
+      await setSecureItem('authToken', tokenData.accessToken);
+      if (tokenData.refreshToken) await setSecureItem('refreshToken', tokenData.refreshToken);
 
       setUser(userData);
       setAccessToken(tokenData.accessToken);
-      await SecureStore.deleteItemAsync(ACTIVE_ESTABLISHMENT_KEY);
+      await deleteSecureItem(ACTIVE_ESTABLISHMENT_KEY);
       setEstabelecimentoAtual(null);
       setNeedsLinkRequest(false);
 
@@ -171,32 +177,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
   };
 
   const selectEstablishment = async (estabelecimento: EstablishmentLink) => {
+    if (selecting.current) return { success: false, error: 'Aguarde a seleção em andamento.' };
+    selecting.current = true;
+    const epoch = authEpoch.current;
     try {
       setIsLoading(true);
+      // Não substitui o contexto de um turno nem descarta seus dados para trocar loja.
+      const stored = await getSecureItem(ACTIVE_ESTABLISHMENT_KEY);
+      const currentStored = stored ? JSON.parse(stored) as SelectedEstablishment & Partial<EstablishmentLink> : null;
+      const currentId = currentStored?.estabelecimentoId ?? currentStored?.id;
+      if (currentId !== estabelecimento.estabelecimentoId) {
+        const [token, session, tracking] = await Promise.all([
+          getSecureItem('operationalAccessToken'), getSecureItem('operationalSession'), getSecureItem('trackingMode'),
+        ]);
+        if (token || session || tracking) return { success: false, error: 'Encerre ou recupere seu turno atual antes de trocar de estabelecimento.' };
+      }
+      if (epoch !== authEpoch.current) return { success: false, error: 'A sessão mudou. Entre novamente.' };
       const selected = await selectEstablishmentApi(estabelecimento.estabelecimentoId);
-      await SecureStore.setItemAsync('authToken', selected.accessToken);
-      await SecureStore.setItemAsync('zippygo.token', selected.accessToken);
-      if (selected.refreshToken) await SecureStore.setItemAsync('refreshToken', selected.refreshToken);
+      if (epoch !== authEpoch.current) return { success: false, error: 'A sessão mudou. Entre novamente.' };
+      if (!selected.accessToken || selected.estabelecimentoSelecionado?.id !== estabelecimento.estabelecimentoId) {
+        return { success: false, error: 'A seleção não foi confirmada pelo servidor. Atualize os vínculos e tente novamente.' };
+      }
+      await setSecureItem('authToken', selected.accessToken);
+      await setSecureItem('zippygo.token', selected.accessToken);
+      if (selected.refreshToken) await setSecureItem('refreshToken', selected.refreshToken);
 
       const current = selected.estabelecimentoSelecionado ?? {
         id: estabelecimento.estabelecimentoId,
         nome: estabelecimento.nome,
         tipoEstabelecimento: estabelecimento.tipoEstabelecimento,
       };
-      await SecureStore.setItemAsync(ACTIVE_ESTABLISHMENT_KEY, JSON.stringify(current));
+      await setSecureItem(ACTIVE_ESTABLISHMENT_KEY, JSON.stringify(current));
       setAccessToken(selected.accessToken);
       setEstabelecimentoAtual(current);
       setNeedsEstablishmentSelection(false);
       setNeedsLinkRequest(false);
       return { success: true };
-    } catch (error: any) {
-      return { success: false, error: error?.message ?? 'Não foi possível selecionar o restaurante.' };
+    } catch (error: unknown) {
+      return { success: false, error: error instanceof Error ? error.message : 'Não foi possível selecionar o restaurante.' };
     } finally {
-      setIsLoading(false);
+      selecting.current = false;
+      if (epoch === authEpoch.current) setIsLoading(false);
     }
   };
 
   const signOut = async () => {
+    authEpoch.current += 1;
     try {
       setIsLoading(true);
       try {
@@ -206,11 +232,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
       await pararMonitoramentoLocalizacao();
       await clearTrackingMode();
-      await SecureStore.deleteItemAsync('zippygo.user');
-      await SecureStore.deleteItemAsync('zippygo.token');
-      await SecureStore.deleteItemAsync('authToken');
-      await SecureStore.deleteItemAsync('refreshToken');
-      await SecureStore.deleteItemAsync(ACTIVE_ESTABLISHMENT_KEY);
+      await deleteSecureItem('zippygo.user');
+      await deleteSecureItem('zippygo.token');
+      await deleteSecureItem('authToken');
+      await deleteSecureItem('refreshToken');
+      await deleteSecureItem(ACTIVE_ESTABLISHMENT_KEY);
       setUser(null);
       setAccessToken(null);
       setEstabelecimentos([]);

@@ -1,0 +1,232 @@
+{
+  "completed": true,
+  "ambiente": "Expo Web; Chrome headless; API interceptada; sem API/banco reais",
+  "results": [
+    "Boas-vindas pela raiz; capacete carregado; validação de login sem pedido HTTP",
+    "Recuperação indisponível sem coleta de e-mail/envio; senha protegida; falha HTTP/rede; retry; bloqueio durante login; sem vínculos",
+    "Cadastro: campos inválidos, confirmação diferente, conflito HTTP, retry, telefone opcional, payload normalizado, envio único e sucesso após resposta",
+    "Quatro telas em claro/escuro, 390/320 px, sem overflow; tema persistido; texto 30% maior em cadastro; movimento reduzido",
+    "Login com dois vínculos abre seleção; um vínculo seleciona loja e salva tokens; welcome restaura sessão sem novo login",
+    "Restauração com 401 renova token pelo contrato existente e preserva seleção de loja"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "body": {
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "body": {
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "body": {
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/cadastro",
+      "body": {
+        "nome": "Motoboy de teste",
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/api/motoboys/cadastro",
+      "body": {
+        "nome": "Motoboy de teste",
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "body": {
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/login",
+      "body": {
+        "email": "teste@exemplo.com",
+        "senha": "Senha@123"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/definir-estabelecimento",
+      "body": {
+        "estabelecimentoId": "1"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/auth/refresh",
+      "body": {
+        "refreshToken": "refresh-teste"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/estabelecimentos-disponiveis",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/motoboys/me/vinculos/solicitacoes",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/me/estabelecimentos",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    }
+  ],
+  "failures": []
+}

@@ -1,0 +1,60 @@
+{
+  "ambiente": "Expo Web; Chrome headless; API interceptada; sem integração real",
+  "results": [
+    "Pedido com itens e foto do catálogo — 390 px",
+    "Tema escuro persistido após recarregar; movimento reduzido",
+    "Pedido em 320 px sem rolagem horizontal",
+    "Simulação web de texto 30% maior em 320 px; validação nativa permanece pendente",
+    "Falha HTTP, retry, ausência de itens/valor e previsão inválida",
+    "Chegada envia expectedPedidoId correto; finalização legada requer autenticação (sem sessão real nesta revisão)",
+    "Central de conversas renderiza com componentes compartilhados"
+  ],
+  "requests": [
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/orders/1842",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/Motoboy",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/orders/1842",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/orders/1842",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/orders/1842",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/orders/1842",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/motoboys/me/session/stops/current/arrive",
+      "body": "{\"expectedPedidoId\":1842}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/orders/1842",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/api/v2/motoboys/me/session/queue",
+      "body": null
+    }
+  ],
+  "failures": []
+}

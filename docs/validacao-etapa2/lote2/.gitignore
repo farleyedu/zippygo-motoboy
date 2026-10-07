@@ -1,0 +1,17 @@
+# Keep only screenshots referenced in README.md
+*.png
+!stores-claro-390.png
+!stores-escuro-320.png
+!stores-texto-ampliado-320.png
+!link-claro-390.png
+!link-escuro-390.png
+!solicitacao-pendente.png
+!solicitacao-recusada.png
+!solicitacao-aprovada.png
+!invite-claro-390.png
+!invite-escuro-320.png
+!convite-aceito.png
+!convite-recusado.png
+!troca-bloqueada.png
+!lista-erro.png
+!sem-vinculos.png
