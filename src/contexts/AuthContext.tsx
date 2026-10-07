@@ -26,8 +26,9 @@ interface AuthContextData {
   estabelecimentos: EstablishmentLink[];
   estabelecimentoAtual: SelectedEstablishment | EstablishmentLink | null;
   needsEstablishmentSelection: boolean;
+  needsLinkRequest: boolean;
   isLoading: boolean;
-  signIn: (email: string, senha: string) => Promise<{ success: boolean; error?: string; requiresEstablishmentSelection?: boolean }>;
+  signIn: (email: string, senha: string) => Promise<{ success: boolean; error?: string; requiresEstablishmentSelection?: boolean; requiresLinkRequest?: boolean }>;
   selectEstablishment: (estabelecimento: EstablishmentLink) => Promise<{ success: boolean; error?: string }>;
   refreshEstabelecimentos: () => Promise<EstablishmentLink[]>;
   signOut: () => Promise<void>;
@@ -48,6 +49,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [estabelecimentos, setEstabelecimentos] = useState<EstablishmentLink[]>([]);
   const [estabelecimentoAtual, setEstabelecimentoAtual] = useState<SelectedEstablishment | EstablishmentLink | null>(null);
   const [needsEstablishmentSelection, setNeedsEstablishmentSelection] = useState(false);
+  const [needsLinkRequest, setNeedsLinkRequest] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -76,10 +78,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (current) {
         setEstabelecimentoAtual(current);
         setNeedsEstablishmentSelection(false);
+        setNeedsLinkRequest(false);
       } else if (links.length === 1) {
         await selectEstablishment(links[0]);
+      } else if (links.length === 0) {
+        setNeedsEstablishmentSelection(false);
+        setNeedsLinkRequest(true);
       } else {
         setNeedsEstablishmentSelection(true);
+        setNeedsLinkRequest(false);
       }
     } catch (error) {
       console.log('Erro ao carregar usuario:', error);
@@ -134,11 +141,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAccessToken(tokenData.accessToken);
       await SecureStore.deleteItemAsync(ACTIVE_ESTABLISHMENT_KEY);
       setEstabelecimentoAtual(null);
+      setNeedsLinkRequest(false);
 
       const links = await refreshEstabelecimentos();
       if (links.length === 0) {
-        setNeedsEstablishmentSelection(true);
-        return { success: true, requiresEstablishmentSelection: true };
+        setNeedsEstablishmentSelection(false);
+        setNeedsLinkRequest(true);
+        return { success: true, requiresLinkRequest: true };
       }
       if (links.length === 1) {
         const selected = await selectEstablishment(links[0]);
@@ -147,6 +156,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       setNeedsEstablishmentSelection(true);
+      setNeedsLinkRequest(false);
       return { success: true, requiresEstablishmentSelection: true };
     } catch (error) {
       console.log('Erro no login:', error);
@@ -173,6 +183,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setAccessToken(selected.accessToken);
       setEstabelecimentoAtual(current);
       setNeedsEstablishmentSelection(false);
+      setNeedsLinkRequest(false);
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error?.message ?? 'Não foi possível selecionar o restaurante.' };
@@ -201,6 +212,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setEstabelecimentos([]);
       setEstabelecimentoAtual(null);
       setNeedsEstablishmentSelection(false);
+      setNeedsLinkRequest(false);
     } finally {
       setIsLoading(false);
     }
@@ -213,6 +225,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       estabelecimentos,
       estabelecimentoAtual,
       needsEstablishmentSelection,
+      needsLinkRequest,
       isLoading,
       signIn,
       selectEstablishment,

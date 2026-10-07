@@ -52,6 +52,10 @@ export const API_CONFIG = {
     REFRESH_TOKEN: '/auth/refresh',
     ESTABLISHMENTS: '/me/estabelecimentos',
     SELECT_ESTABLISHMENT: '/auth/definir-estabelecimento',
+    MOTOBOY_REGISTER: '/motoboys/cadastro',
+    MOTOBOY_AVAILABLE_ESTABLISHMENTS: '/motoboys/me/estabelecimentos-disponiveis',
+    MOTOBOY_LINK_REQUESTS: '/motoboys/me/vinculos/solicitacoes',
+    MOTOBOY_REQUEST_LINK: '/motoboys/me/vinculos/solicitar',
 
     OPERATIONAL_START: '/v2/motoboys/me/session/start',
     OPERATIONAL_SESSION: '/v2/motoboys/me/session',

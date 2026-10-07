@@ -31,7 +31,8 @@
     </domain-config>
     
     <!-- Configuração base para HTTPS -->
-    <base-config>
+    <!-- O dev client do Expo usa HTTP para carregar o bundle Metro local. -->
+    <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system"/>
         </trust-anchors>

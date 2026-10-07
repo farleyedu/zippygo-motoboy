@@ -26,7 +26,7 @@ import {
 export default function TelaInicialMap() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { user, estabelecimentoAtual, isLoading: authLoading, needsEstablishmentSelection } = useAuth();
+  const { user, estabelecimentoAtual, isLoading: authLoading, needsEstablishmentSelection, needsLinkRequest } = useAuth();
   const {
     pedidos: pedidosDaFila,
     queue,
@@ -51,10 +51,14 @@ export default function TelaInicialMap() {
       router.replace('/(auth)/login');
       return;
     }
+    if (needsLinkRequest) {
+      router.replace('/solicitarRestaurante' as any);
+      return;
+    }
     if (needsEstablishmentSelection && !estabelecimentoAtual) {
       router.replace('/selecionarRestaurante' as any);
     }
-  }, [authLoading, user, needsEstablishmentSelection, estabelecimentoAtual, router]);
+  }, [authLoading, user, needsEstablishmentSelection, needsLinkRequest, estabelecimentoAtual, router]);
 
   useEffect(() => {
     const restoreSession = async () => {

@@ -32,7 +32,8 @@ export default function LoginScreen() {
     setIsLoading(false);
 
     if (result.success) {
-      router.replace((result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/') as any);
+      if (result.requiresLinkRequest) router.replace('/solicitarRestaurante' as any);
+      else router.replace((result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/') as any);
     } else {
       Alert.alert('Erro no Login', result.error || 'Erro desconhecido');
     }

@@ -23,6 +23,28 @@ export type SelectedEstablishment = {
   status?: string | null;
 };
 
+export type MotoboyAvailableEstablishment = {
+  id: string;
+  nome: string;
+  cidade?: string | null;
+  uf?: string | null;
+  tipoEstabelecimento?: string | null;
+};
+
+export type MotoboyLinkRequest = {
+  id: string;
+  motoboyId: number;
+  estabelecimentoId: string;
+  estabelecimentoNome: string;
+  status: 'pending' | 'approved' | 'rejected' | string;
+  requestedAtUtc: string;
+  reviewedAtUtc?: string | null;
+  rejectionReason?: string | null;
+  motoboyNome?: string | null;
+  motoboyEmail?: string | null;
+  motoboyTelefone?: string | null;
+};
+
 export type OperationalSession = {
   sessionId: string;
   epoch: number;
@@ -148,6 +170,33 @@ function unwrap<T>(response: AxiosResponse<any>): T {
   }
 
   return (payload?.data ?? payload) as T;
+}
+
+export async function registerMotoboy(payload: {
+  nome: string;
+  email: string;
+  telefone?: string;
+  senha: string;
+}): Promise<{ userId: number; motoboyId: number; nome: string; email: string }> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.MOTOBOY_REGISTER, payload);
+  return unwrap(response);
+}
+
+export async function listAvailableEstablishments(): Promise<MotoboyAvailableEstablishment[]> {
+  const response = await apiClient.get(API_CONFIG.ENDPOINTS.MOTOBOY_AVAILABLE_ESTABLISHMENTS);
+  const data = unwrap<MotoboyAvailableEstablishment[]>(response);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function listMotoboyLinkRequests(): Promise<MotoboyLinkRequest[]> {
+  const response = await apiClient.get(API_CONFIG.ENDPOINTS.MOTOBOY_LINK_REQUESTS);
+  const data = unwrap<MotoboyLinkRequest[]>(response);
+  return Array.isArray(data) ? data : [];
+}
+
+export async function requestMotoboyLink(estabelecimentoId: string): Promise<MotoboyLinkRequest> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.MOTOBOY_REQUEST_LINK, { estabelecimentoId });
+  return unwrap(response);
 }
 
 export async function listEstablishments(): Promise<EstablishmentLink[]> {

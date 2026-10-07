@@ -64,6 +64,9 @@ export default function SelecionarRestauranteScreen() {
           <TouchableOpacity style={styles.secondaryButton} onPress={atualizar}>
             <Text style={styles.secondaryButtonText}>Tentar novamente</Text>
           </TouchableOpacity>
+          <TouchableOpacity style={styles.linkButton} onPress={() => router.replace('/solicitarRestaurante' as any)}>
+            <Text style={styles.linkButtonText}>Solicitar vínculo a um restaurante</Text>
+          </TouchableOpacity>
         </View>
       ) : (
         <View style={styles.list}>
@@ -101,4 +104,6 @@ const styles = StyleSheet.create({
   emptyText: { color: '#6B7280', fontSize: 14, lineHeight: 21 },
   secondaryButton: { marginTop: 20, borderRadius: 10, backgroundColor: '#2C79FF', padding: 14, alignItems: 'center' },
   secondaryButtonText: { color: '#FFF', fontWeight: '700' },
+  linkButton: { marginTop: 12, alignItems: 'center', padding: 10 },
+  linkButtonText: { color: '#2C79FF', fontWeight: '700' },
 });
