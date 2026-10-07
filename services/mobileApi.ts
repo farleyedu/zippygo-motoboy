@@ -146,6 +146,64 @@ export type OperationalLocationPayload = {
   trackingMode: 'online_idle' | 'active_route';
 };
 
+export type OrderItemDetail = {
+  produtoId?: string | null;
+  nome: string;
+  quantidade: number;
+  precoUnitario?: number | null;
+  observacao?: string | null;
+  adicionais: { id?: string | null; nome: string; preco: number }[];
+  total?: number | null;
+  imagemUrl?: string | null;
+};
+
+export type OperationalOrderDetail = {
+  id: number; queueVersion: number; position: number; stopStatus: string;
+  isCurrent: boolean; isOffer: boolean; locked: boolean;
+  assignedAtUtc: string; pickedUpAtUtc?: string | null; arrivedAtUtc?: string | null;
+  origem: string; nomeCliente?: string | null; telefoneCliente?: string | null;
+  enderecoEntrega?: string | null; rua?: string | null; numero?: string | null;
+  bairro?: string | null; cidade?: string | null; estado?: string | null; cep?: string | null;
+  latitude?: number | null; longitude?: number | null; total?: number | null;
+  subtotal?: number | null; taxaEntrega?: number | null; formaPagamento?: string | null;
+  statusPagamento?: string | null; troco?: number | null; observacoes?: string | null;
+  previsaoEntrega?: string | null; requerCodigoEntrega: boolean;
+  capaImagemUrl?: string | null; itens: OrderItemDetail[];
+};
+
+export async function getOperationalOrder(pedidoId: number, signal?: AbortSignal): Promise<OperationalOrderDetail> {
+  const response = await apiClient.get(`/v2/motoboys/me/session/orders/${pedidoId}`, { signal });
+  return unwrap<OperationalOrderDetail>(response);
+}
+
+export type StoreChatMessage = { id: number; motoboyId: number; pedidoId?: number | null; direction: 'operator' | 'motoboy'; body: string; createdAtUtc: string; readAtUtc?: string | null };
+export type GroupChatMessage = { id: number; senderType: string; motoboyId?: number | null; motoboyNome?: string | null; body: string; createdAtUtc: string };
+export type ClientChat = {
+  channel: { pedidoId: number; clienteNome?: string | null; podeReceber: boolean; motivo?: string | null; janelaFimUtc?: string | null };
+  messages: { id: string; body: string; type: string; status: string; createdAtUtc: string; mine: boolean }[];
+  hasMore: boolean; cursor?: string | null;
+};
+const operationalPath = '/v2/motoboys/me/session';
+export async function getStoreMessages(signal?: AbortSignal): Promise<StoreChatMessage[]> {
+  return unwrap(await apiClient.get(`${operationalPath}/messages`, { signal, params: { limit: 100 } }));
+}
+export async function sendStoreMessage(body: string, pedidoId?: number): Promise<StoreChatMessage> {
+  return unwrap(await apiClient.post(`${operationalPath}/messages`, { body, pedidoId }));
+}
+export async function markStoreMessagesRead(): Promise<void> { unwrap(await apiClient.post(`${operationalPath}/messages/read`)); }
+export async function getGroupMessages(signal?: AbortSignal): Promise<GroupChatMessage[]> {
+  return unwrap(await apiClient.get(`${operationalPath}/group-messages`, { signal, params: { limit: 100 } }));
+}
+export async function sendGroupMessage(body: string): Promise<GroupChatMessage> {
+  return unwrap(await apiClient.post(`${operationalPath}/group-messages`, { body }));
+}
+export async function getClientMessages(pedidoId: number, signal?: AbortSignal): Promise<ClientChat> {
+  return unwrap(await apiClient.get(`${operationalPath}/orders/${pedidoId}/client-messages`, { signal, params: { limit: 100 } }));
+}
+export async function sendClientMessage(pedidoId: number, mensagem: string): Promise<void> {
+  unwrap(await apiClient.post(`${operationalPath}/orders/${pedidoId}/client-messages`, { mensagem }));
+}
+
 export class MobileApiError extends Error {
   status: number;
   code?: string;
@@ -308,8 +366,8 @@ export async function pickUpCurrent(): Promise<MotoboyQueue> {
   return unwrap<MotoboyQueue>(response);
 }
 
-export async function arriveCurrent(): Promise<MotoboyQueue> {
-  const response = await apiClient.post(API_CONFIG.ENDPOINTS.ARRIVE_CURRENT);
+export async function arriveCurrent(expectedPedidoId?: number): Promise<MotoboyQueue> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.ARRIVE_CURRENT, expectedPedidoId == null ? undefined : { expectedPedidoId });
   return unwrap<MotoboyQueue>(response);
 }
 

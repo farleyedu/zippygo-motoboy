@@ -4,12 +4,14 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
+import { Platform } from 'react-native';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useColorScheme } from '@/components/useColorScheme';
 import * as Notifications from 'expo-notifications';
 import * as Linking from 'expo-linking';
 import { AuthProvider } from '@/src/contexts/AuthContext';
+import { ZippyThemeProvider } from '@/src/ui/theme';
 
 import { testApiHealth } from '../services/apiService';
 import '../components/locationTask';
@@ -29,6 +31,7 @@ SplashScreen.preventAutoHideAsync();
 export default function RootLayout() {
   const [loaded, error] = useFonts({
     SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
+    Manrope: require('../assets/fonts/Manrope-Variable.ttf'),
     ...FontAwesome.font,
   });
 
@@ -49,6 +52,7 @@ export default function RootLayout() {
 
   useEffect(() => {
     // 🔔 Configura handler para notificações recebidas
+    if (Platform.OS === 'web') return;
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowAlert: true,
@@ -95,9 +99,11 @@ export default function RootLayout() {
 
   return (
     <AuthProvider>
+      <ZippyThemeProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <RootLayoutNav />
       </GestureHandlerRootView>
+      </ZippyThemeProvider>
     </AuthProvider>
   );
 }
@@ -108,6 +114,8 @@ function RootLayoutNav() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
+        <Stack.Screen name="pedido/[id]" options={{ headerShown: false }} />
+        <Stack.Screen name="conversas" options={{ headerShown: false }} />
         {/* Telas de autenticação */}
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         

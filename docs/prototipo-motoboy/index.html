@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#141715">
+  <title>ZippyGo — Seu próximo movimento · Protótipo</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="prototype.js" defer></script>
+</head>
+<body>
+  <div class="ambient" aria-hidden="true"></div>
+  <header class="studio-header">
+    <a class="studio-brand" href="#home" aria-label="ZippyGo início"><span class="brand-mark">z<span>↗</span></span><span>Zippy<span class="brand-go">Go</span><small>DESIGN EXPLORATION / 01</small></span></a>
+    <nav class="view-switch" aria-label="Modos de apresentação">
+      <button data-view="prototype" class="active">Protótipo</button>
+      <button data-view="gallery">Todas as telas <span id="screen-count"></span></button>
+      <button data-view="flows">Fluxos</button>
+      <button data-view="research">Pesquisa</button>
+    </nav>
+    <div class="studio-actions"><button id="motion-button" class="studio-icon" title="Reduzir movimento" aria-label="Reduzir movimento"></button><button id="theme-button" class="studio-icon" title="Alternar tema do app" aria-label="Alternar tema do app"></button><button id="focus-button" class="studio-icon" title="Ampliar celular" aria-label="Ampliar celular"></button></div>
+  </header>
+  <div id="prototype-view" class="workspace">
+    <aside class="screen-sidebar">
+      <div class="sidebar-heading"><span class="eyebrow">A EXPERIÊNCIA INTEIRA</span><h2>Cada tela.<br>Cada movimento.</h2><p>Uma jornada feita para quem<br>vive a cidade sobre duas rodas.</p></div>
+      <label class="studio-search"><span id="search-icon"></span><input id="screen-search" type="search" placeholder="Buscar tela ou fluxo…" aria-label="Buscar telas"><kbd>/</kbd></label>
+      <div id="screen-list" class="screen-list"></div>
+      <div class="sidebar-footer"><span class="live-dot"></span><span>Conceito navegável · dados fictícios</span></div>
+    </aside>
+    <main class="stage">
+      <div class="stage-intro"><div class="eyebrow"><span class="tiny-line"></span> ZIPPYGO / MOBILE EXPERIENCE</div><h1>Seu próximo <em>movimento.</em></h1><p>Mais clareza no caminho. Mais presença em cada detalhe.</p></div>
+      <div class="device-stage" id="device-stage"><div class="device-glow" aria-hidden="true"></div><div class="device" id="device"><div class="hardware-button"></div><div class="status-bar"><span>19:41</span><div class="dynamic-island"></div><div class="status-icons" id="status-icons"></div></div><div id="app" class="app"></div><div class="home-indicator"></div></div><span class="stage-tag tag-left">PROFUNDIDADE<br><strong>com propósito.</strong></span><span class="stage-tag tag-right">TOQUE. ARRASTE.<br><strong>Explore de verdade.</strong></span></div>
+      <div class="stage-controls"><button id="previous-screen" title="Tela anterior" aria-label="Tela anterior"></button><span id="current-position"></span><button id="next-screen" title="Próxima tela" aria-label="Próxima tela"></button><span class="control-divider"></span><button id="restart-journey">Reiniciar jornada</button></div>
+    </main>
+    <aside class="inspector" id="inspector"></aside>
+  </div>
+  <main id="gallery-view" class="wide-view" hidden></main>
+  <main id="flows-view" class="wide-view" hidden></main>
+  <main id="research-view" class="wide-view" hidden></main>
+  <div id="studio-toast" class="studio-toast" role="status" aria-live="polite"></div>
+  <footer class="studio-footer"><span>PROTÓTIPO CONCEITUAL · OUTUBRO 2026</span><span>Uma experiência ZippyGo. <a href="FLUXOS.md">Fluxos</a> / <a href="PESQUISA.md">Pesquisa</a> / <a href="CONTINUIDADE.md">Continuidade</a></span></footer>
+</body>
+</html>

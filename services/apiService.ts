@@ -77,15 +77,12 @@ async function refreshAuthToken(): Promise<string | null> {
 
 // Fetch Adapter customizado para React Native
 const fetchAdapter: AxiosAdapter = async (config) => {
-  const url = config.baseURL ? `${config.baseURL}${config.url}` : config.url!;
+  const url = axios.getUri(config);
   const method = config.method?.toUpperCase() || 'GET';
   
   // Log detalhado em desenvolvimento
   if (isDev) {
     console.log(`🔗 [API][REQ] ${method} ${url}`);
-    if (config.data) {
-      console.log('📤 [API][DATA]:', config.data);
-    }
   }
   
   // Verificar CLEARTEXT em desenvolvimento

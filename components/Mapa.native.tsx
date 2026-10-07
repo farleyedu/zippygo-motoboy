@@ -11,6 +11,9 @@ type Props = {
   pedidos: Pedido[];
   emEntrega: boolean;
   recenterToken?: number;
+  routeMode?: boolean;
+  mapClean?: boolean;
+  onOrderPress?: (pedidoId: number) => void;
 };
 
 const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: number } | null => {
@@ -26,7 +29,7 @@ const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: num
   return null;
 };
 
-export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
+export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress }: Props) {
   const [destinoCoords, setDestinoCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const indiceAtualRef = useRef<number>(0);
   const [entregasFinalizadas, setEntregasFinalizadas] = useState(false);
@@ -35,6 +38,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   const mapRef = useRef<MapView>(null);
   const [trackMarkers, setTrackMarkers] = useState(true);
   const hasCenteredOnceRef = useRef(false);
+  const headingRef = useRef(0);
   const intervalsRef = useRef<number[]>([]);
 
   // Cleanup function para limpar todos os intervals
@@ -98,6 +102,10 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
 
   const centerTo = useCallback((coords: { latitude: number; longitude: number }) => {
     if (mapRef.current) {
+      if (routeMode) {
+        mapRef.current.animateCamera({ center: coords, pitch: 48, heading: headingRef.current, zoom: 17 }, { duration: 650 });
+        return;
+      }
       mapRef.current.animateToRegion({
         latitude: coords.latitude,
         longitude: coords.longitude,
@@ -105,17 +113,24 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         longitudeDelta: 0.03,
       });
     }
-  }, []);
+  }, [routeMode]);
 
   const handleUserLocationChange = useCallback((e: any) => {
     const coord = e.nativeEvent.coordinate;
     if (!coord) return;
+    if (typeof coord.heading === 'number' && coord.heading >= 0 && (!coord.speed || coord.speed > 1)) headingRef.current = coord.heading;
     setUserLocation({ latitude: coord.latitude, longitude: coord.longitude });
+    if (routeMode) centerTo({ latitude: coord.latitude, longitude: coord.longitude });
     if (!hasCenteredOnceRef.current) {
       hasCenteredOnceRef.current = true;
       centerTo({ latitude: coord.latitude, longitude: coord.longitude });
     }
-  }, [centerTo]);
+  }, [centerTo, routeMode]);
+
+  useEffect(() => {
+    if (userLocation) centerTo(userLocation);
+    if (!routeMode) mapRef.current?.animateCamera({ pitch: 0, heading: 0 }, { duration: 450 });
+  }, [routeMode, centerTo]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -223,6 +238,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
           <React.Fragment key={`${p.id}-${i}`}>
             <Marker
               coordinate={coordinate}
+              onPress={() => onOrderPress?.(p.id)}
               anchor={{ x: 0.5, y: 1 }}
               image={require('../assets/images/alfinete_85x85.png')}
               tracksViewChanges={false}
@@ -248,6 +264,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
 
       const isAtual = i === indiceAtualRef.current;
       const isFuturo = i > indiceAtualRef.current;
+      if (mapClean && !isAtual) return null;
 
       if (isAtual) {
         return (
@@ -255,7 +272,8 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
             key={`${p.id}-atual`}
             coordinate={coordinate}
             anchor={{ x: 0.5, y: 1 }}
-            pinColor="#d32f2f"
+            pinColor="#2872e3"
+            onPress={() => onOrderPress?.(p.id)}
             tracksViewChanges={false}
             zIndex={999}
           />
@@ -287,7 +305,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
 
       return null;
     });
-  }, [pedidos, emEntrega, trackMarkers]);
+  }, [pedidos, emEntrega, trackMarkers, mapClean, onOrderPress]);
 
   return (
     <MapView
@@ -298,8 +316,18 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       loadingEnabled
       scrollEnabled
       zoomEnabled
-      pitchEnabled={false}
-      rotateEnabled={false}
+      pitchEnabled
+      rotateEnabled
+      customMapStyle={[
+        { elementType: 'geometry', stylers: [{ color: '#19283f' }] },
+        { elementType: 'labels.text.fill', stylers: [{ color: '#a9c4e5' }] },
+        { elementType: 'labels.text.stroke', stylers: [{ color: '#18283f' }] },
+        { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+        { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+        { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d4768' }] },
+        { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#4a678d' }] },
+        { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#102037' }] },
+      ]}
       onMapReady={async () => {
         try {
           if (!locationAuthorized) return;

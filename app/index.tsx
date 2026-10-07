@@ -60,6 +60,8 @@ export default function TelaInicialMap() {
   const [modalRotaVisible, setModalRotaVisible] = useState(false);
   const [painelNoTopo, setPainelNoTopo] = useState(false);
   const [online, setOnline] = useState(false);
+  const [mapClean, setMapClean] = useState(false);
+  const [routeMode, setRouteMode] = useState(false);
   const [pedidosAceitos, setPedidosAceitos] = useState<any[]>([]);
   const [organizandoRota, setOrganizandoRota] = useState(false);
 
@@ -333,7 +335,7 @@ export default function TelaInicialMap() {
     }
 
     router.push({
-       pathname: '/ExemploSacolaScreen',
+       pathname: '/pedido/[id]',
       params: {
         id: String(pedidoAtual.id),
         nome: pedidoAtual.nomeCliente ?? '--',
@@ -352,7 +354,14 @@ export default function TelaInicialMap() {
 
   return (
     <View style={styles.container}>
-      <Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} recenterToken={recenterToken} />
+      <Mapa pedidos={pedidosAceitos} emEntrega={emEntrega} recenterToken={recenterToken} routeMode={routeMode && emEntrega} mapClean={mapClean} onOrderPress={(id) => router.push({ pathname: '/pedido/[id]', params: { id: String(id) } })} />
+      <View style={{ flexDirection: 'row', gap: 8, position: 'absolute', left: mapClean ? undefined : 20, alignSelf: mapClean ? 'center' : undefined, top: mapClean ? undefined : insets.top + 95, bottom: mapClean ? Math.max(insets.bottom, 16) : undefined, zIndex: 25 }}>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel={mapClean ? 'Mostrar controles do mapa' : 'Limpar a visão do mapa'} onPress={() => setMapClean(value => !value)} style={{ minHeight: 44, flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: '#142640ed', borderWidth: 1, borderColor: '#6999d680', borderRadius: 14, paddingHorizontal: 13 }}>
+          <Ionicons name={mapClean ? 'layers-outline' : 'expand-outline'} size={17} color="#e5f0ff" /><Text style={{ fontFamily: 'Manrope', fontSize: 11, color: '#e5f0ff', fontWeight: '700' }}>{mapClean ? 'Mostrar controles' : 'Só mapa'}</Text>
+        </TouchableOpacity>
+        {!mapClean && <TouchableOpacity accessibilityRole="button" accessibilityLabel="Alternar modo rota" onPress={() => { if (!emEntrega) { Alert.alert('Modo rota', 'Aceite e inicie sua rota para acompanhar a próxima entrega.'); return; } setRouteMode(value => !value); setRecenterToken(Date.now()); }} style={{ minHeight: 44, flexDirection: 'row', gap: 7, alignItems: 'center', backgroundColor: routeMode && emEntrega ? '#276ce0' : '#142640ed', borderWidth: 1, borderColor: '#6999d680', borderRadius: 14, paddingHorizontal: 13 }}><Ionicons name="navigate-outline" size={17} color="#e5f0ff" /><Text style={{ fontFamily: 'Manrope', fontSize: 11, color: '#e5f0ff', fontWeight: '700' }}>{routeMode && emEntrega ? 'Seguindo a rota' : 'Modo rota'}</Text></TouchableOpacity>}
+      </View>
+      {!mapClean && <>
       <View style={{ flexDirection: 'row', position: 'absolute', top: insets.top + 8, right: 20, zIndex: 20, alignItems: 'center' }}>
         {!online && (
           <TouchableOpacity
@@ -407,7 +416,7 @@ export default function TelaInicialMap() {
         </View>
       )}
 
-      <TouchableOpacity style={[styles.menuButton, { top: insets.top + 10 }]}>
+      <TouchableOpacity accessibilityRole="button" accessibilityLabel="Abrir conversas" onPress={() => router.push('/conversas')} style={[styles.menuButton, { top: insets.top + 10 }]}>
         <Ionicons name="menu" size={24} color="#000" />
         <View style={styles.badge} />
       </TouchableOpacity>
@@ -528,6 +537,7 @@ export default function TelaInicialMap() {
           </Animated.View>
         )}
       </Animated.View>
+      </>}
     </View>
   );
 }
