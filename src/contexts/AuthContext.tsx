@@ -60,10 +60,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setIsLoading(true);
       const storedUser = await SecureStore.getItemAsync('zippygo.user');
-      const storedToken = await SecureStore.getItemAsync('authToken');
+      const storedToken = await SecureStore.getItemAsync('authToken')
+        ?? await SecureStore.getItemAsync('zippygo.token');
       const storedEstablishment = await SecureStore.getItemAsync(ACTIVE_ESTABLISHMENT_KEY);
 
       if (!storedUser || !storedToken) return;
+
+      // Compatibilidade com versoes antigas que salvavam apenas zippygo.token.
+      await SecureStore.setItemAsync('authToken', storedToken);
 
       const parsedUser = JSON.parse(storedUser) as User;
       setUser(parsedUser);

@@ -5,6 +5,7 @@ import { StyleSheet, Text, View, Image } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pedido } from '../types/pedido';
+import { requestForegroundLocationPermission } from './locationSetup';
 
 type Props = {
   pedidos: Pedido[];
@@ -30,6 +31,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   const indiceAtualRef = useRef<number>(0);
   const [entregasFinalizadas, setEntregasFinalizadas] = useState(false);
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [locationAuthorized, setLocationAuthorized] = useState(false);
   const mapRef = useRef<MapView>(null);
   const [trackMarkers, setTrackMarkers] = useState(true);
   const hasCenteredOnceRef = useRef(false);
@@ -136,6 +138,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   // Recentraliza imediatamente quando a tela volta ao foco (token muda)
   useEffect(() => {
     if (!recenterToken) return;
+    if (!locationAuthorized) return;
     if (userLocation) {
       centerTo(userLocation);
     } else {
@@ -149,7 +152,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         }
       })();
     }
-  }, [recenterToken, userLocation, centerTo]);
+  }, [recenterToken, userLocation, locationAuthorized, centerTo]);
 
   useEffect(() => {
     // Ao organizar rota (não emEntrega), enquadra todos os pedidos no mapa
@@ -192,8 +195,9 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
   useEffect(() => {
     (async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === 'granted') {
+        const allowed = await requestForegroundLocationPermission();
+        setLocationAuthorized(allowed);
+        if (allowed) {
           const location = await Location.getCurrentPositionAsync({});
           setUserLocation(location.coords);
           // Centraliza assim que obtemos a primeira localização
@@ -298,6 +302,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
       rotateEnabled={false}
       onMapReady={async () => {
         try {
+          if (!locationAuthorized) return;
           if (userLocation) {
             centerTo(userLocation);
           } else {
@@ -315,7 +320,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken }: Props) {
         latitudeDelta: 0.005,
         longitudeDelta: 0.005,
       }}
-      showsUserLocation
+      showsUserLocation={locationAuthorized}
       onUserLocationChange={handleUserLocationChange}
     >
       {markers}

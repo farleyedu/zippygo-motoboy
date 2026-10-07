@@ -2,11 +2,12 @@
 import axios, { AxiosInstance, AxiosResponse, AxiosAdapter } from 'axios';
 import { API_CONFIG, getApiUrl, validateApiConfig } from '../config/apiConfig';
 import { Pedido, PedidosResponse, BuscarPedidosParams } from '../types/pedido';
-import { getSecureItem } from '../utils/secureStorage';
+import { deleteSecureItem, getSecureItem, setSecureItem } from '../utils/secureStorage';
 
 // Detectar ambiente
 const APP_ENV = process.env.EXPO_PUBLIC_APP_ENV || 'dev';
 const isDev = APP_ENV === 'dev' || APP_ENV === 'development';
+let authRefreshInFlight: Promise<string | null> | null = null;
 // Removendo imports do adapter - agora usamos dados diretos da API
 // import { 
 //   adaptPedidoRawToPedido, 
@@ -19,6 +20,59 @@ const isDev = APP_ENV === 'dev' || APP_ENV === 'development';
 // Validar configuração da API
 if (!validateApiConfig()) {
   console.warn('⚠️ Configuração da API inválida. Verifique a URL base em config/apiConfig.ts');
+}
+
+function isOperationalEndpoint(endpoint: string): boolean {
+  return endpoint.startsWith('/v2/motoboys/me/session') &&
+    !endpoint.endsWith('/start') &&
+    !endpoint.endsWith('/switch');
+}
+
+function isAuthEndpoint(endpoint: string): boolean {
+  return endpoint === API_CONFIG.ENDPOINTS.LOGIN || endpoint === API_CONFIG.ENDPOINTS.REFRESH_TOKEN;
+}
+
+/** Renova o token principal uma vez e compartilha a mesma promessa entre requests simultaneas. */
+async function refreshAuthToken(): Promise<string | null> {
+  if (authRefreshInFlight) return authRefreshInFlight;
+
+  authRefreshInFlight = (async () => {
+    const refreshToken = await getSecureItem('refreshToken');
+    if (!refreshToken) return null;
+
+    try {
+      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REFRESH_TOKEN}`, {
+        method: 'POST',
+        headers: API_CONFIG.DEFAULT_HEADERS,
+        body: JSON.stringify({ refreshToken }),
+      });
+      const raw = await response.text();
+      let payload: any = null;
+      try {
+        payload = raw ? JSON.parse(raw) : null;
+      } catch {
+        payload = null;
+      }
+
+      const data = payload?.data ?? payload;
+      if (!response.ok || !data?.accessToken) {
+        if (response.status === 401) await deleteSecureItem('refreshToken');
+        return null;
+      }
+
+      await setSecureItem('authToken', data.accessToken);
+      await setSecureItem('zippygo.token', data.accessToken);
+      if (data.refreshToken) await setSecureItem('refreshToken', data.refreshToken);
+      return data.accessToken as string;
+    } catch (error) {
+      if (isDev) console.warn('[AUTH] Falha ao renovar sessao:', error);
+      return null;
+    }
+  })().finally(() => {
+    authRefreshInFlight = null;
+  });
+
+  return authRefreshInFlight;
 }
 
 // Fetch Adapter customizado para React Native
@@ -41,10 +95,19 @@ const fetchAdapter: AxiosAdapter = async (config) => {
   }
   
   try {
+    // O transformRequest padrao do Axios normalmente ja converte objetos para
+    // JSON antes de chegar ao adapter. Serializar uma string novamente envia
+    // um JSON duplamente codificado e quebra o model binding do ASP.NET.
+    const requestBody = config.data == null
+      ? undefined
+      : typeof config.data === 'string'
+        ? config.data
+        : JSON.stringify(config.data);
+
     const response = await fetch(url, {
       method,
       headers: config.headers as Record<string, string>,
-      body: config.data ? JSON.stringify(config.data) : undefined,
+      body: requestBody,
       signal: config.signal as AbortSignal | undefined,
     });
     
@@ -96,11 +159,7 @@ apiClient.interceptors.request.use(
   async (config) => {
     try {
       const endpoint = String(config.url ?? '');
-      const isOperationalEndpoint =
-        endpoint.startsWith('/v2/motoboys/me/session') &&
-        !endpoint.endsWith('/start') &&
-        !endpoint.endsWith('/switch');
-      const token = await getSecureItem(isOperationalEndpoint ? 'operationalAccessToken' : 'authToken');
+      const token = await getSecureItem(isOperationalEndpoint(endpoint) ? 'operationalAccessToken' : 'authToken');
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
@@ -138,7 +197,26 @@ apiClient.interceptors.request.use(
 
 // Interceptor de resposta para tratamento de erros
 apiClient.interceptors.response.use(
-  (response) => {
+  async (response) => {
+    const endpoint = String(response.config.url ?? '');
+    const requestConfig = response.config as typeof response.config & { _authRetry?: boolean };
+
+    if (response.status === 401 && !requestConfig._authRetry && !isAuthEndpoint(endpoint) && !isOperationalEndpoint(endpoint)) {
+      const newToken = await refreshAuthToken();
+      if (newToken) {
+        requestConfig._authRetry = true;
+        if (requestConfig.headers && typeof (requestConfig.headers as any).set === 'function') {
+          (requestConfig.headers as any).set('Authorization', `Bearer ${newToken}`);
+        } else {
+          requestConfig.headers = {
+            ...(requestConfig.headers as any),
+            Authorization: `Bearer ${newToken}`,
+          } as typeof requestConfig.headers;
+        }
+        return apiClient.request(requestConfig);
+      }
+    }
+
     // Log da resposta apenas em desenvolvimento
     if (isDev) {
       console.log('✅ [AXIOS][RES]:', {

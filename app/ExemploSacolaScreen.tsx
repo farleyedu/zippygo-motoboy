@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Animated as RNAnimated } from 'react-native';
+import { Alert, Linking, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View, Animated as RNAnimated } from 'react-native';
 import { Stack, useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView, useBottomSheet, BottomSheetBackgroundProps } from '@gorhom/bottom-sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -26,7 +26,8 @@ import {
 } from 'lucide-react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
-import { useFetchPedidoById } from '../hooks/useFetchPedidos';
+import { useFetchPedidoById, useFetchPedidos } from '../hooks/useFetchPedidos';
+import { setTrackingMode } from '../services/trackingService';
 
 // Componente de background transparente customizado
 const TransparentBackground: React.FC<BottomSheetBackgroundProps> = ({ style }) => {
@@ -68,6 +69,13 @@ export default function ExemploSacolaScreen() {
   
   // Hook para buscar dados reais do pedido da API
   const { pedido: pedidoAPI, loading: loadingPedido, error: errorPedido, refetch } = useFetchPedidoById(pedidoId);
+  const {
+    queue,
+    deliverCurrent,
+    failCurrent,
+    refetch: refetchQueue,
+  } = useFetchPedidos();
+  const [acaoEmAndamento, setAcaoEmAndamento] = useState(false);
   
   // Fallback para dados dos params (compatibilidade durante transição)
   const nomeCliente = pedidoAPI?.nomeCliente || pedidoAPI?.cliente_nome || params.nome || 'Cliente';
@@ -92,6 +100,8 @@ export default function ExemploSacolaScreen() {
   
   // Determina se é pedido do iFood baseado no ID do iFood
   const isIfood = Boolean(pedidoAPI?.idIfood || params.id_ifood);
+  const pedidoDaFila = queue?.current?.pedido;
+  const requerCodigoDaFila = Boolean(pedidoDaFila?.requerCodigoEntrega);
   
   // Cria o objeto pedidoAtual com dados reais (sem mocks)
   const pedidoAtual = {
@@ -101,7 +111,7 @@ export default function ExemploSacolaScreen() {
     endereco: endereco,
     bairro: bairro,
     itens: itens, // Usando itens reais dos params
-    timeline: [
+    timeline: pedidoAPI?.timeline ?? [], /* legacy fallback timeline removed; API is the source of truth
       {
         id: 1,
         evento: "Pedido confirmado",
@@ -137,7 +147,7 @@ export default function ExemploSacolaScreen() {
         local: endereco,
         status: "pendente"
       }
-    ],
+    ], */
     pagamento: {
       metodo: pagamento || 'dinheiro',
       status: statusPagamento,
@@ -189,6 +199,13 @@ export default function ExemploSacolaScreen() {
     })();
   }, [pedidoId, isIfood]);
 
+  useEffect(() => {
+    if (!requerCodigoDaFila) return;
+    getSecureItem(`codigoEntrega_${pedidoId}`).then((codigo) => {
+      setCodigoValidado(Boolean(codigo));
+    });
+  }, [pedidoId, requerCodigoDaFila]);
+
   // Funções necessárias
   const handleSolicitarCodigo = () => {
     setCodigoSolicitado(true);
@@ -236,6 +253,31 @@ export default function ExemploSacolaScreen() {
 
   // Função para avançar para a próxima entrega
   const handleProximaEntrega = async () => {
+    if (acaoEmAndamento) return;
+    if (!queue?.current) {
+      Alert.alert('Entrega indisponível', 'A fila não possui uma entrega atual.');
+      return;
+    }
+    try {
+      setAcaoEmAndamento(true);
+      const codigo = await getSecureItem(`codigoEntrega_${pedidoId}`);
+      if (requerCodigoDaFila && !codigo) {
+        Alert.alert('Código necessário', 'Informe o código fornecido pelo cliente antes de concluir a entrega.');
+        return;
+      }
+      await deliverCurrent(codigo || undefined);
+      await setTrackingMode('online_idle');
+      await refetchQueue();
+      await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
+      await deleteSecureItem(`codigoEntrega_${pedidoId}`);
+      router.replace('/');
+    } catch (caught: any) {
+      Alert.alert('Não foi possível concluir a entrega', caught?.message ?? 'Tente novamente.');
+    } finally {
+      setAcaoEmAndamento(false);
+    }
+    return;
+    // Legacy local-storage flow kept only as historical reference; V2 flow above is authoritative.
     const podeLiberar = codigoValidado && (pagamentoConfirmado || jaFoiPago);
     
     if (!podeLiberar) {
@@ -253,8 +295,8 @@ export default function ExemploSacolaScreen() {
     const lista = await getSecureItem('pedidosCompletos');
     const indiceAtualStr = await getSecureItem('indiceAtual');
     if (lista && indiceAtualStr) {
-      const pedidos = JSON.parse(lista);
-      let indiceAtual = parseInt(indiceAtualStr, 10);
+      const pedidos = JSON.parse(lista as string);
+      let indiceAtual = parseInt(indiceAtualStr as string, 10);
       await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
       
       if (indiceAtual < pedidos.length - 1) {
@@ -277,11 +319,56 @@ export default function ExemploSacolaScreen() {
     await deleteSecureItem(`codigoConfirmado_${pedidoId}`);
     router.replace('/');
   };
-  const handleAcaoTelefone = (acao: "ligar" | "whatsapp") => {
+  const handleAcaoTelefone = async (acao: "ligar" | "whatsapp") => {
+    setMostrarAcoesTelefone(false);
+    const digits = telefone.replace(/\D/g, '');
+    if (!digits) {
+      Alert.alert('Telefone indisponível', 'Este pedido não possui telefone cadastrado.');
+      return;
+    }
+    const url = acao === 'ligar' ? `tel:${digits}` : `https://wa.me/${digits}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Não foi possível abrir', acao === 'ligar' ? 'Não foi possível abrir o telefone.' : 'Não foi possível abrir o WhatsApp.');
+    }
+    return;
     // Em RN puro, usar Linking; mantendo stub por enquanto
     // Linking.openURL("tel:+5511999999999") etc.
     setMostrarAcoesTelefone(false);
   };
+
+  const executarFalha = async (motivo: string) => {
+    if (!queue?.current || acaoEmAndamento) return;
+    try {
+      setAcaoEmAndamento(true);
+      await failCurrent(motivo);
+      await refetchQueue();
+      Alert.alert('Entrega atualizada', 'A entrega foi retirada da sua rota.', [
+        { text: 'OK', onPress: () => router.replace('/') },
+      ]);
+    } catch (caught: any) {
+      Alert.alert('Não foi possível atualizar a entrega', caught?.message ?? 'Tente novamente.');
+    } finally {
+      setAcaoEmAndamento(false);
+    }
+  };
+
+  const handleReportarProblema = () => {
+    Alert.alert('Reportar problema', 'O que aconteceu com esta entrega?', [
+      { text: 'Voltar', style: 'cancel' },
+      { text: 'Cliente ausente', onPress: () => void executarFalha('cliente_ausente') },
+      { text: 'Problema no endereço', onPress: () => void executarFalha('problema_endereco') },
+    ]);
+  };
+
+  const handleCancelarEntrega = () => {
+    Alert.alert('Cancelar entrega', 'A entrega será devolvida para o estabelecimento. Deseja continuar?', [
+      { text: 'Não', style: 'cancel' },
+      { text: 'Cancelar entrega', style: 'destructive', onPress: () => void executarFalha('cancelada_pelo_motoboy') },
+    ]);
+  };
+
   const handleReverterPagamento = () => {
     setPagamentoConfirmado(false);
     console.log('Pagamento revertido');
@@ -812,12 +899,22 @@ export default function ExemploSacolaScreen() {
 
           {/* Ações secundárias */}
           <View style={{ paddingHorizontal: 16, marginTop: 12, marginBottom: 6 }}>
-            <TouchableOpacity activeOpacity={0.9} style={[styles.secondaryBtn, { backgroundColor: "#F97316" }]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.secondaryBtn, { backgroundColor: "#F97316" }]}
+              onPress={handleReportarProblema}
+              disabled={acaoEmAndamento}
+            >
               <AlertTriangle size={18} color="#fff" />
               <Text style={styles.secondaryTxt}>Reportar Problema</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity activeOpacity={0.9} style={[styles.secondaryBtn, { backgroundColor: "#4B5563" }]}>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              style={[styles.secondaryBtn, { backgroundColor: "#4B5563" }]}
+              onPress={handleCancelarEntrega}
+              disabled={acaoEmAndamento}
+            >
               <Ban size={18} color="#fff" />
               <Text style={styles.secondaryTxt}>Cancelar Entrega</Text>
             </TouchableOpacity>
@@ -839,6 +936,7 @@ export default function ExemploSacolaScreen() {
                 activeOpacity={0.8} 
                 style={[styles.primaryBtn, { backgroundColor: "#22C55E" }]}
                 onPress={handleProximaEntrega}
+                disabled={acaoEmAndamento}
               >
                 <View style={[styles.squareIcon, { backgroundColor: "rgba(255,255,255,0.2)" }]}> 
                   <View style={[styles.squareDot, { backgroundColor: "#fff" }]} />

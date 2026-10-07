@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchPedidoById } from '../services/apiService';
 import {
   acceptOffer as acceptOfferApi,
@@ -60,7 +60,10 @@ export const useFetchPedidos = (_params?: BuscarPedidosParams) => {
     }
   }, []);
 
-  const pedidos = queueToPedidos(queue);
+  // Evita criar um novo array em todo render. A tela inicial sincroniza esse
+  // valor com um estado local; uma nova referência constante causava um loop
+  // de renderização ("Maximum update depth exceeded").
+  const pedidos = useMemo(() => queueToPedidos(queue), [queue]);
   return {
     pedidos,
     queue,

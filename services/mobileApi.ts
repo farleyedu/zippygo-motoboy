@@ -29,6 +29,7 @@ export type MotoboyAvailableEstablishment = {
   cidade?: string | null;
   uf?: string | null;
   tipoEstabelecimento?: string | null;
+  modulosAtivos?: string[] | null;
 };
 
 export type MotoboyLinkRequest = {
@@ -37,6 +38,7 @@ export type MotoboyLinkRequest = {
   estabelecimentoId: string;
   estabelecimentoNome: string;
   status: 'pending' | 'approved' | 'rejected' | string;
+  origem?: 'motoboy' | 'estabelecimento' | string;
   requestedAtUtc: string;
   reviewedAtUtc?: string | null;
   rejectionReason?: string | null;
@@ -160,6 +162,13 @@ function errorMessage(payload: any): string {
   if (typeof payload?.error === 'string') return payload.error;
   if (typeof payload?.message === 'string') return payload.message;
   if (typeof payload?.error?.message === 'string') return payload.error.message;
+  if (payload?.errors && typeof payload.errors === 'object') {
+    const messages = Object.values(payload.errors)
+      .flatMap((value) => Array.isArray(value) ? value : [value])
+      .filter((value): value is string => typeof value === 'string');
+    if (messages.length > 0) return messages.join(' ');
+  }
+  if (typeof payload?.title === 'string') return payload.title;
   return 'Não foi possível concluir a operação.';
 }
 
@@ -197,6 +206,16 @@ export async function listMotoboyLinkRequests(): Promise<MotoboyLinkRequest[]> {
 export async function requestMotoboyLink(estabelecimentoId: string): Promise<MotoboyLinkRequest> {
   const response = await apiClient.post(API_CONFIG.ENDPOINTS.MOTOBOY_REQUEST_LINK, { estabelecimentoId });
   return unwrap(response);
+}
+
+export async function acceptMotoboyInvite(id: string): Promise<void> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.MOTOBOY_ACCEPT_INVITE(id));
+  unwrap(response);
+}
+
+export async function rejectMotoboyInvite(id: string): Promise<void> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.MOTOBOY_REJECT_INVITE(id));
+  unwrap(response);
 }
 
 export async function listEstablishments(): Promise<EstablishmentLink[]> {
@@ -368,10 +387,19 @@ function parseItems(raw?: string | null): Pedido['itens'] {
 
 function createIdentifier(): string {
   const cryptoObject = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto;
-  return cryptoObject?.randomUUID?.() ?? `${Date.now()}-${identifierCounter++}`;
-}
+  if (cryptoObject?.randomUUID) {
+    return cryptoObject.randomUUID();
+  }
 
-let identifierCounter = 0;
+  // O backend desserializa attemptId como System.Guid. Alguns ambientes
+  // Android/Hermes não expõem crypto.randomUUID(), então o fallback também
+  // precisa gerar um UUID válido (e não timestamp-contador).
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (character) => {
+    const random = Math.floor(Math.random() * 16);
+    const value = character === 'x' ? random : (random & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}
 
 async function getClientInstanceId(): Promise<string> {
   const stored = await getSecureItem('clientInstanceId');

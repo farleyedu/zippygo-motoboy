@@ -46,7 +46,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
         'ACCESS_BACKGROUND_LOCATION',
-        'FOREGROUND_SERVICE'
+        'FOREGROUND_SERVICE',
+        'FOREGROUND_SERVICE_LOCATION'
       ],
       package: 'com.farleyedu.zippygomotoboy',
       jsEngine: 'hermes',
@@ -72,7 +73,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'expo-location',
         {
           locationAlwaysAndWhenInUsePermission: 'Permitir que o app use sua localização para rastrear entregas.',
-          locationWhenInUsePermission: 'Permitir que o app use sua localização enquanto estiver em uso.'
+          locationWhenInUsePermission: 'Permitir que o app use sua localização enquanto estiver em uso.',
+          isAndroidBackgroundLocationEnabled: true,
+          isAndroidForegroundServiceEnabled: true
         }
       ],
       'expo-secure-store'

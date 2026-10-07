@@ -56,6 +56,8 @@ export const API_CONFIG = {
     MOTOBOY_AVAILABLE_ESTABLISHMENTS: '/motoboys/me/estabelecimentos-disponiveis',
     MOTOBOY_LINK_REQUESTS: '/motoboys/me/vinculos/solicitacoes',
     MOTOBOY_REQUEST_LINK: '/motoboys/me/vinculos/solicitar',
+    MOTOBOY_ACCEPT_INVITE: (id: string) => `/motoboys/me/vinculos/convites/${id}/aceitar`,
+    MOTOBOY_REJECT_INVITE: (id: string) => `/motoboys/me/vinculos/convites/${id}/recusar`,
 
     OPERATIONAL_START: '/v2/motoboys/me/session/start',
     OPERATIONAL_SESSION: '/v2/motoboys/me/session',

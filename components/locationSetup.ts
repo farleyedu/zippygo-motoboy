@@ -1,5 +1,5 @@
 import * as Location from 'expo-location';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { getSecureItem } from '../utils/secureStorage';
 import {
   sendCurrentLocation,
@@ -8,6 +8,33 @@ import {
 } from '../services/trackingService';
 
 const LOCATION_TASK_NAME = 'background-location-task';
+
+export function showLocationSettingsAlert(message: string) {
+  Alert.alert('Permissão de localização necessária', message, [
+    { text: 'Agora não', style: 'cancel' },
+    {
+      text: 'Abrir configurações',
+      onPress: () => {
+        Linking.openSettings().catch((error) => {
+          console.warn('[SETUP] Não foi possível abrir as configurações:', error);
+        });
+      },
+    },
+  ]);
+}
+
+export async function requestForegroundLocationPermission(): Promise<boolean> {
+  const current = await Location.getForegroundPermissionsAsync();
+  if (current.status === 'granted') return true;
+
+  const requested = await Location.requestForegroundPermissionsAsync();
+  if (requested.status === 'granted') return true;
+
+  showLocationSettingsAlert(
+    'Permita o acesso à localização enquanto o app estiver em uso para visualizar sua posição e iniciar as entregas.',
+  );
+  return false;
+}
 
 export async function iniciarMonitoramentoLocalizacao(mode: TrackingMode = 'online_idle'): Promise<boolean> {
   try {
@@ -19,11 +46,15 @@ export async function iniciarMonitoramentoLocalizacao(mode: TrackingMode = 'onli
       return false;
     }
 
-    const { status: foreground } = await Location.requestForegroundPermissionsAsync();
-    const { status: background } = await Location.requestBackgroundPermissionsAsync();
+    if (!(await requestForegroundLocationPermission())) {
+      return false;
+    }
 
-    if (foreground !== 'granted' || background !== 'granted') {
-      Alert.alert('Permissoes necessarias', 'Permita acesso a localizacao em segundo plano.');
+    const { status: background } = await Location.requestBackgroundPermissionsAsync();
+    if (background !== 'granted') {
+      showLocationSettingsAlert(
+        'Para ficar online e compartilhar sua localização durante as entregas, permita a localização em segundo plano nas configurações do Android.',
+      );
       return false;
     }
 

@@ -10,7 +10,7 @@ import {
   Platform,
 } from 'react-native';
 import { CodeField, Cursor, useBlurOnFulfill, useClearByFocusCell } from 'react-native-confirmation-code-field';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from '@react-navigation/native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { setSecureItem, deleteSecureItem } from '../utils/secureStorage';
@@ -24,10 +24,14 @@ export default function VerificationScreen() {
   const [props, getCellOnLayoutHandler] = useClearByFocusCell({ value, setValue });
   const navigation = useNavigation();
   const router = useRouter();
+  const params = useLocalSearchParams<{ id?: string }>();
 
   const handleValidar = async () => {
     // Marca que o código foi validado
     await setSecureItem('codigoValidado', 'true');
+    if (params.id && value.length === CELL_COUNT) {
+      await setSecureItem(`codigoEntrega_${params.id}`, value);
+    }
     // Remove o flag de callback
     await deleteSecureItem('codigoCallback');
     // Volta para a tela anterior

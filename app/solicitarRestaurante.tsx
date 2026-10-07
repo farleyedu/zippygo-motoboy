@@ -7,12 +7,14 @@ import {
   listMotoboyLinkRequests,
   MotoboyAvailableEstablishment,
   MotoboyLinkRequest,
+  acceptMotoboyInvite,
+  rejectMotoboyInvite,
   requestMotoboyLink,
 } from '../services/mobileApi';
 
 export default function SolicitarRestauranteScreen() {
   const router = useRouter();
-  const { user, refreshEstabelecimentos, estabelecimentos, selectEstablishment } = useAuth();
+  const { user, refreshEstabelecimentos, estabelecimentos, estabelecimentoAtual, selectEstablishment } = useAuth();
   const [restaurants, setRestaurants] = useState<MotoboyAvailableEstablishment[]>([]);
   const [requests, setRequests] = useState<MotoboyLinkRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -21,7 +23,10 @@ export default function SolicitarRestauranteScreen() {
 
   const load = useCallback(async () => {
     const [available, mine] = await Promise.all([listAvailableEstablishments(), listMotoboyLinkRequests()]);
-    setRestaurants(available);
+    const deliveryEstablishments = available.filter((item) =>
+      (item.modulosAtivos ?? []).some((module) => String(module).toUpperCase() === 'DELIVERY'),
+    );
+    setRestaurants(deliveryEstablishments);
     setRequests(mine);
   }, []);
 
@@ -32,24 +37,6 @@ export default function SolicitarRestauranteScreen() {
     }
     load().catch((error: any) => Alert.alert('Erro', error?.message ?? 'Não foi possível carregar os restaurantes.')).finally(() => setLoading(false));
   }, [user, router, load]);
-
-  useEffect(() => {
-    const interval = setInterval(async () => {
-      try {
-        await load();
-        const links = await refreshEstabelecimentos();
-        if (links.length === 1) {
-          const result = await selectEstablishment(links[0]);
-          if (result.success) router.replace('/');
-        } else if (links.length > 1) {
-          router.replace('/selecionarRestaurante');
-        }
-      } catch {
-        // A tela permanece disponível para nova tentativa manual se a rede oscilar.
-      }
-    }, 15000);
-    return () => clearInterval(interval);
-  }, [load]);
 
   const atualizar = async () => {
     try {
@@ -82,6 +69,51 @@ export default function SolicitarRestauranteScreen() {
     }
   };
 
+  const responderConvite = async (request: MotoboyLinkRequest, aceitar: boolean) => {
+    try {
+      setBusyId(request.id);
+      if (aceitar) await acceptMotoboyInvite(request.id);
+      else await rejectMotoboyInvite(request.id);
+      await load();
+      if (aceitar) {
+        const links = await refreshEstabelecimentos();
+        if (links.length === 1) {
+          const result = await selectEstablishment(links[0]);
+          if (result.success) router.replace('/');
+        }
+      }
+      Alert.alert(aceitar ? 'Convite aceito' : 'Convite recusado', aceitar ? 'Agora você está vinculado ao restaurante.' : 'O convite foi recusado.');
+    } catch (error: any) {
+      Alert.alert(aceitar ? 'Não foi possível aceitar' : 'Não foi possível recusar', error?.message ?? 'Tente novamente.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const escolherRestaurante = async (restaurant: MotoboyAvailableEstablishment) => {
+    try {
+      setBusyId(restaurant.id);
+      const result = await selectEstablishment({
+        estabelecimentoId: restaurant.id,
+        nome: restaurant.nome,
+        tipoEstabelecimento: restaurant.tipoEstabelecimento,
+        statusVinculo: 'ativo',
+        statusEstabelecimento: 'ativo',
+        tipoAcesso: 'motoboy',
+        modulosAtivos: restaurant.modulosAtivos ?? [],
+      });
+      if (!result.success) {
+        Alert.alert('Não foi possível selecionar', result.error ?? 'Tente novamente.');
+        return;
+      }
+      router.replace('/');
+    } catch (error: any) {
+      Alert.alert('Não foi possível selecionar', error?.message ?? 'Tente novamente.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const requestFor = (id: string) => requests.find((item) => item.estabelecimentoId === id);
 
   if (!user) return null;
@@ -97,6 +129,9 @@ export default function SolicitarRestauranteScreen() {
           const pending = request?.status === 'pending';
           const approved = request?.status === 'approved' || estabelecimentos.some((item) => item.estabelecimentoId === restaurant.id);
           const rejected = request?.status === 'rejected';
+          const invitation = pending && request?.origem === 'estabelecimento';
+          const currentEstablishmentId = estabelecimentoAtual && 'estabelecimentoId' in estabelecimentoAtual ? estabelecimentoAtual.estabelecimentoId : estabelecimentoAtual?.id;
+          const selected = currentEstablishmentId === restaurant.id;
           return (
             <View key={restaurant.id} style={styles.card}>
               <View style={styles.cardMain}>
@@ -106,7 +141,26 @@ export default function SolicitarRestauranteScreen() {
                   <Text style={styles.location}>{[restaurant.cidade, restaurant.uf].filter(Boolean).join(' - ') || 'Restaurante disponível'}</Text>
                 </View>
               </View>
-              {approved ? <Text style={styles.approved}>Vínculo aprovado</Text> : pending ? <Text style={styles.pending}>Aguardando aprovação</Text> : (
+              {approved ? (
+                <View style={styles.approvedActions}>
+                  <Text style={styles.approved}>{selected ? 'Restaurante selecionado' : 'Vínculo aprovado'}</Text>
+                  <TouchableOpacity style={styles.button} onPress={() => void escolherRestaurante(restaurant)} disabled={busyId === restaurant.id || selected}>
+                    {busyId === restaurant.id ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>{selected ? 'Selecionado' : 'Escolher restaurante'}</Text>}
+                  </TouchableOpacity>
+                </View>
+              ) : invitation ? (
+                <View style={styles.inviteActions}>
+                  <Text style={styles.inviteText}>O restaurante enviou um convite</Text>
+                  <View style={styles.inviteButtons}>
+                    <TouchableOpacity style={styles.button} onPress={() => void responderConvite(request, true)} disabled={busyId === request.id}>
+                      {busyId === request.id ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>Aceitar</Text>}
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.secondaryButtonSmall} onPress={() => void responderConvite(request, false)} disabled={busyId === request.id}>
+                      <Text style={styles.secondaryTextSmall}>Recusar</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ) : pending ? <Text style={styles.pending}>Aguardando aprovação</Text> : (
                 <TouchableOpacity style={styles.button} onPress={() => solicitar(restaurant.id)} disabled={busyId === restaurant.id}>
                   {busyId === restaurant.id ? <ActivityIndicator color="#FFF" /> : <Text style={styles.buttonText}>{rejected ? 'Solicitar novamente' : 'Solicitar vínculo'}</Text>}
                 </TouchableOpacity>
@@ -143,7 +197,13 @@ const styles = StyleSheet.create({
   button: { alignItems: 'center', backgroundColor: '#2C79FF', borderRadius: 10, padding: 12 },
   buttonText: { color: '#FFF', fontWeight: '800' },
   pending: { color: '#B45309', fontSize: 14, fontWeight: '800' },
+  inviteActions: { marginTop: 2 },
+  inviteText: { color: '#1D4ED8', fontSize: 13, fontWeight: '800', marginBottom: 8 },
+  inviteButtons: { flexDirection: 'row', gap: 8 },
+  secondaryButtonSmall: { alignItems: 'center', borderColor: '#9CA3AF', borderRadius: 10, borderWidth: 1, flex: 1, justifyContent: 'center', padding: 12 },
+  secondaryTextSmall: { color: '#4B5563', fontWeight: '800' },
   approved: { color: '#15803D', fontSize: 14, fontWeight: '800' },
+  approvedActions: { gap: 10 },
   rejected: { color: '#B91C1C', fontSize: 14, fontWeight: '800' },
   reason: { color: '#6B7280', fontSize: 12, marginTop: 6 },
   empty: { color: '#6B7280', marginTop: 24, textAlign: 'center' },
