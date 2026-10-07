@@ -6,6 +6,7 @@ Atualizado em 07/10/2026. **Autorizado pelo Farley: implementar todas as telas e
 
 - Visual e interações: `index.html`, `styles.css`, `prototype.js`, capturas em `previews/`.
 - Jornada, exceções e políticas: `FLUXOS.md`.
+- Acompanhamento por tela: `CHECKLIST-IMPLEMENTACAO.md`. Distinguir desenho, código inicial, API e validação em aparelho; uma tela bonita no HTML não conta como tela entregue no app.
 - Inventário canônico: as **61 entradas de `rawScreens`** em `prototype.js`. Cada tela deve ter correspondente nativo e estados pertinentes, incluindo as telas de exceção. Não reduzir a quantidade para entregar um MVP.
 - Manter o desenho aprovado com a **nova paleta azul**, solicitada em 07/10: branco luminoso, azul vivo, azul profundo e cobre. Claro e escuro foram atualizados. A tela de detalhes do pedido foi ampliada a pedido do usuário. As fotos dos produtos vêm do catálogo existente.
 - Dados fictícios ficam exclusivamente no protótipo HTML. A versão nativa usa a API e mostra indisponibilidade quando houver erro, canal fechado ou dados ausentes.
@@ -21,7 +22,7 @@ As URLs abaixo incluem `/api`. O cliente mobile já tem `BASE_URL` terminando em
 | Jornada | Contrato já existente | Trabalho para completar |
 | --- | --- | --- |
 | Entrar e recuperar sessão | Auth/login, refresh; `AuthContext`, `apiService` | Aplicar telas aprovadas sem perder renovação e armazenamento |
-| Cadastro, lojas e convites | `/motoboys/register`, `/motoboys/me/estabelecimentos-disponiveis`, `/motoboys/me/vinculos/*`, `/auth/estabelecimentos*` | Confirmar URLs em `apiConfig`, estilizar todos os estados, não trocar loja com entrega ativa |
+| Cadastro, lojas e convites | `/motoboys/cadastro`, `/motoboys/me/estabelecimentos-disponiveis`, `/motoboys/me/vinculos/*`, `/auth/estabelecimentos*` | Confirmar URLs em `apiConfig`, estilizar todos os estados, não trocar loja com entrega ativa |
 | Online desde a espera | `/v2/motoboys/me/session/start`, GET/DELETE sessão, heartbeat/location | Contexto operacional único; rastreamento `online_idle` desde online e `active_route` durante rota; reparar fila local |
 | Mapa livre e pedidos | Sessão/queue, coordenadas da fila; `Mapa.native` | Mapa nativo persistente, pins, seleção, perspectiva e navegação externa; sem recriar mapa ao selecionar pin. Só mapa oculta sobreposições e mantém rastreamento; modo rota acompanha posição/direção. Câmera de acompanhamento inicial integrada; trajeto e instruções reais ainda pendentes |
 | Oferta, rota e coleta | queue/offer/accept/reject, queue/reorder/resume, stops/current/pickup | Validade, conflito de versão, ordem travada, checklist e políticas do servidor |
@@ -49,6 +50,40 @@ As URLs abaixo incluem `/api`. O cliente mobile já tem `BASE_URL` terminando em
 6. **Trabalho e recuperação:** histórico, ganhos, acerto, resumo do turno, suporte/segurança, offline, sessão expirada, negadas, canceladas e todos os estados restantes do inventário.
 7. **Fidelidade e integração:** percorrer todas as 61 telas, comparar capturas nativas com protótipo no claro e escuro; conferir tamanhos, hierarquia, luz, profundidade, movimentos e feedback. Validar com fonte de dados local/testes. Documentar teste Android em aparelho necessário para GPS/câmera/notificações reais.
 
+## Como executar sem perder o controle do escopo
+
+As sete etapas são marcos maiores. Dentro de cada uma, trabalhar em **um percurso completo por lote**, normalmente duas a cinco telas relacionadas. Exemplo: selecionar loja → preparar permissões → ficar online. Exceções que dependem desse percurso acompanham o lote: vínculo recusado, localização negada, sessão encerrada e falha de rede. Não esperar o final das 61 telas para testar integrações ou comparar o visual.
+
+Para cada lote:
+
+1. Selecionar os IDs canônicos do checklist e conferir no protótipo o visual, os gestos, a animação, os destinos e as regras. Definir o que comprova a conclusão antes de escrever código.
+2. Localizar endpoints, serviços, repositórios e eventos existentes. Registrar o que será reutilizado, estendido ou criado. Conferir como o admin usa o mesmo recurso.
+3. Fechar o contrato entre app e servidor: dados de entrada/saída, permissões, estados de erro e eventos. Quando necessário, criar migration versionada. Identidade e loja vêm da sessão; pedido e vínculo são revalidados.
+4. Implementar as regras no backend usando os serviços e transações existentes. Conferir compatibilidade com mobile/admin atuais e executar testes pertinentes às mudanças.
+5. Implementar as telas nativas com os componentes visuais aprovados e conectar à API. Tratar carregamento, vazio, indisponibilidade, rede, cancelamento e retorno à tela. Preparar as animações e o movimento reduzido no mesmo lote.
+6. Percorrer o fluxo com app e API de teste, conferindo também o que aparece no admin. Comparar capturas com o protótipo nos temas claro/escuro. Testar em Android as funcionalidades que dependem de GPS, segundo plano, câmera, áudio ou notificações.
+7. Atualizar checklist e CONTINUIDADE com arquivos, contratos, testes e pendências. Separar alterações de produto dos documentos e preparar um diff por lote. Testes com API interceptada são registrados como tal; não contam como validação da integração real.
+
+Uma tela só entra como **concluída** quando o desenho nativo, as interações, o contrato real e os estados previstos do lote foram verificados. Se apenas uma parte passou, registrar a parte que passou. Revisão visual e testes ocorrem em todas as etapas; a etapa 7 verifica o conjunto e regressões.
+
+### Lotes sugeridos dentro dos marcos
+
+| Etapa | Ordem dos lotes | Resultado que pode ser experimentado |
+| --- | --- | --- |
+| 1 — Base e pedido | 1.1 componentes/tema; 1.2 detalhe/API; 1.3 contatos/entrada pela fila | Abrir um pedido autorizado e conferir cliente, catálogo e valores reais. Código inicial já existe; validação visual final/Android continua necessária |
+| 2 — Conta e sessão | 2.1 entrada/cadastro/recuperação; 2.2 vínculos/convites; 2.3 permissões/contexto de sessão; 2.4 perfil/moto/documentos/configurações | Entrar, vincular, escolher loja e recuperar sessão. Dados e preferências persistem; troca de loja respeita a operação |
+| 3 — Turno e rota | 3.1 home/online/tracking; 3.2 oferta/ordem/coleta; 3.3 mapas/navegação; 3.4 retorno/transferência/cancelamento/conflito | Loja acompanha desde online; motoboy recebe, aceita, coleta e percorre rota, usa Só mapa e resolve mudanças da fila |
+| 4 — Finalização | 4.1 código/contrato transacional; 4.2 dinheiro/Pix/cartão/divisão; 4.3 prova/arraste/recibo; 4.4 falha de rede/reenvio | Código e recebimento conferidos; entrega e cobrança registradas no arraste; duplicidade não afeta a próxima parada |
+| 5 — Comunicação | 5.1 central/texto/histórico/leitura; 5.2 contatos e chat entre colegas; 5.3 áudio/imagens/anexos; 5.4 respostas/reações/busca/fila; 5.5 grupo/notificações/admin | Cliente, loja, colegas e grupo funcionam nos canais autorizados, com mídia e recuperação de falhas |
+| 6 — Trabalho e recuperação | 6.1 histórico/recibo; 6.2 ganhos/acerto/resumo; 6.3 suporte/segurança; 6.4 revisar os estados de recuperação ligados aos demais lotes | Valores reais, fechamento conferível e caminhos completos de ajuda e recuperação |
+| 7 — Revisão do conjunto | 7.1 auditoria das 61 telas; 7.2 jornadas entre app/API/admin; 7.3 Android/segundo plano/permissões/desempenho/acessibilidade | Inventário completo, fidelidade visual, integrações e comportamento no aparelho comprovados |
+
+### Publicação depois da implementação
+
+Preparar uma versão de teste com API/banco isolados e APK instalável durante o trabalho. Quando os marcos estiverem concluídos, preparar migrations, compatibilidade do backend/admin, configuração de serviços, build e roteiro de retorno. Validar a versão candidata com dados de teste. Só então executar a publicação autorizada dos ambientes escolhidos, com verificação após atualização. O pedido atual de organizar etapas não realiza publicação.
+
+Não estimar dias ou percentual global só pelo número de telas: cobrança, tracking em segundo plano e mídia têm complexidade maior que telas de perfil. Ao terminar cada lote, registrar esforço real e revisar a estimativa do restante. O progresso é medido por jornadas verificadas, APIs e testes concluídos.
+
 ## Regras para qualquer motor executar
 
 - Não substituir telas aprovadas por páginas genéricas com listas de botões. Estados de erro também têm composição própria.
@@ -67,7 +102,8 @@ As URLs abaixo incluem `/api`. O cliente mobile já tem `BASE_URL` terminando em
 - [x] Guia de modelos Claude com preços/fontes e rotina econômica.
 - [x] Commit das mudanças anteriores, isolado dos documentos.
 - [x] Paleta azul aplicada nas 61 telas e nos componentes nativos novos; capacete atualizado.
-- [x] Etapa 1: tema, Manrope, componentes nativos, pedido detalhado com fotos reais e consulta operacional restrita.
+- [x] Código inicial da etapa 1: tema, Manrope, componentes nativos, pedido detalhado com fotos reais e consulta operacional restrita.
+- [ ] Validação da etapa 1 com app/API reais em ambiente de teste e revisão Android. A revisão Expo Web com API interceptada e testes backend já passou.
 - [ ] Etapas 2–7 permanecem em execução/pendência; o app completo ainda não foi entregue. Antecipados: chat básico de texto (loja/cliente/grupo), modos de câmera/visualização do mapa e proteção do ID na chegada. Isso não conclui as etapas 3 e 5.
 
 Verificação deste lote: TypeScript sem erros; 48 testes backend selecionados passaram; Expo Web em 390 px com nove verificações de pedido/chat e todas as chamadas de API interceptadas. Foram conferidos envio de texto, preservação do rascunho após falha e parâmetros da URL. Não foram enviados pedidos, mensagens ou pagamentos reais. GPS, câmera e notificações ainda precisam de teste Android em aparelho.
