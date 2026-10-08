@@ -1,0 +1,11 @@
+{
+  "results": [
+    "Janelas de hoje e semana respeitam Brasilia e virada UTC",
+    "Historico personalizado inclui o ultimo dia e aceita ano bissexto",
+    "Historico rejeita datas inexistentes, intervalo invertido e mais de 93 dias",
+    "Consulta financeira passa loja, janela e AbortSignal sem token operacional",
+    "Respostas nulas, sem ACK ou falha nao sao tratadas como sucesso",
+    "Suporte preserva identificador e corpo em repeticao"
+  ],
+  "scope": "Funcoes reais transpiladas; HTTP controlado, sem API externa."
+}

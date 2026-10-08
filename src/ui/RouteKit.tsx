@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
-import { useRouter } from 'expo-router';
+import { useRouter, useRootNavigationState } from 'expo-router';
 import { Check, ChevronRight, Lock, Map, Package, Store } from 'lucide-react-native';
 import { MotoboyQueue, queueToPedidos, RouteStop } from '../../services/mobileApi';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
@@ -14,8 +14,8 @@ import Mapa from '../../components/Mapa';
 export function activeStops(queue?: MotoboyQueue | null) { return queue ? [...(queue.current ? [queue.current] : []), ...queue.next] : []; }
 
 export function RouteScreen({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
-  const router = useRouter(), turn = useOperationalSession(), focused = useIsFocused();
-  useEffect(() => { if (focused && turn.phase === 'offline') router.replace('/'); }, [turn.phase, focused, router]);
+  const router = useRouter(), turn = useOperationalSession(), focused = useIsFocused(), auth = useAuth(), navigation = useRootNavigationState();
+  useEffect(() => { if (navigation?.key && !auth.isLoading && focused && turn.permissions && turn.phase === 'offline') router.replace('/'); }, [navigation?.key, auth.isLoading, turn.permissions, turn.phase, focused, router]);
   return <AccountScreen active="map" footer={footer}>
     {turn.routeNotice && <Feedback title={turn.routeNotice.kind === 'cancelled' ? 'A loja cancelou um pedido' : 'Sua rota foi atualizada'} message="Confira a sequência atual antes de continuar." onRetry={() => { const notice = turn.routeNotice!; turn.clearRouteNotice(); router.push({ pathname: '/estadoRota', params: { tipo: notice.kind, pedidoId: String(notice.pedidoId || '') } }); }} />}
     {turn.busy && !turn.queue ? <Feedback title="Conferindo sua rota" loading /> : null}

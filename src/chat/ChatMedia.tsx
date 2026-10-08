@@ -23,6 +23,8 @@ import { Mic, Pause, Play, Send, Trash2, X } from 'lucide-react-native';
 import { ChatAttachment, LocalChatFile } from '../../services/communicationApi';
 import { useZippyTheme } from '../ui/theme';
 import { openChatFile } from './media';
+import { browserNativeTest } from '../../services/browserNativeTest';
+import { BrowserAudioComposer } from './BrowserAudioComposer';
 
 const clock = (seconds: number) =>
   `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
@@ -43,8 +45,10 @@ export function ChatMedia({
   useEffect(() => {
     let alive = true;
     if (image) {
+      setUri(null);
+      setError('');
       setLoading(true);
-      void openChatFile(attachment.id)
+      void openChatFile(attachment.id, attachment.clientPedidoId)
         .then(
           (value) => {
             if (alive) setUri(value);
@@ -60,7 +64,7 @@ export function ChatMedia({
     return () => {
       alive = false;
     };
-  }, [attachment.id, image]);
+  }, [attachment.id, attachment.clientPedidoId, image]);
   const play = async () => {
     try {
       if (status.playing) {
@@ -70,7 +74,10 @@ export function ChatMedia({
       setLoading(true);
       setError('');
       if (!uri) {
-        const source = await openChatFile(attachment.id);
+        const source = await openChatFile(
+          attachment.id,
+          attachment.clientPedidoId,
+        );
         setUri(source);
         player.replace(source);
       }
@@ -135,7 +142,9 @@ export function ChatMedia({
               {clock(status.currentTime)} /{' '}
               {status.duration
                 ? clock(status.duration)
-                : `${Math.round(attachment.size / 1024)} KB`}
+                : attachment.size
+                  ? `${Math.round(attachment.size / 1024)} KB`
+                  : '--:--'}
             </Text>
           </View>
         </View>
@@ -181,7 +190,11 @@ export function ChatMedia({
   );
 }
 
-export function AudioComposer({
+export function AudioComposer(props: { disabled: boolean; send: (file: LocalChatFile) => Promise<void>; onError: (error: string) => void }) {
+  return browserNativeTest ? <BrowserAudioComposer disabled={props.disabled} /> : <NativeAudioComposer {...props} />;
+}
+
+function NativeAudioComposer({
   disabled,
   send,
   onError,

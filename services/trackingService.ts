@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { browserNativeTest } from './browserNativeTest';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import { createIdentifier, heartbeatOperationalSession, OperationalLocationPayload, sendOperationalLocations } from './mobileApi';
 
@@ -108,6 +109,7 @@ export async function clearTrackingMode(): Promise<void> {
 }
 
 export async function sendCurrentLocation(mode?: TrackingMode): Promise<void> {
+  if (browserNativeTest) return;
   const context = await scope();
   if (!context || closingScopes.has(context.id)) return;
   const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -119,6 +121,7 @@ export async function sendLocation(
   mode?: TrackingMode,
   options: { force?: boolean } = {},
 ): Promise<void> {
+  if (browserNativeTest) return;
   const context = await scope();
   if (!context) return;
   return serialize(async () => {
@@ -136,6 +139,7 @@ export async function sendLocation(
 }
 
 export async function flushLocationQueue(): Promise<void> {
+  if (browserNativeTest) return;
   const context = await scope();
   if (context) await serialize(() => flushQueue(context));
 }

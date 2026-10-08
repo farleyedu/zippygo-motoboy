@@ -7,6 +7,7 @@ import { registerLogoutPrecondition } from '../../services/sessionEvents';
 import { readyToComplete } from '../delivery/completionRules';
 import { useAuth } from './AuthContext';
 import { useOperationalSession } from './OperationalSessionContext';
+import { assertRealProof } from '../../services/browserNativeTest';
 
 export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt};
 type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<void>;preparePayment:(parts:PaymentPart[])=>Promise<void>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
@@ -93,6 +94,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     await persist({...d,phase:'completed',receipt,request:{...d.request,codigo:undefined}});return receipt;
   };
   const send=async(d:CompletionDraft)=>{
+    assertRealProof(d.request.proofId);
     if(!scope(d))throw new Error('A sessão desta conferência mudou. Consulte o recibo; recupere o turno antes de reenviar.');
     if(turn.store.getSnapshot().queue?.current?.pedidoId!==d.context.pedidoId)throw new Error('Este pedido não é mais sua entrega atual. Consulte o resultado antes de seguir.');
     const sending={...d,phase:'sending' as const};await persist(sending);

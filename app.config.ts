@@ -81,7 +81,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
       ],
       'expo-secure-store',
       ['expo-audio', { microphonePermission: 'Permitir gravar mensagens de audio para sua equipe e clientes.' }],
-      ['expo-notifications', { sounds: ['./assets/sounds/chat-message.wav', './assets/sounds/chat-mention.wav'] }]
+      ['expo-notifications', { sounds: ['./assets/sounds/chat_message.wav', './assets/sounds/chat_mention.wav'] }]
     ],
     
     experiments: {

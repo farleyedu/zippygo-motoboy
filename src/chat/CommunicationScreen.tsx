@@ -54,6 +54,7 @@ import {
   ChatTarget,
   dismissChatNotification,
   listChat,
+  chatMessageContext,
   listChatContacts,
   listChatNotifications,
   LocalChatFile,
@@ -81,6 +82,7 @@ import { useZippyTheme } from '../ui/theme';
 import { AudioComposer, ChatMedia } from './ChatMedia';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
+import { decodeChatDraft, encodeChatDraft, mentionedIds } from './draft';
 
 const reactionIcons = {
   like: ThumbsUp,
@@ -216,6 +218,9 @@ export default function CommunicationScreen() {
     follow = useRef(true),
     generation = useRef(0),
     enqueueing = useRef(false);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+  const loadedQuery = useRef('');
+  const paginationQuery = useRef('');
   const draftKey = `zippygo.chat.draft.v2:${identity.replace(`:${turn.session?.sessionId}:`, ':')}`;
   const {
     outbox,
@@ -225,7 +230,8 @@ export default function CommunicationScreen() {
   } = useChatOutbox(owner, turn.session?.sessionId, (message, sentTarget) => {
     if (
       sentTarget.channel === target?.channel &&
-      sentTarget.target === target?.target
+      sentTarget.target === target?.target &&
+      sentTarget.pedidoId === target?.pedidoId
     )
       setMessages((current) => merge(current, [message]));
     setRefresh((n) => n + 1);
@@ -239,7 +245,9 @@ export default function CommunicationScreen() {
     void AsyncStorage.getItem(draftKey).then(
       (raw) => {
         if (alive) {
-          setDraft(raw || '');
+          const saved = decodeChatDraft(raw);
+          setDraft(saved.body);
+          setMentions(saved.mentions);
           setRestored(true);
         }
       },
@@ -254,18 +262,33 @@ export default function CommunicationScreen() {
   useEffect(() => {
     if (!restored || !target) return;
     const timer = setTimeout(() => {
-      void AsyncStorage.setItem(draftKey, draft).catch(() =>
-        setError('Nao foi possivel salvar o rascunho.'),
-      );
+      void AsyncStorage.setItem(
+        draftKey,
+        encodeChatDraft(draft, mentions),
+      ).catch(() => setError('Nao foi possivel salvar o rascunho.'));
     }, 350);
     return () => clearTimeout(timer);
-  }, [draft, restored, draftKey, target]);
+  }, [draft, mentions, restored, draftKey, target]);
+  useEffect(() => {
+    setMessages([]);
+    setContacts([]);
+    setSelected(null);
+    setSearch('');
+    setSearching(false);
+    setMore(false);
+    setCursor(undefined);
+    setHighlighted(null);
+    loadedQuery.current = '';
+    paginationQuery.current = '';
+  }, [identity]);
   useEffect(() => {
     let alive = true;
     void AsyncStorage.getItem(`zippygo.chat.settings:${owner}`)
       .then((raw) => {
-        if (alive && raw) {
-          const data = JSON.parse(raw) as {
+        if (alive) {
+          const data = (
+            raw ? JSON.parse(raw) : { muted: false, mentionAlerts: true }
+          ) as {
             muted: boolean;
             mentionAlerts: boolean;
           };
@@ -302,7 +325,7 @@ export default function CommunicationScreen() {
       const version = ++generation.current,
         abort = new AbortController();
       let inFlight = false;
-      const load = async (initial = false) => {
+      const load = async () => {
         if (inFlight) return;
         inFlight = true;
         try {
@@ -311,20 +334,22 @@ export default function CommunicationScreen() {
               'Inicie seu turno para abrir as conversas da loja.',
             );
           if (target) {
+            const query = `${identity}:${searching ? search : ''}`;
             const data = await listChat(target, {
               signal: abort.signal,
               search: searching ? search : undefined,
             });
             if (version !== generation.current) return;
+            const replace = loadedQuery.current !== query;
             setMessages((current) =>
-              initial || searching
-                ? data.messages
-                : merge(current, data.messages),
+              replace ? data.messages : merge(current, data.messages),
             );
-            if (initial || searching) {
+            if (paginationQuery.current !== query) {
               setMore(data.hasMore);
               setCursor(data.cursor);
+              paginationQuery.current = query;
             }
+            loadedQuery.current = query;
             const through = data.messages.at(-1)?.sequence;
             if (through && !searching)
               void readChat(target, through).catch(() => undefined);
@@ -358,7 +383,7 @@ export default function CommunicationScreen() {
         }
       };
       setLoading(true);
-      void load(true);
+      void load();
       const timer = setInterval(() => void load(), 8000);
       return () => {
         generation.current++;
@@ -367,6 +392,34 @@ export default function CommunicationScreen() {
       };
     }, [identity, target, search, searching, refresh, turn.session?.sessionId]),
   );
+  const locate = useCallback(
+    async (id: string) => {
+      if (!target) return;
+      const scope = live.current;
+      try {
+        const page = await chatMessageContext(target, id);
+        if (scope !== live.current) return;
+        loadedQuery.current = `${scope}:`;
+        setSearching(false);
+        setSearch('');
+        follow.current = false;
+        setMessages((current) => merge(current, page.messages));
+        setHighlighted(id);
+      } catch (e) {
+        if (scope === live.current)
+          setError(e instanceof Error ? e.message : 'Mensagem indisponivel.');
+      }
+    },
+    [target],
+  );
+  useEffect(() => {
+    if (params.messageId && target) void locate(params.messageId);
+  }, [params.messageId, identity, locate]);
+  useEffect(() => {
+    if (!highlighted) return;
+    const timer = setTimeout(() => setHighlighted(null), 10000);
+    return () => clearTimeout(timer);
+  }, [highlighted]);
   const back = () => (router.canGoBack() ? router.back() : router.replace('/'));
   const store = auth.estabelecimentoAtual?.nome || 'Estabelecimento';
   const colleagues = contacts.filter(
@@ -385,7 +438,7 @@ export default function CommunicationScreen() {
   const pending = entries.filter(
     (entry) =>
       entry.target.channel === target?.channel &&
-      entry.target.target === target?.target,
+      entry.target.target === target?.target && entry.target.pedidoId === target?.pedidoId,
   );
   const send = async (body = draft, file?: LocalChatFile) => {
     if (!target || !ready || enqueueing.current) return;
@@ -401,9 +454,7 @@ export default function CommunicationScreen() {
           clientId: createIdentifier(),
           body: body.trim(),
           replyTo: reply?.id,
-          mentions: mentions
-            .filter((c) => body.includes(`@${c.nome}`))
-            .map((c) => c.motoboyId),
+          mentions: mentionedIds(body, mentions),
           pedidoId: target.pedidoId,
         },
         file: savedFile,
@@ -1078,8 +1129,7 @@ export default function CommunicationScreen() {
                   <Pressable
                     accessibilityLabel="Ver mensagem citada"
                     onPress={() => {
-                      setSearch(message.replyBody || '');
-                      setSearching(true);
+                      if (message.replyTo) void locate(message.replyTo);
                     }}
                     style={{
                       borderLeftWidth: 2,
@@ -1187,6 +1237,13 @@ export default function CommunicationScreen() {
             return (
               <Pressable
                 key={message.id}
+                onLayout={(event) => {
+                  if (highlighted === message.id)
+                    scroll.current?.scrollTo({
+                      y: Math.max(0, event.nativeEvent.layout.y - 32),
+                      animated: !theme.reducedMotion,
+                    });
+                }}
                 accessibilityLabel={`Mensagem de ${message.senderName}${message.mentioned ? ', mencionou voce' : ''}: ${message.body || 'anexo'}`}
                 onLongPress={() => setSelected(message)}
                 onPress={() => setSelected(message)}
@@ -1201,13 +1258,15 @@ export default function CommunicationScreen() {
                       : dark
                         ? '#22334c'
                         : '#fff',
-                    borderColor: message.mentioned
-                      ? colors.warning
-                      : message.mine
-                        ? dark
-                          ? '#65a1ff'
-                          : '#b9cde7'
-                        : colors.line,
+                    borderWidth: highlighted === message.id ? 3 : 1,
+                    borderColor:
+                      message.mentioned || highlighted === message.id
+                        ? colors.warning
+                        : message.mine
+                          ? dark
+                            ? '#65a1ff'
+                            : '#b9cde7'
+                          : colors.line,
                   },
                 ]}
               >

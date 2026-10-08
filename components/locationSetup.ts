@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import { Alert, Linking, Platform } from 'react-native';
 import { getSecureItem } from '../utils/secureStorage';
+import { browserNativeTest, reportBrowserMock } from '../services/browserNativeTest';
 import {
   sendCurrentLocation,
   setTrackingMode,
@@ -24,6 +25,7 @@ export function showLocationSettingsAlert(message: string) {
 }
 
 export async function requestForegroundLocationPermission(): Promise<boolean> {
+  if (browserNativeTest) return true;
   const current = await Location.getForegroundPermissionsAsync();
   if (current.status === 'granted') return true;
 
@@ -38,6 +40,7 @@ export async function requestForegroundLocationPermission(): Promise<boolean> {
 
 export async function iniciarMonitoramentoLocalizacao(mode: TrackingMode = 'online_idle'): Promise<boolean> {
   try {
+    if (browserNativeTest) { await setTrackingMode(mode); reportBrowserMock('GPS e segundo plano MOCK no navegador. Nenhuma coordenada simulada enviada a loja.'); return true; }
     if (Platform.OS === 'web') return false;
     const token = await getSecureItem('authToken');
     const operationalToken = await getSecureItem('operationalAccessToken');

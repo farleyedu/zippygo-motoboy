@@ -1,0 +1,11 @@
+{
+  "results": [
+    "Mencao conserva destinatario apos recarga e continua marcada",
+    "Pagina antiga permanece apos envio e atualizacao",
+    "Aviso abre e destaca mensagem fora da primeira pagina",
+    "Cliente recebe foto protegida, busca na API e reage"
+  ],
+  "screenshots": 10,
+  "errors": [],
+  "scope": "Expo Web real, API interceptada. Nao comprova Android ou provedores reais."
+}

@@ -1,29 +1,29 @@
 import React from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
-import { useRouter, Href } from 'expo-router';
+import { useRouter, useRootNavigationState, Href } from 'expo-router';
 import { useIsFocused } from '@react-navigation/native';
 import { ChevronRight, Home, Route, MessageCircle, UserRound, Wallet, LucideIcon } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { Entrance, Feedback, Screen, type } from './Kit';
 import { useZippyTheme } from './theme';
 
-export function AppNav({ active = 'profile' }: { active?: 'home' | 'map' | 'chats' | 'profile' }) {
+export function AppNav({ active = 'profile' }: { active?: 'home' | 'map' | 'chats' | 'profile' | 'earnings' }) {
   const router = useRouter(), { reducedMotion, dark } = useZippyTheme();
   const tabs: { id: typeof active; title: string; icon: LucideIcon; path: Href }[] = [
     { id: 'home', title: 'Início', icon: Home, path: '/' }, { id: 'map', title: 'Rota', icon: Route, path: '/rota' },
     { id: 'chats', title: 'Chat', icon: MessageCircle, path: '/conversas' },
     { id: 'profile', title: 'Perfil', icon: UserRound, path: '/perfil' },
   ];
-  const items: ({ id:string; title:string; icon:LucideIcon; path?:Href })[]=[...tabs.slice(0,3),{id:'earnings',title:'Ganhos',icon:Wallet},tabs[3]];
+  const items: ({ id:string; title:string; icon:LucideIcon; path?:Href })[]=[...tabs.slice(0,3),{id:'earnings',title:'Ganhos',icon:Wallet,path:'/ganhos'},tabs[3]];
   return <View style={{ height: 64, borderRadius: 21, backgroundColor: dark ? '#0e1b30' : '#16243d', borderWidth: dark ? 1 : 0, borderColor: '#40557655', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', paddingHorizontal: 6, boxShadow: '0 12px 28px #08162933' }}>{items.map(tab => <Pressable key={tab.id} accessibilityRole="tab" accessibilityLabel={tab.path?tab.title:'Ganhos — disponível na etapa 6'} accessibilityState={{ selected: active === tab.id, disabled:!tab.path }} disabled={!tab.path} onPress={() => tab.path && router.navigate(tab.path)} style={({ pressed }) => ({ flex:1, minHeight: 49, gap: 4, alignItems: 'center', justifyContent: 'center', borderRadius: 15, backgroundColor: active === tab.id ? '#82b5ff14' : 'transparent', opacity: pressed ? .65 : 1 })}>
     {active === tab.id && <View style={{ position: 'absolute', top: 1, width: 12, height: 2, borderRadius: 3, backgroundColor: '#7db0ff', boxShadow: reducedMotion ? undefined : '0 0 8px #7db0ff' }} />}
     <tab.icon size={19} color={active === tab.id ? '#9bc4ff' : '#8d9fba'} strokeWidth={1.8} /><Text style={{ fontFamily: 'Manrope', fontSize: 9, color: active === tab.id ? '#9bc4ff' : '#8d9fba' }}>{tab.title}</Text>
   </Pressable>)}</View>;
 }
 
-export function AccountScreen({ children, active = 'profile', footer }: { children: React.ReactNode; active?: 'home' | 'map' | 'chats' | 'profile'; footer?: React.ReactNode }) {
-  const auth = useAuth(), focused = useIsFocused(), router = useRouter();
-  React.useEffect(() => { if (focused && !auth.isLoading && !auth.user && !auth.restoreError) router.replace('/(auth)/login'); }, [focused, auth.user, auth.isLoading, auth.restoreError, router]);
+export function AccountScreen({ children, active = 'profile', footer }: { children: React.ReactNode; active?: 'home' | 'map' | 'chats' | 'profile' | 'earnings'; footer?: React.ReactNode }) {
+  const auth = useAuth(), focused = useIsFocused(), router = useRouter(), navigation = useRootNavigationState();
+  React.useEffect(() => { if (navigation?.key && focused && !auth.isLoading && !auth.user && !auth.restoreError) router.replace('/(auth)/login'); }, [navigation?.key, focused, auth.user, auth.isLoading, auth.restoreError, router]);
   if (!auth.user && auth.restoreError) return <Screen><Feedback title="Vamos reconectar seu acesso" message={auth.restoreError} onRetry={()=>void auth.loadUserFromStorage()}/></Screen>;
   if (auth.isLoading || !auth.user) return <Screen><Feedback title="Conferindo seu acesso" loading /></Screen>;
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><Screen footer={<View style={{ gap: 12 }}>{footer}<AppNav active={active} /></View>}><Entrance>{children}</Entrance></Screen></KeyboardAvoidingView>;

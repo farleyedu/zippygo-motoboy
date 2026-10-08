@@ -1,6 +1,8 @@
 import { Platform } from 'react-native';
+import { browserNativeTest, createBrowserMockPhoto } from './browserNativeTest';
 
 export async function chooseAccountImage(camera: boolean): Promise<string | null> {
+  if (camera && browserNativeTest) return createBrowserMockPhoto();
   // Carregamento por ação: aparelhos com binário antigo continuam abrindo o app.
   const picker = await import('expo-image-picker');
   if (camera) {

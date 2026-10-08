@@ -1,10 +1,10 @@
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect,useRef } from 'react';
-import { Platform, Vibration } from 'react-native';
+import { Platform, Vibration, View } from 'react-native';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -18,6 +18,7 @@ import { useDeliveryCompletion } from '@/src/contexts/DeliveryCompletionContext'
 import { useAuth } from '@/src/contexts/AuthContext';
 import { getSecureItem,setSecureItem } from '@/utils/secureStorage';
 import { ChatNotices } from '@/src/chat/ChatNotices';
+import { BrowserTestBanner } from '@/src/ui/BrowserTestBanner';
 
 import '../components/locationTask';
 
@@ -72,8 +73,8 @@ export default function RootLayout() {
       <OperationalSessionProvider>
       <DeliveryCompletionProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <RootLayoutNav />
-        <ChatNotices />
+        <BrowserTestBanner />
+        <View style={{ flex: 1 }}><RootLayoutNav /><ChatNotices /></View>
       </GestureHandlerRootView>
       </DeliveryCompletionProvider>
       </OperationalSessionProvider>
@@ -88,6 +89,7 @@ function RootLayoutNav() {
   const preferences = useZippyTheme();
   const current = String(segments[0] || 'index');
   const completion = useDeliveryCompletion();
+  const navigation = useRootNavigationState();
   const notified=useRef(new Set<string>());
   useEffect(()=>{
     const offer=turn.queue?.offer,owner=String(auth.user?.id||'');
@@ -108,20 +110,24 @@ function RootLayoutNav() {
   useEffect(() => {
     const pending = ['sending','pending'].includes(completion.draft?.phase || '');
     const execution = ['confirmacaoEntrega','VerificationScreen','cobrarEntrega','dividirPagamento','comprovanteEntrega','chegadaEntrega','pedido','oferta','rota','retirada','transferencia','recusarPedido','retornoLoja','turno'];
-    if (pending && execution.includes(current)) router.replace('/entregaPendente');
-  }, [current,completion.draft?.phase,router]);
+    if (navigation?.key && pending && execution.includes(current)) router.replace('/entregaPendente');
+  }, [navigation?.key,current,completion.draft?.phase,router]);
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    Notifications.setNotificationHandler({ handleNotification: async notification => ({ shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldSetBadge: false, shouldPlaySound: !notification.request.content.data?.chatMessageId && preferences.sound }) });
-  }, [preferences.sound]);
+    Notifications.setNotificationHandler({ handleNotification: async notification => {
+      const data = notification.request.content.data;
+      const allowed = !data?.chatMessageId || data.recipientSessionId === turn.session?.sessionId;
+      return { shouldShowAlert: allowed, shouldShowBanner: allowed, shouldShowList: allowed, shouldSetBadge: false, shouldPlaySound: allowed && !data?.chatMessageId && preferences.sound };
+    } });
+  }, [preferences.sound, turn.session?.sessionId]);
   useEffect(() => {
-    if (!auth.isLoading && !auth.user && !auth.restoreError && current !== '(auth)' && current !== 'index') router.replace('/(auth)/login');
-  }, [auth.isLoading, auth.user, auth.restoreError, current, router]);
+    if (navigation?.key && !auth.isLoading && !auth.user && !auth.restoreError && current !== '(auth)' && current !== 'index') router.replace('/(auth)/login');
+  }, [navigation?.key,auth.isLoading, auth.user, auth.restoreError, current, router]);
   useEffect(() => {
-    if (auth.isLoading || !auth.user || !auth.estabelecimentoAtual) return;
-    if (turn.phase === 'expired' && !['(auth)', 'sessaoEncerrada', 'permissoes', 'permissaoNegada', 'entregaPendente', 'entregaConcluida'].includes(current)) router.replace('/sessaoEncerrada');
+    if (!navigation?.key || auth.isLoading || !auth.user || !auth.estabelecimentoAtual) return;
+    if (turn.phase === 'expired' && !['(auth)', 'sessaoEncerrada', 'permissoes', 'permissaoNegada', 'entregaPendente', 'entregaConcluida', 'ganhos', 'historico', 'reciboHistorico', 'acerto', 'resumoTurno', 'suporte', 'seguranca', 'ajudaOperacional'].includes(current)) router.replace('/sessaoEncerrada');
     else if (turn.session && turn.phase === 'permission-required' && current === 'index') router.replace('/permissoes');
-  }, [turn.phase, turn.session?.sessionId, auth.isLoading, auth.user?.id, auth.estabelecimentoAtual, current, router]);
+  }, [navigation?.key,turn.phase, turn.session?.sessionId, auth.isLoading, auth.user?.id, auth.estabelecimentoAtual, current, router]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

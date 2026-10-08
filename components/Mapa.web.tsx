@@ -3,6 +3,7 @@ import type { Map as LeafletMap } from 'leaflet';
 import { Pedido } from '../types/pedido';
 import { useZippyTheme } from '../src/ui/theme';
 import 'leaflet/dist/leaflet.css';
+import { browserNativeTest } from '../services/browserNativeTest';
 
 type Props = { pedidos: Pedido[]; emEntrega: boolean; recenterToken?: number; routeMode?: boolean; mapClean?: boolean; onOrderPress?: (id: number) => void; view3D?: boolean };
 export default function Mapa({ pedidos, mapClean, onOrderPress, recenterToken, routeMode }: Props) {
@@ -15,7 +16,11 @@ export default function Mapa({ pedidos, mapClean, onOrderPress, recenterToken, r
     const coords = pedidos.map(p => p.coordinates).filter((c): c is { lat: number; lng: number } => !!c && Number.isFinite(c.lat) && Number.isFinite(c.lng));
     if (coords.length) instance.fitBounds(coords.map(c => [c.lat, c.lng]), { padding: [25, 25], maxZoom: 15 }); else instance.setView([0, 0], 2);
     const rider = L.circleMarker([0, 0], { radius: 7, color: '#fff', weight: 3, fillColor: '#397df0', fillOpacity: 1 });
-    if (navigator.geolocation) watch = navigator.geolocation.watchPosition(p => { if (!alive) return; const first = !position.current; position.current = [p.coords.latitude, p.coords.longitude]; rider.setLatLng(position.current).addTo(instance); if (first) instance.setView(position.current, 16); }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 });
+    if (browserNativeTest) {
+      position.current = coords.length ? [coords[0].lat + 0.002, coords[0].lng + 0.002] : [-23.5505, -46.6333];
+      rider.setLatLng(position.current).bindTooltip('GPS MOCK no navegador').addTo(instance);
+      if (!coords.length) instance.setView(position.current, 14);
+    } else if (navigator.geolocation) watch = navigator.geolocation.watchPosition(p => { if (!alive) return; const first = !position.current; position.current = [p.coords.latitude, p.coords.longitude]; rider.setLatLng(position.current).addTo(instance); if (first) instance.setView(position.current, 16); }, () => {}, { enableHighAccuracy: true, maximumAge: 5000, timeout: 12000 });
     setReady(true);
   }); return () => { alive = false; if (watch !== undefined) navigator.geolocation.clearWatch(watch); map.current?.remove(); map.current = null; }; }, []);
   useEffect(() => { if (!ready || !map.current) return; const current = map.current; let alive = true; let layer: import('leaflet').LayerGroup | undefined;

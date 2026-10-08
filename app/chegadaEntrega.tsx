@@ -1,5 +1,6 @@
 import React from 'react';
-import { Linking,Text,View } from 'react-native';
+import { Text,View } from 'react-native';
+import { browserNativeLinking as Linking } from '../services/browserNativeTest';
 import { useRouter } from 'expo-router';
 import { Check,HelpCircle,MapPin,MessageCircle,Phone } from 'lucide-react-native';
 import { useAuth } from '../src/contexts/AuthContext';

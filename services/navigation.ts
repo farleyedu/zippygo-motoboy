@@ -1,7 +1,9 @@
 import { Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { browserNativeTest, reportBrowserMock } from './browserNativeTest';
 
 export async function openPreferredNavigation(destination: { latitude?: number | null; longitude?: number | null; address?: string | null }) {
+  if (browserNativeTest) { reportBrowserMock('Navegacao externa MOCK no navegador. Maps/Waze nao foram abertos.'); return; }
   const hasCoords = typeof destination.latitude === 'number' && typeof destination.longitude === 'number' && Number.isFinite(destination.latitude) && Number.isFinite(destination.longitude) && Math.abs(destination.latitude)<=90 && Math.abs(destination.longitude)<=180;
   const target = hasCoords ? `${destination.latitude},${destination.longitude}` : destination.address?.trim();
   if (!target) throw new Error('Este destino não tem endereço ou coordenadas para navegar. Fale com a loja.');

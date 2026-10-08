@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { Platform, Linking } from 'react-native';
+import { browserNativeTest, reportBrowserMock } from './browserNativeTest';
 
 export type PermissionKind = 'foreground' | 'background' | 'notifications' | 'services';
 export type PermissionValue = { granted: boolean; canAskAgain: boolean; supported: boolean };
@@ -12,6 +13,10 @@ const unsupported: PermissionValue = { granted: false, canAskAgain: false, suppo
 const permission = (value: { granted: boolean; canAskAgain: boolean }): PermissionValue => ({ ...value, supported: true });
 
 export async function readOperationalPermissions(): Promise<OperationalPermissions> {
+  if (browserNativeTest) {
+    const allowed = { granted: true, canAskAgain: false, supported: true };
+    return { foreground: { ...allowed }, background: { ...allowed }, notifications: { ...allowed }, services: true, ready: true };
+  }
   const foreground = permission(await Location.getForegroundPermissionsAsync());
   const services = await Location.hasServicesEnabledAsync();
   const background = Platform.OS === 'web' ? unsupported : permission(await Location.getBackgroundPermissionsAsync());
@@ -21,6 +26,7 @@ export async function readOperationalPermissions(): Promise<OperationalPermissio
 
 // Chamadas de solicitação ocorrem apenas nas ações explicadas pela tela de preparação.
 export async function askOperationalPermission(kind: PermissionKind): Promise<void> {
+  if (browserNativeTest) { reportBrowserMock('Permissao MOCK liberada no navegador, sem dialogo nativo.'); return; }
   if (kind === 'services') { await openOperationalSettings(); return; }
   if (kind === 'foreground') { await Location.requestForegroundPermissionsAsync(); return; }
   if (Platform.OS === 'web') throw new Error('Esta permissão precisa do aplicativo instalado no aparelho.');
@@ -37,6 +43,7 @@ export async function askOperationalPermission(kind: PermissionKind): Promise<vo
 }
 
 export async function openOperationalSettings(): Promise<void> {
+  if (browserNativeTest) { reportBrowserMock('Configuracoes nativas MOCK no navegador. Permissoes liberadas para teste.'); return; }
   if (Platform.OS === 'web') throw new Error('Abra as permissões de localização nas configurações do navegador.');
   await Linking.openSettings();
 }

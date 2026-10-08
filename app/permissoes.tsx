@@ -10,6 +10,7 @@ import { askOperationalPermission, PermissionKind } from '../services/operationa
 import { Button, Entrance, Feedback, Header, Pill, Screen, Surface, type } from '../src/ui/Kit';
 import { LogoutAction } from '../src/ui/LogoutAction';
 import { useZippyTheme } from '../src/ui/theme';
+import { browserNativeTest } from '../services/browserNativeTest';
 
 function Radar() {
   const { colors, reducedMotion } = useZippyTheme();
@@ -67,12 +68,12 @@ export default function PermissoesScreen() {
     <View style={{ flexDirection: 'row', gap: 7 }}>{[0, 1, 2].map(index => <View key={index} style={{ flex: 1, height: 4, borderRadius: 4, backgroundColor: index < 2 || permissions?.ready ? colors.accent : colors.line }} />)}</View>
     <Radar />
     <Text accessibilityRole="header" style={[type.title, { color: colors.ink, fontSize: 29, lineHeight: 36 }]}>Seu caminho,{ '\n'}sempre conectado.</Text>
-    <Text style={[type.body, { color: colors.muted, marginTop: 12, marginBottom: 18 }]}>Confira as permissões antes de começar. A loja acompanha sua localização somente durante o turno online.</Text>
+    <Text style={[type.body, { color: colors.muted, marginTop: 12, marginBottom: 18 }]}>{browserNativeTest ? 'Permissoes liberadas para teste no navegador. Recursos nativos estao mockados; as demais acoes continuam usando a API.' : 'Confira as permissões antes de começar. A loja acompanha sua localização somente durante o turno online.'}</Text>
     <Pill icon={ShieldCheck}>{auth.estabelecimentoAtual?.nome || 'Seu estabelecimento'}</Pill>
-    {Platform.OS === 'web' && <View style={{ marginTop: 18 }}><Feedback title="Seu turno acontece no aparelho" message="No navegador você pode conferir as telas. O acompanhamento em segundo plano precisa do app instalado no celular." /></View>}
+    {browserNativeTest ? <View style={{ marginTop: 18 }}><Feedback title="Permissoes liberadas · MOCK no navegador" message="GPS, segundo plano e notificacoes estao simulados para teste. Nenhuma permissao nativa sera solicitada; coordenadas simuladas nao sao enviadas a loja." /></View> : Platform.OS === 'web' && <View style={{ marginTop: 18 }}><Feedback title="Seu turno acontece no aparelho" message="No navegador você pode conferir as telas. O acompanhamento em segundo plano precisa do app instalado no celular." /></View>}
     {(failure || turn.error) && <View style={{ marginTop: 18 }}><Feedback title={turn.phase === 'reconnecting' ? 'O turno aguarda conexão' : 'Confira antes de continuar'} message={failure || turn.error || undefined} onRetry={() => { setFailure(''); void turn.store.restore(); }} /></View>}
     {!permissions && <Feedback title="Conferindo permissões" loading />}
-    <View style={{ gap: 12, marginTop: 20 }}>{cards.map(card => {
+    <View style={{ gap: 12, marginTop: 20 }}>{!browserNativeTest && cards.map(card => {
       const permission = permissions?.[card.kind], Icon = card.icon;
       return <Surface key={card.kind}><View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 13 }}><View style={{ padding: 11, borderRadius: 14, backgroundColor: colors.soft }}><Icon size={22} color={colors.accent} strokeWidth={1.7} /></View><View style={{ flex: 1, gap: 6 }}><Text style={[type.body, { color: colors.ink, fontWeight: '800' }]}>{card.title}</Text><Text style={[type.small, { color: colors.muted }]}>{card.description}</Text><Pill icon={permission?.granted ? Check : undefined} tone={permission?.granted ? 'accent' : 'warning'}>{permission?.granted ? 'PERMITIDO' : permission && !permission.supported ? 'NO APLICATIVO' : 'CONFERIR PERMISSÃO'}</Pill></View></View>
         {!permission?.granted && <View style={{ marginTop: 14 }}><Button secondary disabled={blocked || !permission?.supported || (card.kind === 'background' && !permissions?.foreground.granted)} loading={requesting === card.kind} onPress={() => void ask(card.kind)}>{card.kind === 'foreground' ? 'Permitir localização' : card.kind === 'background' ? 'Permitir em segundo plano' : 'Permitir notificações'}</Button></View>}

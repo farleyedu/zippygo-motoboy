@@ -1,0 +1,13 @@
+{
+  "results": [
+    "Permissoes liberadas e aviso permanente 320",
+    "Audio gravacao previa e envio somente local 320",
+    "Camera gera previa e comprovante mock sem HTTP 320",
+    "Permissoes liberadas e aviso permanente 390",
+    "Audio gravacao previa e envio somente local 390",
+    "Camera gera previa e comprovante mock sem HTTP 390"
+  ],
+  "screenshots": 6,
+  "errors": [],
+  "scope": "Expo Web real com API interceptada; hardware e permissoes reais proibidos pelos testes."
+}

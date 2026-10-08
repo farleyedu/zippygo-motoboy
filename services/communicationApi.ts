@@ -13,6 +13,7 @@ export type ChatAttachment = {
   name: string;
   contentType: string;
   size: number;
+  clientPedidoId?: number;
 };
 export type ChatMessage = {
   id: string;
@@ -58,6 +59,15 @@ export type ChatContact = {
 };
 export type LocalChatFile = { uri: string; name: string; contentType: string };
 const root = '/v2/motoboys/me/session/chat';
+export const chatMessageContext = async (
+  target: ChatTarget,
+  id: string,
+): Promise<ChatPage> =>
+  unwrap(
+    await apiClient.get(`${root}/${target.channel}/messages/${id}/context`, {
+      params: { target: target.target, pedidoId: target.pedidoId },
+    }),
+  );
 export const listChat = async (
   target: ChatTarget,
   options: { before?: number; search?: string; signal?: AbortSignal } = {},
@@ -166,6 +176,7 @@ export type ClientRichChat = {
     mine: boolean;
     attachment?: ChatAttachment;
     replyTo?: string;
+    reactions: { reaction: string; count: number; mine: boolean }[];
   }[];
   hasMore: boolean;
   cursor?: string;
@@ -174,15 +185,34 @@ export const listClientChat = async (
   pedidoId: number,
   before?: string,
   signal?: AbortSignal,
+  search?: string,
 ): Promise<ClientRichChat> =>
   unwrap(
     await apiClient.get(
       `/v2/motoboys/me/session/orders/${pedidoId}/client-chat`,
-      { params: { before, limit: 50 }, signal },
+      { params: { before, limit: 50, search }, signal },
     ),
   );
-export async function chatAttachmentData(id: string): Promise<string> {
-  const response = await apiClient.get(`${root}/attachments/${id}`, {
+export const reactClientChat = async (
+  pedido: number,
+  id: string,
+  reaction: string | null,
+): Promise<void> => {
+  unwrap(
+    await apiClient.put(
+      `/v2/motoboys/me/session/orders/${pedido}/client-chat/messages/${id}/reaction`,
+      { reaction },
+    ),
+  );
+};
+export async function chatAttachmentData(
+  id: string,
+  clientPedidoId?: number,
+): Promise<string> {
+  const path = clientPedidoId
+    ? `/v2/motoboys/me/session/orders/${clientPedidoId}/client-chat/messages/${id}/attachment`
+    : `${root}/attachments/${id}`;
+  const response = await apiClient.get(path, {
     responseType: 'blob',
   });
   return new Promise((resolve, reject) => {

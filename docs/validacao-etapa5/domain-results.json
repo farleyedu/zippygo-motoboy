@@ -1,6 +1,9 @@
 {
-  "passed": 11,
+  "passed": 14,
   "results": [
+    "Rascunho restaurado conserva destinatarios de mencao",
+    "Rascunho legado nao inventa destinatarios e mencao removida nao dispara alerta",
+    "Nome com pontuacao e destinatarios repetidos sao preservados com seguranca",
     "Persiste antes de enviar e remove somente apos ACK",
     "ACK perdido preserva identificador no reinicio e reenvio",
     "Falha de armazenamento impede rede e preserva rascunho externo",

@@ -31,8 +31,11 @@ export async function retainChatFile(
   }
   return { ...file, uri };
 }
-export async function openChatFile(id: string): Promise<string> {
-  const data = await chatAttachmentData(id);
+export async function openChatFile(
+  id: string,
+  clientPedidoId?: number,
+): Promise<string> {
+  const data = await chatAttachmentData(id, clientPedidoId);
   if (Platform.OS === 'web') return data;
   const uri = `${FileSystem.cacheDirectory}chat-${id}.${data.startsWith('data:image/') ? 'jpg' : 'm4a'}`;
   await FileSystem.writeAsStringAsync(uri, data.slice(data.indexOf(',') + 1), {

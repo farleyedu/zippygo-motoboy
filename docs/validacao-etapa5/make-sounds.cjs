@@ -16,6 +16,6 @@ function sound(name, notes) {
   }
   fs.writeFileSync(path.join(out,name),wave);
 }
-sound('chat-message.wav',[523.25,659.25]);
-sound('chat-mention.wav',[659.25,880,1174.66]);
+sound('chat_message.wav',[523.25,659.25]);
+sound('chat_mention.wav',[659.25,880,1174.66]);
 console.log('Dois avisos WAV gerados, com ataques suaves e volume moderado.');

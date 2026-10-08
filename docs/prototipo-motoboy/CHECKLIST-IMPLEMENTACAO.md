@@ -43,19 +43,19 @@ Cada tela pertence a uma etapa principal. Recuperação de rede, permissões, ca
 | 33 | Detalhes do grupo · `group-details` | 5 | Pendente | Reutilizar roster; completar participantes/preferências | Pendente |
 | 34 | Nova conversa · `contacts` | 5 | Pendente | Consulta operacional adicionada; completar seleção/canais | Pendente |
 | 35 | Notificações · `notifications` | 5 | Pendente | Verificar eventos/push e persistência de leitura | Pendente |
-| 36 | Histórico de entregas · `history` | 6 | Pendente | Auditar histórico existente e consulta do próprio motoboy | Pendente |
-| 37 | Recibo & linha do tempo · `history-detail` | 6 | Pendente | Reutilizar auditoria; expor recibo autorizado | Pendente |
-| 38 | Meus ganhos · `earnings` | 6 | Pendente | Auditar financeiro/taxas e consulta do próprio motoboy | Pendente |
-| 39 | Acerto com a loja · `settlement` | 6 | Pendente | Auditar acertos; divergência e confirmação pelas partes | Pendente |
-| 40 | Resumo do turno · `shift` | 6 | Pendente | Resumo real; encerramento respeita pendências | Pendente |
+| 36 | Histórico de entregas · `history` | 6 | Implementado localmente | Consulta própria por loja e datas, ocorrências, sem dados privados do cliente | SQL/testes locais; Web em validação; Android/API integrada pendentes; ETAPA-6.md |
+| 37 | Recibo & linha do tempo · `history-detail` | 6 | Implementado localmente | Recibo autorizado e timestamps do servidor, sem código/foto privada | SQL/testes locais; Web em validação; Android/API integrada pendentes; ETAPA-6.md |
+| 38 | Meus ganhos · `earnings` | 6 | Implementado com limites | Loja define modalidade, cotação congelada, saldo separado do dinheiro dos clientes, período parcial proporcional, entregas antigas aplicáveis sob demanda (backfill) | Testes SQL/regras unitários; testes de integração do período parcial/backfill escritos mas não executados nesta sessão (sem Postgres local); ETAPA-6.md |
+| 39 | Acerto com a loja · `settlement` | 6 | Implementado localmente | Conferência, contestação, pagamento externo registrado e recebimento bilateral | SQL/idempotência/isolamento; jornada HTTP integrada pendente; ETAPA-6.md |
+| 40 | Resumo do turno · `shift` | 6 | Implementado localmente | Ganhos registrados e encerramento existente com bloqueio de pendências | TypeScript/testes locais; Android/API integrada pendentes; ETAPA-6.md |
 | 41 | Meu perfil · `profile` | 2 | Implementado no Expo/API pertinente | Perfil/foto próprios e logout por configurações | PostgreSQL local e Web com API interceptada; Android/API reais pendentes |
 | 42 | Editar perfil · `edit-profile` | 2 | Implementado no Expo/API pertinente | PATCH próprio limitado, sem status/saldo/vínculo | PostgreSQL local e Web com API interceptada; Android/API reais pendentes |
 | 43 | Minha moto · `vehicle` | 2 | Implementado no Expo/API pertinente | Moto própria com modelo/placa/ano validados | PostgreSQL local e Web com API interceptada; Android/API reais pendentes |
 | 44 | Documentos · `documents` | 2 | Implementado no Expo/API pertinente | Upload privado; recebido não é aprovado | PostgreSQL local e Web com API interceptada; Android/API reais pendentes; EXIF testado no backend; câmera/galeria nativas pendentes |
 | 45 | Configurações · `settings` | 2 | Implementado no Expo/API pertinente | Tema/movimento/som/vibração/Maps-Waze persistidos | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
 | 46 | Localização & privacidade · `tracking` | 3 | Implementado no Expo/API pertinente | Compartilhamento por preferência existente e diagnóstico de tracking | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes; GPS/navegação/background no aparelho pendentes |
-| 47 | Ajuda & suporte · `support` | 6 | Pendente | Reutilizar atendimento e contexto | Pendente |
-| 48 | Central de segurança · `safety` | 6 | Pendente | Completar contato de confiança e avisos reais | Pendente |
+| 47 | Ajuda & suporte · `support` | 6 | Implementado localmente | Solicitação persistente por contexto e atalhos para conversa/segurança | SQL/idempotência; atendimento real/Android pendentes; ETAPA-6.md |
+| 48 | Central de segurança · `safety` | 6 | Implementado localmente | Contato local por conta, aviso sem rastreamento, discador nativo/mock explícito | Domínio mock; Share/discador Android pendentes; ETAPA-6.md |
 | 49 | Algo deu errado · `incident` | 3 | Implementado no Expo/API pertinente | Motivo/orientação da loja; expectedPedidoId dentro da transação | PostgreSQL local e Web com API interceptada; Android/API reais pendentes |
 | 50 | Cliente não localizado · `absent` | 3 | Implementado no Expo/API pertinente | Canais existentes e decisão da loja; sem espera/contato fictícios | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
 | 51 | Transferir pedido · `transfer` | 3 | Implementado no Expo/API pertinente | Alvos/políticas/transfer existentes, com confirmação | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
@@ -76,5 +76,5 @@ Registrar os IDs atendidos, caminhos dos arquivos mobile/backend/admin, contrato
 
 Guardar capturas comparáveis de claro/escuro e verificar tipografia, tamanho de controles, espaçamento, profundidade, iluminação e movimento. Conferir texto ampliado, movimento reduzido, teclado, telas menores e acessibilidade conforme o lote.
 
-Lote 2.4 e etapas 3/4 têm código e validações locais; integração real e fidelidade Android pendentes. Etapas 5/6/7 ainda precisam de implementação/auditoria. Não converter quantidade de telas em percentual de produto pronto.
+Lote 2.4 e etapas 3/4 têm código e validações locais; integração real e fidelidade Android pendentes. Etapa 6 tem implementação local e limites em ETAPA-6.md. Etapa 5 tem alterações e evidências próprias em docs/validacao-etapa5; esta rodada não reaudita toda sua matriz. Etapa 7 permanece pendente. Não converter quantidade de telas em percentual de produto pronto.
 

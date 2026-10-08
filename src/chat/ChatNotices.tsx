@@ -27,6 +27,12 @@ import { registerChatPush } from './push';
 import * as Notifications from 'expo-notifications';
 
 export function ChatNotices() {
+  const [ready, setReady] = useState(Platform.OS !== 'web');
+  useEffect(() => setReady(true), []);
+  return ready ? <MountedChatNotices /> : null;
+}
+
+function MountedChatNotices() {
   const auth = useAuth(),
     turn = useOperationalSession(),
     theme = useZippyTheme(),
@@ -41,9 +47,9 @@ export function ChatNotices() {
   const [notice, setNotice] = useState<ChatMessage | null>(null);
   const opacity = useRef(new Animated.Value(0)).current;
   const regular = useAudioPlayer(
-      require('../../assets/sounds/chat-message.wav'),
+      require('../../assets/sounds/chat_message.wav'),
     ),
-    mention = useAudioPlayer(require('../../assets/sounds/chat-mention.wav'));
+    mention = useAudioPlayer(require('../../assets/sounds/chat_mention.wav'));
   const latest = useRef({ theme });
   latest.current = { theme };
   useEffect(() => {
@@ -74,7 +80,8 @@ export function ChatNotices() {
             if (
               !alive ||
               typeof data.chatMessageId !== 'string' ||
-              typeof data.threadKey !== 'string'
+              typeof data.threadKey !== 'string' ||
+              data.recipientSessionId !== turn.session?.sessionId
             )
               return;
             const parts = data.threadKey.split(':'),
@@ -151,8 +158,12 @@ export function ChatNotices() {
             );
           if (prefs.sound) {
             const player = message.mentioned ? mention : regular;
-            await player.seekTo(0);
-            player.play();
+            try {
+              await player.seekTo(0);
+              player.play();
+            } catch {
+              /* O aviso visual nao depende do audio. */
+            }
           }
         }
         if (hide) clearTimeout(hide);

@@ -1,0 +1,17 @@
+{
+  "passed": 11,
+  "results": [
+    "Mocks ativam somente no navegador de desenvolvimento",
+    "Todas as permissoes Web ficam liberadas sem consultar SDK",
+    "Android continua consultando permissoes reais",
+    "Monitoramento Web inicia mock e nao publica GPS",
+    "Camera Web gera foto identificada sem acesso a hardware",
+    "Cadastro recusa foto mock antes de qualquer HTTP",
+    "Comprovante mock anexa localmente e nao permite concluir no servidor",
+    "Marcador de comprovante bloqueia envio mesmo com mocks desligados",
+    "Fotos reais mantem o contrato original de envio",
+    "Navegacao mock nao abre aplicativo externo",
+    "Discador mock nao abre ligacao externa"
+  ],
+  "scope": "SDKs simulados; sem banco ou provedores reais."
+}

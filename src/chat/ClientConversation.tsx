@@ -34,6 +34,9 @@ import {
   Search,
   Send,
   Trash2,
+  Heart,
+  ThumbsUp,
+  TriangleAlert,
   X,
 } from 'lucide-react-native';
 import {
@@ -42,6 +45,7 @@ import {
   ClientRichChat,
   listClientChat,
   LocalChatFile,
+  reactClientChat,
 } from '../../services/communicationApi';
 import { createIdentifier } from '../../services/mobileApi';
 import { useAuth } from '../contexts/AuthContext';
@@ -51,6 +55,7 @@ import { useZippyTheme } from '../ui/theme';
 import { AudioComposer, ChatMedia } from './ChatMedia';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
+import { browserNativeTest } from '../../services/browserNativeTest';
 
 const reasons: Record<string, string> = {
   ifood: 'Este cliente deve ser contatado pelo canal do iFood.',
@@ -90,6 +95,11 @@ export default function ClientConversation() {
       null,
     ),
     [older, setOlder] = useState(false);
+  const [selected, setSelected] = useState<
+    ClientRichChat['messages'][number] | null
+  >(null);
+  const [reacting, setReacting] = useState(false);
+  const loadedQuery = useRef('');
   const scope = `${owner}:${turn.session?.sessionId}:${pedidoId}`,
     live = useRef(scope);
   live.current = scope;
@@ -111,6 +121,12 @@ export default function ClientConversation() {
     setDraftReady(false);
     setReply(null);
     setMessages([]);
+    setSelected(null);
+    setData(null);
+    setSearch('');
+    setSearching(false);
+    setLoading(true);
+    loadedQuery.current = '';
     void AsyncStorage.getItem(draftKey).then(
       (raw) => {
         if (alive) {
@@ -125,7 +141,7 @@ export default function ClientConversation() {
     return () => {
       alive = false;
     };
-  }, [draftKey]);
+  }, [draftKey, scope]);
   useEffect(() => {
     if (!draftReady) return;
     const timer = setTimeout(() => {
@@ -150,10 +166,13 @@ export default function ClientConversation() {
             pedidoId,
             undefined,
             abort.signal,
+            searching ? search : undefined,
           );
           if (!alive) return;
+          const query = `${scope}:${searching ? search : ''}`;
+          const replace = loadedQuery.current !== query;
           setData((previous) =>
-            previous
+            previous && !replace
               ? {
                   ...result,
                   hasMore: previous.hasMore,
@@ -164,12 +183,16 @@ export default function ClientConversation() {
           setMessages((current) =>
             Array.from(
               new Map(
-                [...current, ...result.messages].map((m) => [m.id, m]),
+                [...(replace ? [] : current), ...result.messages].map((m) => [
+                  m.id,
+                  m,
+                ]),
               ).values(),
             ).sort(
               (a, b) => Date.parse(a.createdAtUtc) - Date.parse(b.createdAtUtc),
             ),
           );
+          loadedQuery.current = query;
           setError('');
         } catch (e) {
           if (alive && !abort.signal.aborted)
@@ -188,7 +211,7 @@ export default function ClientConversation() {
         abort.abort();
         clearInterval(timer);
       };
-    }, [scope, refresh, pedidoId]),
+    }, [scope, refresh, pedidoId, search, searching]),
   );
   const send = async (body = draft, file?: LocalChatFile) => {
     if (sending.current || !ready || !data?.channel.podeReceber) return;
@@ -244,7 +267,12 @@ export default function ClientConversation() {
     follow.current = false;
     const before = live.current;
     try {
-      const next = await listClientChat(pedidoId, data.cursor);
+      const next = await listClientChat(
+        pedidoId,
+        data.cursor,
+        undefined,
+        searching ? search : undefined,
+      );
       if (before !== live.current) return;
       setData(next);
       setMessages((current) =>
@@ -356,7 +384,7 @@ export default function ClientConversation() {
         </Pressable>
         {searching && (
           <TextInput
-            accessibilityLabel="Buscar no historico carregado"
+            accessibilityLabel="Buscar mensagens do cliente"
             value={search}
             onChangeText={setSearch}
             placeholder="Buscar mensagens…"
@@ -447,88 +475,116 @@ export default function ClientConversation() {
               </Text>
             </Pressable>
           )}
-          {messages
-            .filter((m) =>
-              m.body
-                .toLocaleLowerCase('pt-BR')
-                .includes(search.toLocaleLowerCase('pt-BR')),
-            )
-            .map((message) => {
-              const fg = message.mine && dark ? '#fff' : colors.ink;
-              return (
-                <Pressable
-                  key={message.id}
-                  onLongPress={() => setReply(message)}
-                  onPress={() => setReply(message)}
-                  accessibilityLabel={`Responder: ${message.body}`}
-                  style={{
-                    maxWidth: '85%',
-                    alignSelf: message.mine ? 'flex-end' : 'flex-start',
-                    padding: 13,
-                    borderRadius: 16,
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    backgroundColor: message.mine
-                      ? dark
-                        ? '#2872e3'
-                        : '#c7d8ee'
-                      : colors.card,
-                  }}
-                >
-                  {message.replyTo && (
-                    <Text
-                      style={{
-                        fontSize: 9,
-                        color: fg,
-                        borderLeftWidth: 2,
-                        borderLeftColor: colors.accent,
-                        paddingLeft: 7,
-                        marginBottom: 8,
-                      }}
-                    >
-                      Resposta a uma mensagem
-                    </Text>
-                  )}
-                  {message.attachment && (
-                    <ChatMedia
-                      attachment={message.attachment}
-                      foreground={fg}
-                    />
-                  )}
+          {messages.map((message) => {
+            const fg = message.mine && dark ? '#fff' : colors.ink;
+            return (
+              <Pressable
+                key={message.id}
+                onLongPress={() => setSelected(message)}
+                onPress={() => setSelected(message)}
+                accessibilityLabel={`Mensagem do cliente: ${message.body || 'anexo'}`}
+                style={{
+                  maxWidth: '85%',
+                  alignSelf: message.mine ? 'flex-end' : 'flex-start',
+                  padding: 13,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: colors.line,
+                  backgroundColor: message.mine
+                    ? dark
+                      ? '#2872e3'
+                      : '#c7d8ee'
+                    : colors.card,
+                }}
+              >
+                {message.replyTo && (
                   <Text
                     style={{
-                      fontFamily: 'Manrope',
-                      fontSize: 11,
-                      lineHeight: 18,
+                      fontSize: 9,
                       color: fg,
+                      borderLeftWidth: 2,
+                      borderLeftColor: colors.accent,
+                      paddingLeft: 7,
+                      marginBottom: 8,
                     }}
                   >
-                    {message.body}
+                    Resposta a uma mensagem
                   </Text>
+                )}
+                {message.attachment && (
+                  <ChatMedia attachment={message.attachment} foreground={fg} />
+                )}
+                <Text
+                  style={{
+                    fontFamily: 'Manrope',
+                    fontSize: 11,
+                    lineHeight: 18,
+                    color: fg,
+                  }}
+                >
+                  {message.body}
+                </Text>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    justifyContent: 'flex-end',
+                    gap: 4,
+                    marginTop: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 8, color: fg }}>
+                    {new Date(message.createdAtUtc).toLocaleTimeString(
+                      'pt-BR',
+                      { hour: '2-digit', minute: '2-digit' },
+                    )}
+                  </Text>
+                  {message.mine &&
+                    (['read', 'lida'].includes(message.status) ? (
+                      <CheckCheck size={12} color={fg} />
+                    ) : (
+                      <Check size={12} color={fg} />
+                    ))}
+                </View>
+                {!!message.reactions?.length && (
                   <View
                     style={{
                       flexDirection: 'row',
-                      justifyContent: 'flex-end',
-                      gap: 4,
+                      flexWrap: 'wrap',
+                      gap: 8,
                       marginTop: 6,
                     }}
                   >
-                    <Text style={{ fontSize: 8, color: fg }}>
-                      {new Date(message.createdAtUtc).toLocaleTimeString(
-                        'pt-BR',
-                        { hour: '2-digit', minute: '2-digit' },
-                      )}
-                    </Text>
-                    {message.mine &&
-                      (['read', 'lida'].includes(message.status) ? (
-                        <CheckCheck size={12} color={fg} />
-                      ) : (
-                        <Check size={12} color={fg} />
-                      ))}
+                    {message.reactions.map((reaction) => {
+                      const Icon =
+                        reaction.reaction === 'like'
+                          ? ThumbsUp
+                          : reaction.reaction === 'heart'
+                            ? Heart
+                            : reaction.reaction === 'alert'
+                              ? TriangleAlert
+                              : Check;
+                      return (
+                        <View
+                          key={reaction.reaction}
+                          accessibilityLabel={`${reaction.reaction}: ${reaction.count}`}
+                          style={{
+                            flexDirection: 'row',
+                            gap: 4,
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Icon size={13} color={fg} />
+                          <Text style={{ fontSize: 9, color: fg }}>
+                            {reaction.count}
+                          </Text>
+                        </View>
+                      );
+                    })}
                   </View>
-                </Pressable>
-              );
-            })}
+                )}
+              </Pressable>
+            );
+          })}
           {pending.map((entry) => (
             <View
               key={entry.request.clientId}
@@ -590,6 +646,78 @@ export default function ClientConversation() {
             </View>
           ))}
         </ScrollView>
+        {selected && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: 8,
+              backgroundColor: colors.card,
+            }}
+          >
+            <Pressable
+              accessibilityLabel="Responder citando mensagem do cliente"
+              onPress={() => {
+                setReply(selected);
+                setSelected(null);
+              }}
+              style={{ padding: 10 }}
+            >
+              <Reply size={19} color={colors.accent} />
+            </Pressable>
+            {data?.channel.podeReceber &&
+              (
+                [
+                  ['like', ThumbsUp, 'Curtir'],
+                  ['heart', Heart, 'Gostei'],
+                  ['thanks', Check, 'Obrigado'],
+                  ['alert', TriangleAlert, 'Atencao'],
+                ] as const
+              ).map(([key, Icon, label]) => (
+                <Pressable
+                  key={key}
+                  accessibilityLabel={label}
+                  disabled={reacting}
+                  style={{ padding: 10 }}
+                  onPress={() => {
+                    const before = live.current;
+                    setReacting(true);
+                    void reactClientChat(
+                      pedidoId,
+                      selected.id,
+                      selected.reactions?.some(
+                        (r) => r.reaction === key && r.mine,
+                      )
+                        ? null
+                        : key,
+                    )
+                      .then(() => {
+                        if (before === live.current) {
+                          setSelected(null);
+                          setRefresh((n) => n + 1);
+                        }
+                      })
+                      .catch((e) => {
+                        if (before === live.current) setError(String(e));
+                      })
+                      .finally(() => {
+                        if (before === live.current) setReacting(false);
+                      });
+                  }}
+                >
+                  <Icon size={18} color={colors.accent} />
+                </Pressable>
+              ))}
+            <Pressable
+              accessibilityLabel="Fechar acoes da mensagem"
+              onPress={() => setSelected(null)}
+              style={{ padding: 10 }}
+            >
+              <X size={18} color={colors.muted} />
+            </Pressable>
+          </View>
+        )}
         {reply && (
           <View
             style={{
@@ -620,10 +748,12 @@ export default function ClientConversation() {
           <>
             <ScrollView
               horizontal
+              style={{ flexGrow: 0, flexShrink: 0, height: 42 }}
               contentContainerStyle={{
                 paddingHorizontal: 16,
                 gap: 8,
                 paddingBottom: 10,
+                alignItems: 'flex-start',
               }}
             >
               {['Estou chegando', 'Cheguei!', 'Estou na portaria'].map(
@@ -696,7 +826,7 @@ export default function ClientConversation() {
                   }}
                 />
               </View>
-              {Platform.OS !== 'web' && (
+              {(Platform.OS !== 'web' || browserNativeTest) && (
                 <AudioComposer
                   disabled={!ready || busy}
                   send={(file) => send('', file)}

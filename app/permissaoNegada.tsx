@@ -7,6 +7,7 @@ import { useOperationalSession } from '../src/contexts/OperationalSessionContext
 import { openOperationalSettings } from '../services/operationalPermissions';
 import { Button, Entrance, Feedback, Header, Pill, Screen, Surface, type } from '../src/ui/Kit';
 import { useZippyTheme } from '../src/ui/theme';
+import { browserNativeTest } from '../services/browserNativeTest';
 
 export default function PermissaoNegadaScreen() {
   const allowed = useOperationalAccess(), turn = useOperationalSession(), router = useRouter();
@@ -16,6 +17,7 @@ export default function PermissaoNegadaScreen() {
   const title = notification ? 'Não perca um chamado.' : services ? 'Seu caminho precisa do GPS.' : 'Seu caminho precisa da localização.';
   const detail = notification ? 'Permita as notificações para receber avisos de rotas e mensagens.' : services ? 'Ative a localização do aparelho e volte para conferir.' : background ? 'Nas permissões do ZippyGo, permita a localização também em segundo plano para acompanhar o turno com a tela apagada.' : 'Nas permissões do ZippyGo, permita a localização enquanto o app estiver em uso.';
   if (!allowed) return <Screen><Feedback title="Preparando seu acesso" loading /></Screen>;
+  if (browserNativeTest) return <Screen footer={<Button onPress={() => router.replace('/permissoes')}>Continuar teste no navegador</Button>}><Header title="Permissoes liberadas" subtitle="MOCK no navegador" onBack={() => router.replace('/permissoes')} /><Feedback title="Nenhuma permissao nativa necessaria" message="Localizacao, segundo plano e notificacoes estao simulados neste ambiente de teste. No Android, as permissoes reais continuam obrigatorias." /></Screen>;
   return <Screen footer={<View style={{ gap: 10 }}><Button icon={Settings2} disabled={Platform.OS === 'web'} onPress={() => void openOperationalSettings().catch(failure => setError(failure.message))}>Abrir configurações</Button><Button secondary onPress={() => router.replace('/permissoes')}>Voltar à preparação</Button></View>}><Entrance>
     <Header title="Vamos ajustar juntos." subtitle="Uma permissão, um propósito." onBack={() => router.replace('/permissoes')} />
     <View style={{ height: 180, justifyContent: 'center', alignItems: 'center' }}><View style={{ padding: 27, borderRadius: 29, backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: colors.warning, transform: [{ rotate: '-7deg' }], shadowColor: colors.warning, shadowOpacity: .15, shadowRadius: 20, shadowOffset: { width: 0, height: 8 } }}>{notification ? <Bell size={38} color={colors.warning} /> : <MapPin size={38} color={colors.warning} />}</View></View>

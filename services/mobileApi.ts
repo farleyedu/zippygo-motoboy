@@ -4,6 +4,7 @@ import { API_CONFIG } from '../config/apiConfig';
 import { Pedido } from '../types/pedido';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import { operationalRequests } from './operationalRequests';
+import type { PayQuote } from './workApi';
 
 export type EstablishmentLink = {
   estabelecimentoId: string;
@@ -106,6 +107,7 @@ export type DeliveryOrder = {
 };
 
 export type RouteStop = {
+  earnings?: PayQuote | null;
   pedidoId: number;
   position: number;
   status: string;
@@ -368,8 +370,8 @@ export async function getOperationalQueue(): Promise<MotoboyQueue> {
   });
 }
 
-export async function acceptOffer(expectedOfferId?: string): Promise<MotoboyQueue> {
-  const response = await apiClient.post(API_CONFIG.ENDPOINTS.ACCEPT_OFFER, expectedOfferId ? { expectedOfferId } : undefined);
+export async function acceptOffer(expectedOfferId?: string, expectedVersion?: number): Promise<MotoboyQueue> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.ACCEPT_OFFER, expectedOfferId ? { expectedOfferId, expectedVersion } : undefined);
   return unwrap<MotoboyQueue>(response);
 }
 

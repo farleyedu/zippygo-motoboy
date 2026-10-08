@@ -1,5 +1,6 @@
 import { apiClient } from './apiService';
 import { MobileApiError } from './mobileApi';
+import { assertRealPhoto } from './browserNativeTest';
 
 export type OwnAccount = { motoboyId: number; nome: string; email: string; telefone?: string; cidade?: string; uf?: string; avatar?: string; modeloMoto?: string; placaMoto?: string; anoMoto?: number; statusCadastro: string };
 export type OwnDocument = { id: string; tipo: 'identificacao' | 'cnh' | 'moto'; enviadoEmUtc: string; status: string };
@@ -15,5 +16,6 @@ export async function saveVehicle(data: VehicleData): Promise<OwnAccount> { retu
 export async function getOwnDocuments(signal?: AbortSignal): Promise<OwnDocument[]> { return result(await apiClient.get('/motoboys/me/documentos', { signal })); }
 export async function getOwnDocumentImage(id: string): Promise<string> { return result(await apiClient.get(`/motoboys/me/documentos/${encodeURIComponent(id)}`)); }
 export async function sendOwnImage(tipo: OwnDocument['tipo'] | 'avatar', base64: string): Promise<OwnDocument> {
+  assertRealPhoto(base64);
   return result(await apiClient.post('/motoboys/me/documentos', { tipo, base64 }, { timeout: 45000 }));
 }

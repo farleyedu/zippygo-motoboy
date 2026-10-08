@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Image, Linking, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Animated, Image, Pressable, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { browserNativeLinking as Linking } from '../../services/browserNativeTest';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Bell, Check, Clock, HelpCircle, Lock, Map, MapPin, MessageCircle, Moon, Navigation, Package, Phone, Route, ShieldCheck, Store, Sun } from 'lucide-react-native';
