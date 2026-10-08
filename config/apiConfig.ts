@@ -19,6 +19,8 @@ export const API_CONFIG = {
   
   // Timeout para requisições (em milissegundos)
   TIMEOUT: 10000,
+  // Sincronização do turno tolera picos breves, com espera ainda limitada.
+  OPERATIONAL_SYNC_TIMEOUT: 20000,
   
   // Headers padrão
   DEFAULT_HEADERS: {
@@ -54,6 +56,7 @@ export const API_CONFIG = {
     SELECT_ESTABLISHMENT: '/auth/definir-estabelecimento',
     MOTOBOY_REGISTER: '/motoboys/cadastro',
     MOTOBOY_AVAILABLE_ESTABLISHMENTS: '/motoboys/me/estabelecimentos-disponiveis',
+    MOTOBOY_LINKS: '/motoboys/me/vinculos',
     MOTOBOY_LINK_REQUESTS: '/motoboys/me/vinculos/solicitacoes',
     MOTOBOY_REQUEST_LINK: '/motoboys/me/vinculos/solicitar',
     MOTOBOY_ACCEPT_INVITE: (id: string) => `/motoboys/me/vinculos/convites/${id}/aceitar`,
@@ -64,6 +67,7 @@ export const API_CONFIG = {
     OPERATIONAL_QUEUE: '/v2/motoboys/me/session/queue',
     OPERATIONAL_HEARTBEAT: '/v2/motoboys/me/session/heartbeat',
     OPERATIONAL_LOCATION: '/v2/motoboys/me/session/location',
+    OPERATIONAL_LOCATION_BATCH: '/v2/motoboys/me/session/location/batch',
     ACCEPT_OFFER: '/v2/motoboys/me/session/queue/offer/accept',
     REJECT_OFFER: '/v2/motoboys/me/session/queue/offer/reject',
     REORDER_QUEUE: '/v2/motoboys/me/session/queue/reorder',

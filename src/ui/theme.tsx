@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -15,20 +15,21 @@ export const layout = {
   contentWidth: 480,
   motion: { entrance: 320, press: 140 },
 } as const;
-type Preferences = { dark: boolean; reducedMotion: boolean; sound: boolean; vibration: boolean };
+export type Preferences = { dark: boolean; reducedMotion: boolean; sound: boolean; vibration: boolean; navigationApp: 'Google Maps' | 'Waze' };
 type ThemeContextValue = Preferences & { colors: ThemeColors; setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => Promise<void> };
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 const key = 'zippygo.design.preferences.v1';
-const defaults: Preferences = { dark: false, reducedMotion: false, sound: true, vibration: true };
+const defaults: Preferences = { dark: false, reducedMotion: false, sound: true, vibration: true, navigationApp: 'Google Maps' };
 
 export function ZippyThemeProvider({ children }: { children: React.ReactNode }) {
   const [preferences, setPreferences] = useState(defaults);
   const [systemReduced, setSystemReduced] = useState(false);
+  const current = useRef(defaults), writes = useRef(Promise.resolve()), changed = useRef(false);
   useEffect(() => {
     let alive = true;
     AsyncStorage.getItem(key).then(raw => {
-      if (!raw || !alive) return;
-      try { const saved = JSON.parse(raw) as Partial<Preferences>; setPreferences(p => ({ ...p, ...Object.fromEntries(Object.entries(saved).filter(([k, v]) => k in defaults && typeof v === 'boolean')) })); } catch { /* Preferências inválidas usam os padrões. */ }
+      if (!raw || !alive || changed.current) return;
+      try { const saved = JSON.parse(raw) as Partial<Preferences>; const next = { ...defaults, ...Object.fromEntries(Object.entries(saved).filter(([k, v]) => k in defaults && (typeof defaults[k as keyof Preferences] === 'boolean' ? typeof v === 'boolean' : v === 'Google Maps' || v === 'Waze'))) }; current.current = next; setPreferences(next); } catch { /* Preferências inválidas usam os padrões. */ }
     }).catch(() => { /* Mantém as preferências padrão se o armazenamento estiver indisponível. */ });
     AccessibilityInfo.isReduceMotionEnabled().then(value => { if (alive) setSystemReduced(value); }).catch(() => {});
     const listener = AccessibilityInfo.addEventListener('reduceMotionChanged', setSystemReduced);
@@ -38,9 +39,13 @@ export function ZippyThemeProvider({ children }: { children: React.ReactNode }) 
     ...preferences, reducedMotion: preferences.reducedMotion || systemReduced,
     colors: preferences.dark ? palettes.dark : palettes.light,
     setPreference: async (name, setting) => {
-      const next = { ...preferences, [name]: setting };
-      await AsyncStorage.setItem(key, JSON.stringify(next));
-      setPreferences(next);
+      changed.current = true;
+      const write = writes.current.catch(() => {}).then(async () => {
+        const next = { ...current.current, [name]: setting };
+        await AsyncStorage.setItem(key, JSON.stringify(next));
+        current.current = next; setPreferences(next);
+      });
+      writes.current = write; await write;
     },
   }), [preferences, systemReduced]);
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

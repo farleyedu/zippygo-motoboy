@@ -1,0 +1,34 @@
+{
+  "completed": true,
+  "validatedOn": "2026-10-08",
+  "environment": "Expo Web + intercepted API/WebSocket; isolated local PostgreSQL",
+  "bundle": "entry-d58df74bbaba17ced7652796abcf153f.js",
+  "results": [
+    "25 rotas em claro/escuro, sem overflow horizontal; chamadas externas interceptadas. Web não comprova GPS em segundo plano.",
+    "Oito telas críticas também em 320 px, claro/escuro, sem overflow horizontal.",
+    "Código inválido/válido e visível desabilitado; dinheiro insuficiente, troco e preparo sem POST de conclusão.",
+    "Divisão Pix/crédito exata com confirmação de ambas; seleção e upload da foto, revisão autorizada e volta à conferência sem concluir ou cobrar.",
+    "Toque e arraste parcial não concluem; arraste completo com resposta perdida guarda pendência, consulta recupera recibo sem POST duplicado, próximo pedido pago abre nova conferência.",
+    "Reabertura de envio incerto encontra recibo pelo usuário sem repetir POST.",
+    "Sem recibo, reenvio preserva chave e corpo originais e conclui somente o pedido original.",
+    "Logout bloqueado durante conclusão incerta; token e turno preservados, sem DELETE de sessão.",
+    "Registro local ilegível não é sobrescrito; bloqueia nova conferência/logout, preservando token e turno."
+  ],
+  "errors": [],
+  "checks": {
+    "backendPassed": 949,
+    "postgresIntegrationPassed": 23,
+    "domainExecutions": 90,
+    "distinctDomainCases": 68,
+    "adminChecks": 12,
+    "typeScriptMobile": true,
+    "typeScriptAdmin": true,
+    "exportedWebRoutes": 56,
+    "originalHtmlCaptures": 24,
+    "webRoutesPerTheme": 25,
+    "narrowRoutesPerTheme": 8,
+    "androidApkCompiled": true,
+    "androidVisualValidated": false,
+    "productionMutations": false
+  }
+}

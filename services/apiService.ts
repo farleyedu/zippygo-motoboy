@@ -1,5 +1,7 @@
 // Serviço para comunicação com a API do ZippyGo
-import axios, { AxiosInstance, AxiosResponse, AxiosAdapter } from 'axios';
+import axios, { AxiosInstance, AxiosResponse, AxiosAdapter, AxiosError, AxiosHeaders, CanceledError } from 'axios';
+import { logApiFailure } from './apiErrors';
+import { reportOperationalFailure } from './sessionEvents';
 import { API_CONFIG, getApiUrl, validateApiConfig } from '../config/apiConfig';
 import { Pedido, PedidosResponse, BuscarPedidosParams } from '../types/pedido';
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../utils/secureStorage';
@@ -7,6 +9,7 @@ import { deleteSecureItem, getSecureItem, setSecureItem } from '../utils/secureS
 // Detectar ambiente
 const APP_ENV = process.env.EXPO_PUBLIC_APP_ENV || 'dev';
 const isDev = APP_ENV === 'dev' || APP_ENV === 'development';
+const verboseApi = isDev && process.env.EXPO_PUBLIC_API_DEBUG === 'true';
 let authRefreshInFlight: Promise<string | null> | null = null;
 // Removendo imports do adapter - agora usamos dados diretos da API
 // import { 
@@ -39,12 +42,16 @@ async function refreshAuthToken(): Promise<string | null> {
   authRefreshInFlight = (async () => {
     const refreshToken = await getSecureItem('refreshToken');
     if (!refreshToken) return null;
-
+    const originalToken = await getSecureItem('authToken');
+    const config = { method: 'POST', url: API_CONFIG.ENDPOINTS.REFRESH_TOKEN, timeout: API_CONFIG.TIMEOUT, headers: AxiosHeaders.from(API_CONFIG.DEFAULT_HEADERS) };
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), API_CONFIG.TIMEOUT);
     try {
       const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.REFRESH_TOKEN}`, {
         method: 'POST',
         headers: API_CONFIG.DEFAULT_HEADERS,
         body: JSON.stringify({ refreshToken }),
+        signal: controller.signal,
       });
       const raw = await response.text();
       let payload: any = null;
@@ -55,9 +62,20 @@ async function refreshAuthToken(): Promise<string | null> {
       }
 
       const data = payload?.data ?? payload;
-      if (!response.ok || !data?.accessToken) {
-        if (response.status === 401) await deleteSecureItem('refreshToken');
+      const [currentToken, currentRefresh] = await Promise.all([getSecureItem('authToken'), getSecureItem('refreshToken')]);
+      if (currentToken !== originalToken || currentRefresh !== refreshToken) {
+        throw new CanceledError('O acesso mudou durante a renovação.');
+      }
+      if (response.status === 401) {
+        await deleteSecureItem('refreshToken');
         return null;
+      }
+      if (!response.ok || payload?.success === false || typeof data?.accessToken !== 'string' || !data.accessToken) {
+        const message = typeof payload?.error === 'string' ? payload.error : 'Não foi possível renovar o acesso. Tente novamente.';
+        throw new AxiosError(message, AxiosError.ERR_BAD_RESPONSE, config, undefined, {
+          data: payload, status: response.status, statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()), config,
+        });
       }
 
       await setSecureItem('authToken', data.accessToken);
@@ -65,8 +83,13 @@ async function refreshAuthToken(): Promise<string | null> {
       if (data.refreshToken) await setSecureItem('refreshToken', data.refreshToken);
       return data.accessToken as string;
     } catch (error) {
-      if (isDev) console.warn('[AUTH] Falha ao renovar sessao:', error);
-      return null;
+      if (axios.isAxiosError(error)) throw error;
+      throw new AxiosError(
+        controller.signal.aborted ? 'A conexão demorou ao renovar seu acesso. Tente novamente.' : 'Não foi possível conectar para renovar seu acesso. Tente novamente.',
+        controller.signal.aborted ? 'ECONNABORTED' : AxiosError.ERR_NETWORK, config,
+      );
+    } finally {
+      clearTimeout(timer);
     }
   })().finally(() => {
     authRefreshInFlight = null;
@@ -79,9 +102,11 @@ async function refreshAuthToken(): Promise<string | null> {
 const fetchAdapter: AxiosAdapter = async (config) => {
   const url = axios.getUri(config);
   const method = config.method?.toUpperCase() || 'GET';
+  const timedConfig = config as typeof config & { _startedAt?: number };
+  timedConfig._startedAt = Date.now();
   
   // Log detalhado em desenvolvimento
-  if (isDev) {
+  if (verboseApi) {
     console.log(`🔗 [API][REQ] ${method} ${url}`);
   }
   
@@ -91,6 +116,12 @@ const fetchAdapter: AxiosAdapter = async (config) => {
     console.warn('📍 [STACK]:', new Error().stack?.split('\n').slice(1, 4).join('\n'));
   }
   
+  const controller = new AbortController();
+  let timedOut = false;
+  const abort = () => controller.abort();
+  if (config.signal?.aborted) abort();
+  config.signal?.addEventListener?.('abort', abort);
+  const timer = config.timeout ? setTimeout(() => { timedOut = true; controller.abort(); }, config.timeout) : undefined;
   try {
     // O transformRequest padrao do Axios normalmente ja converte objetos para
     // JSON antes de chegar ao adapter. Serializar uma string novamente envia
@@ -105,7 +136,7 @@ const fetchAdapter: AxiosAdapter = async (config) => {
       method,
       headers: config.headers as Record<string, string>,
       body: requestBody,
-      signal: config.signal as AbortSignal | undefined,
+      signal: controller.signal,
     });
     
     const data = await response.text();
@@ -116,11 +147,11 @@ const fetchAdapter: AxiosAdapter = async (config) => {
       parsedData = data;
     }
     
-    if (isDev) {
-      console.log(`✅ [API][RES] ${method} ${url} - ${response.status}`);
+    if (verboseApi) {
+      console.log(`✅ [API][RES] ${method} ${url} - ${response.status} (${Date.now() - timedConfig._startedAt!} ms)`);
     }
     
-    return {
+    const result = {
       data: parsedData,
       status: response.status,
       statusText: response.statusText,
@@ -128,11 +159,19 @@ const fetchAdapter: AxiosAdapter = async (config) => {
       config,
       request: {}
     };
-  } catch (error) {
-    if (isDev) {
-      console.error(`❌ [API][ERR] ${method} ${url}:`, error);
+    if (config.validateStatus && !config.validateStatus(response.status)) {
+      const message = typeof parsedData?.error === 'string' ? parsedData.error : typeof parsedData?.error?.message === 'string' ? parsedData.error.message : 'A API está temporariamente indisponível. Tente novamente.';
+      throw new AxiosError(message, AxiosError.ERR_BAD_RESPONSE, config, undefined, result);
     }
-    throw error;
+    return result;
+  } catch (error) {
+    if (timedOut) throw new AxiosError('A conexão demorou mais que o esperado. Tente novamente.', 'ECONNABORTED', config);
+    if (config.signal?.aborted) { const canceled = new CanceledError('Requisição cancelada.'); canceled.config = config; throw canceled; }
+    if (axios.isAxiosError(error)) throw error;
+    throw new AxiosError('Não foi possível conectar à API. Confira sua conexão e tente novamente.', AxiosError.ERR_NETWORK, config);
+  } finally {
+    if (timer) clearTimeout(timer);
+    config.signal?.removeEventListener?.('abort', abort);
   }
 };
 
@@ -157,12 +196,12 @@ apiClient.interceptors.request.use(
     try {
       const endpoint = String(config.url ?? '');
       const token = await getSecureItem(isOperationalEndpoint(endpoint) ? 'operationalAccessToken' : 'authToken');
-      if (token) {
+      if (token && !(isOperationalEndpoint(endpoint) && config.headers.Authorization)) {
         config.headers.Authorization = `Bearer ${token}`;
       }
       
       // Log da requisição apenas em desenvolvimento
-      if (isDev) {
+      if (verboseApi) {
         console.log('🔗 [AXIOS][REQ]:', {
           method: config.method?.toUpperCase(),
           url: config.url,
@@ -180,13 +219,13 @@ apiClient.interceptors.request.use(
       
       return config;
     } catch (error) {
-      console.error('❌ Erro ao configurar requisição:', error);
+      logApiFailure(error, '[API][CONFIG]');
       return config;
     }
   },
   (error) => {
-    if (isDev) {
-      console.error('❌ [AXIOS][REQ][ERR]:', error);
+    if (verboseApi) {
+      logApiFailure(error, '[API][REQ]');
     }
     return Promise.reject(error);
   }
@@ -197,6 +236,12 @@ apiClient.interceptors.response.use(
   async (response) => {
     const endpoint = String(response.config.url ?? '');
     const requestConfig = response.config as typeof response.config & { _authRetry?: boolean };
+
+    if (isOperationalEndpoint(endpoint) && (response.status === 401 || ['SESSION_CHANGED', 'LINK_FORBIDDEN'].includes(response.data?.code))) {
+      reportOperationalFailure({ status: response.status, code: response.data?.code,
+        message: typeof response.data?.error === 'string' ? response.data.error : 'Seu turno foi encerrado. Confira a sessão antes de continuar.',
+        token: String(response.config.headers?.Authorization || '').replace(/^Bearer\s+/i, '') });
+    }
 
     if (response.status === 401 && !requestConfig._authRetry && !isAuthEndpoint(endpoint) && !isOperationalEndpoint(endpoint)) {
       const newToken = await refreshAuthToken();
@@ -215,7 +260,7 @@ apiClient.interceptors.response.use(
     }
 
     // Log da resposta apenas em desenvolvimento
-    if (isDev) {
+    if (verboseApi) {
       console.log('✅ [AXIOS][RES]:', {
         status: response.status,
         url: response.config.url,
@@ -225,23 +270,6 @@ apiClient.interceptors.response.use(
     return response;
   },
   async (error) => {
-    if (isDev) {
-      console.error('❌ [AXIOS][RES][ERR]:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        url: error.config?.url,
-        method: error.config?.method?.toUpperCase()
-      });
-    }
-
-    // Se o erro for 401 (não autorizado), limpar sessão
-    if (error.response?.status === 401) {
-      console.log('🔄 Token expirado, limpando sessão...');
-      // Aqui você pode adicionar lógica para limpar o token e redirecionar para login
-      // await clearSecureItem('userToken');
-    }
-
     return Promise.reject(error);
   }
 );
@@ -249,52 +277,16 @@ apiClient.interceptors.response.use(
 // Interceptor para tratar respostas e erros
 apiClient.interceptors.response.use(
   (response) => {
-    console.log('📡 API Response:', {
+    if (verboseApi) console.log('📡 API Response:', {
       method: response.config.method?.toUpperCase(),
       url: response.config.url,
       status: response.status,
-      dataSize: JSON.stringify(response.data).length
+      elapsedMs: Date.now() - (response.config as typeof response.config & { _startedAt: number })._startedAt
     });
     return response;
   },
   (error) => {
-    const errorInfo = {
-      method: error.config?.method?.toUpperCase(),
-      url: error.config?.url,
-      fullUrl: `${error.config?.baseURL}${error.config?.url}`,
-      status: error.response?.status,
-      message: error.message,
-      code: error.code,
-      baseURL: error.config?.baseURL,
-      timeout: error.config?.timeout,
-      headers: error.config?.headers,
-      isNetworkError: error.message === 'Network Error',
-      isTimeoutError: error.code === 'ECONNABORTED',
-    };
-    
-    console.error('❌ ERRO DETALHADO NA API:', JSON.stringify(errorInfo, null, 2));
-    
-    // Log específico para Network Error
-    if (error.message === 'Network Error') {
-      console.error('🚨 NETWORK ERROR DETECTADO!');
-      console.error('🔍 Possíveis causas:');
-      console.error('   1. Problema de conectividade');
-      console.error('   2. CORS bloqueado');
-      console.error('   3. Certificado SSL inválido');
-      console.error('   4. Firewall/Proxy bloqueando');
-      console.error('   5. URL incorreta:', errorInfo.fullUrl);
-    }
-    
-    // Sugestões para erros 404
-    if (error.response?.status === 404) {
-      console.warn('💡 Sugestão: Verifique se o endpoint está correto. Endpoints disponíveis:', {
-        'Listar Pedidos': 'GET /api/Pedido',
-        'Buscar Pedido': 'GET /api/Pedido/{id}',
-        'Listar Motoboys': 'GET /api/Motoboy',
-        'Confirmar Entrega': 'POST /api/Entregas/confirmar'
-      });
-    }
-    
+    logApiFailure(error);
     return Promise.reject(error);
   }
 );
@@ -314,33 +306,7 @@ export const fetchPedidos = async (params?: BuscarPedidosParams): Promise<Pedido
     const url = `${API_CONFIG.ENDPOINTS.PEDIDOS}${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
     const response = await apiClient.get(url);
     
-    // Logs detalhados para debug
-    console.log('🔍 DEBUG: URL da API:', url);
-    console.log('🔍 DEBUG: Tipo de response.data:', typeof response.data);
-    console.log('🔍 DEBUG: É array?', Array.isArray(response.data));
-    console.log('🔍 DEBUG: Quantidade de itens:', response.data?.length || 'N/A');
-    console.log('📡 Dados brutos da API para pedidos:', JSON.stringify(response.data, null, 2));
-    
-    // Log detalhado do primeiro pedido para debug
-    if (response.data && response.data.length > 0) {
-      console.log('🔍 PRIMEIRO PEDIDO COMPLETO:', JSON.stringify(response.data[0], null, 2));
-    console.log('🔍 CAMPOS DISPONÍVEIS:', Object.keys(response.data[0]));
-    console.log('🔍 CAMPO ITEMS:', response.data[0].items);
-    console.log('🔍 CAMPO ITENS:', response.data[0].itens);
-    console.log('🔍 TIPO DO CAMPO ITEMS:', typeof response.data[0].items);
-    console.log('🔍 TIPO DO CAMPO ITENS:', typeof response.data[0].itens);
-    }
-    
-    if (response.data && response.data.length > 0) {
-      console.log('🔍 DEBUG: Primeiro pedido completo:', JSON.stringify(response.data[0], null, 2));
-      console.log('🔍 DEBUG: Campos do primeiro pedido:', Object.keys(response.data[0]));
-      if (response.data[0].items) {
-        console.log('🔍 DEBUG: Campo items encontrado:', response.data[0].items);
-      }
-      if (response.data[0].itens) {
-        console.log('🔍 DEBUG: Campo itens encontrado:', response.data[0].itens);
-      }
-    }
+    if (verboseApi) console.log('[PEDIDOS] Leitura concluída:', { count: Array.isArray(response.data) ? response.data.length : 0 });
     
     // Usar dados diretos da API sem adapter
     const pedidosRaw = Array.isArray(response.data) ? response.data : [];
@@ -375,7 +341,7 @@ export const fetchPedidos = async (params?: BuscarPedidosParams): Promise<Pedido
       hasMore: endIndex < pedidosFiltrados.length
     };
   } catch (error) {
-    console.error('Erro ao buscar pedidos:', error);
+    logApiFailure(error, '[PEDIDOS]');
     throw error;
   }
 };
@@ -392,7 +358,7 @@ export const fetchPedidoById = async (id: number): Promise<Pedido> => {
     
     return pedidoComDistancia;
   } catch (error) {
-    console.error(`Erro ao buscar pedido ${id}:`, error);
+    logApiFailure(error, '[PEDIDO]');
     throw error;
   }
 };
@@ -403,7 +369,7 @@ export const createPedido = async (pedidoData: Partial<Pedido>): Promise<Pedido>
     const response = await apiClient.post(API_CONFIG.ENDPOINTS.PEDIDOS, pedidoData);
     return response.data;
   } catch (error) {
-    console.error('Erro ao criar pedido:', error);
+    logApiFailure(error, '[PEDIDO][CRIAR]');
     throw error;
   }
 };
@@ -419,7 +385,7 @@ export const confirmarEntrega = async (pedidoId: number, dados: any): Promise<an
     });
     return response.data;
   } catch (error) {
-    console.error('Erro ao confirmar entrega:', error);
+    logApiFailure(error, '[ENTREGA]');
     throw error;
   }
 };
@@ -446,7 +412,7 @@ export const pingAPI = async (): Promise<{ success: boolean; message: string; en
       endpoint: `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.HEALTH_CHECK}`
     };
     
-    console.error('❌ Ping API falhou:', result);
+    logApiFailure(error, '[PING]');
     return result;
   }
 };
@@ -483,7 +449,7 @@ export const testApiHealth = async (): Promise<boolean> => {
       return false;
     }
   } catch (error) {
-    console.error('❌ [HEALTHZ] Erro ao testar API:', error);
+    logApiFailure(error, '[HEALTHZ]');
     return false;
   }
 };

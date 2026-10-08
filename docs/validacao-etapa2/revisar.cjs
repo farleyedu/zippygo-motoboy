@@ -1,5 +1,5 @@
 // API totalmente interceptada; somente dados fictícios de revisão.
-const { chromium } = require('../validacao-etapa1/node_modules/playwright');
+const { chromium } = require(process.env.QA_PLAYWRIGHT_MODULE || '../validacao-etapa1/node_modules/playwright');
 const fs = require('node:fs');
 const path = require('node:path');
 const assert = require('node:assert/strict');
@@ -16,6 +16,7 @@ async function setup(options = {}) {
     for (const [key, value] of Object.entries(seed || {})) localStorage.setItem(key, value);
   }, { dark: !!options.dark, seed: options.seed });
   const page = await context.newPage();
+  await page.routeWebSocket(/.*/, ws => ws.close());
   page.setDefaultTimeout(60000); page.setDefaultNavigationTimeout(120000);
   page.on('pageerror', error => failures.push(error.message));
   const state = { mode: 'normal', links: [], delay: 0, ...options };
@@ -39,7 +40,7 @@ async function setup(options = {}) {
       if (state.mode === 'conflict') return route.fulfill({ status: 409, json: { success: false, error: 'Este e-mail já está cadastrado.' } });
       return ok({ userId: 1, motoboyId: 1, nome: record.body.nome, email: record.body.email });
     }
-    if (url.pathname.endsWith('/me/estabelecimentos')) {
+    if (url.pathname.endsWith('/motoboys/me/vinculos')) {
       if (state.mode === 'refresh') { state.mode = 'normal'; return route.fulfill({ status: 401, json: { success: false } }); }
       return ok(state.links);
     }
@@ -61,10 +62,9 @@ async function fillLogin(page) {
   await page.getByLabel('Senha', { exact: true }).filter({ visible: true }).fill('Senha@123');
 }
 async function gotoReady(page, url) {
-  // O health check já existente só roda após carregar fontes e montar o app.
-  const ready = page.waitForResponse(response => new URL(response.url()).pathname === '/api/Motoboy', { timeout: 120000 });
   await page.goto(url);
-  await ready;
+  await page.waitForFunction(() => [...document.querySelectorAll('button,[role="button"]')].some(el => Object.keys(el).some(key => key.startsWith('__reactProps$'))));
+  await page.evaluate(() => document.fonts.ready);
 }
 async function main() {
   browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
@@ -178,7 +178,7 @@ async function main() {
     const single = await setup({ links: [link('1')] });
     await gotoReady(single.page, base + '/login'); await fillLogin(single.page);
     await single.page.getByRole('button', { name: 'Entrar', exact: true }).click();
-    await single.page.waitForURL(base + '/');
+    await single.page.waitForURL(base + '/permissoes');
     const tokens = await single.page.evaluate(() => ({ token: localStorage.getItem('authToken'), refresh: localStorage.getItem('refreshToken'), store: JSON.parse(localStorage.getItem('zippygo.estabelecimentoAtual')) }));
     assert.equal(tokens.token, 'token-da-loja'); assert.equal(tokens.refresh, 'refresh-da-loja'); assert.equal(tokens.store.id, '1');
     const prior = requests.filter(r => r.path.endsWith('/auth/login')).length;

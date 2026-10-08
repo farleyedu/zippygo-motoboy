@@ -7,6 +7,7 @@ import { arriveCurrent, getOperationalOrder, OperationalOrderDetail, OrderItemDe
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Avatar, Button, Entrance, Feedback, Header, IconButton, money, Pill, Screen, SectionTitle, Surface, type } from '../../src/ui/Kit';
 import { useZippyTheme } from '../../src/ui/theme';
+import { openPreferredNavigation } from '../../services/navigation';
 
 function ProductCard({ item }: { item: OrderItemDetail }) {
   const { colors } = useZippyTheme(); const [failed, setFailed] = useState(false);
@@ -58,12 +59,13 @@ export default function OrderDetails() {
     if (!order) return;
     const destination = order.latitude != null && order.longitude != null ? `${order.latitude},${order.longitude}` : [order.enderecoEntrega, order.cidade, order.estado].filter(Boolean).join(', ');
     if (!destination) { Alert.alert('Endereço indisponível', 'Fale com a loja para conferir o destino.'); return; }
-    try { await Linking.openURL(`https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=driving`); } catch { Alert.alert('Não foi possível abrir a navegação', 'Tente novamente ou confira seu aplicativo de mapas.'); }
+    try { await openPreferredNavigation({latitude:order.latitude,longitude:order.longitude,address:destination}); } catch { Alert.alert('Não foi possível abrir a navegação', 'Tente novamente ou confira seu aplicativo de mapas.'); }
   };
   const arrive = async () => {
     if (!order || busy) return;
-    if (!order.isCurrent || order.isOffer || !order.pickedUpAtUtc) { back(); return; }
-    if (order.arrivedAtUtc) { router.push({ pathname: '/confirmacaoEntrega', params: { id: String(id) } }); return; }
+    if (!order.isCurrent || order.isOffer) { router.push('/rota'); return; }
+    if (!order.pickedUpAtUtc) { router.push('/retirada'); return; }
+    if (order.arrivedAtUtc) { router.push('/chegadaEntrega'); return; }
     const currentGeneration = generation.current;
     setBusy(true);
     try {
@@ -72,7 +74,7 @@ export default function OrderDetails() {
       if (generation.current !== currentGeneration) return;
       setOrder(updated);
       if (!updated.isCurrent || !updated.arrivedAtUtc) { setError('A rota mudou. Confira o pedido atual antes de finalizar.'); return; }
-      router.push({ pathname: '/confirmacaoEntrega', params: { id: String(id) } });
+      router.push('/chegadaEntrega');
     }
     catch (caught) { if (generation.current === currentGeneration) setError(caught instanceof Error ? caught.message : 'Não foi possível registrar a chegada.'); }
     finally { setBusy(false); }

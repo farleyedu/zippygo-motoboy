@@ -1,0 +1,11 @@
+{
+  "completed": true,
+  "results": [
+    "Três telas em claro/escuro, 390/320 px e texto ampliado; web explica limitação e não inicia turno; logout/cancelamento pela tela principal; login e preparação conectados",
+    "Logout operacional consulta fila, envia um DELETE e só limpa credenciais após ACK",
+    "Pendências locais e conflito de transferência no servidor bloqueiam logout; falha de rede preserva acesso e turno",
+    "401 operacional e sessão nula abrem recuperação e limpam somente turno; autenticação preservada e nenhum refresh principal",
+    "Token de outro contexto não é usado; restauração sem rede preserva turno e falha de vínculos tem retry em vez de spinner infinito"
+  ],
+  "errors": []
+}

@@ -4,6 +4,12 @@
 
 Paleta revista em 07/10 a pedido do Farley: **azul vivo, branco luminoso, azul profundo e detalhes em cobre**. O tema noturno também usa a nova identidade. A mudança alcança botões, cartões, mapas, conversas, ícones, reflexos e capacete 3D. Verde fica reservado à confirmação de código, conforme a regra de negócio.
 
+Implementação mobile/backend: **lote 2.4 e etapas 3/4 com código integrado localmente**. Perfil, moto/documentos, configurações, turno, rota, mapa limpo e finalização com código, cobrança/divisão, foto, arraste, recibo e recuperação sem duplicidade. Detalhes e testes: [ETAPA-3-4.md](ETAPA-3-4.md). API e migrations novas precisam chegar ao ambiente escolhido antes de usar novos fluxos.
+
+Login recomposto pela referência aprovada e revisado no Web. Para vê-lo: **Perfil → Configurações → Sair da conta → Encerrar turno e sair/Sair agora**, após resolver pendências. **APK compilado e instalado, mas conferência visual/funcional Android e jornada app/API reais pendentes**. A revisão automática rejeitou trocar servidor de desenvolvimento/inspecionar conexão. Sem publicação nesta rodada. Etapas 5/6/7 ainda não estão integralmente implementadas.
+
+Otimização posterior da sincronização do app: eventos de fila pelo hub existente, heartbeat compartilhado e recuperação de GPS/rede. Implementação, ganho esperado, testes e limites em [SINCRONIZACAO.md](SINCRONIZACAO.md).
+
 ## Abrir no Chrome
 
 Abra `index.html` com o Chrome por duplo clique ou arraste o arquivo para uma janela do navegador. Mantenha `styles.css`, `prototype.js` e `assets/` junto dele. **Não precisa instalar nada, iniciar o Expo, rodar servidor ou ter internet.**

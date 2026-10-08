@@ -11,11 +11,6 @@
   ],
   "requests": [
     {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
       "method": "POST",
       "path": "/api/auth/login",
       "body": {
@@ -41,12 +36,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
@@ -68,56 +58,6 @@
       }
     },
     {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
       "method": "POST",
       "path": "/api/auth/login",
       "body": {
@@ -127,7 +67,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
@@ -142,12 +82,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
@@ -160,7 +95,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
@@ -172,27 +107,12 @@
     },
     {
       "method": "GET",
-      "path": "/api/v2/motoboys/me/session",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/v2/motoboys/me/session",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/me/estabelecimentos",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
@@ -204,7 +124,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     },
     {
@@ -219,12 +139,7 @@
     },
     {
       "method": "GET",
-      "path": "/api/me/estabelecimentos",
-      "body": null
-    },
-    {
-      "method": "GET",
-      "path": "/api/Motoboy",
+      "path": "/api/motoboys/me/vinculos",
       "body": null
     }
   ],

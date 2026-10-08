@@ -7,9 +7,12 @@ import { AuthLink } from '../src/ui/AuthKit';
 import { Button, Entrance, Feedback, Header, Pill, Screen, SectionTitle, Surface, type } from '../src/ui/Kit';
 import { LinkStatus, StoreCard } from '../src/ui/EstablishmentKit';
 import { useZippyTheme } from '../src/ui/theme';
+import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
+import { LogoutAction } from '../src/ui/LogoutAction';
 
 export default function SelecionarRestauranteScreen() {
   const data = useEstablishmentLinks();
+  const turn = useOperationalSession();
   const router = useRouter();
   const { colors } = useZippyTheme();
   const [pending, setPending] = useState<string | null>(null);
@@ -23,7 +26,7 @@ export default function SelecionarRestauranteScreen() {
     if (!selected) throw new Error('Selecione um vínculo ativo para continuar.');
     const result = await data.selectEstablishment(selected);
     if (!result.success) throw new Error(result.error || 'Não foi possível selecionar.');
-  }, () => router.replace('/'));
+  }, () => router.replace(turn.session ? '/' : '/permissoes'));
 
   return <Screen footer={data.user && !data.loading ? <View style={{ gap: 10 }}>
     <Button loading={data.busy} disabled={blocked || (!!data.links.length && !selected)} onPress={data.links.length ? enter : () => router.push('/solicitarRestaurante')}>{data.links.length ? 'Trabalhar nesta loja' : 'Solicitar meu primeiro vínculo'}</Button>
@@ -42,6 +45,7 @@ export default function SelecionarRestauranteScreen() {
         <View style={{ gap: 12 }}>{invitations.map(invite => <StoreCard key={invite.id} name={invite.estabelecimentoNome} detail="A loja quer você na equipe."><LinkStatus request={invite} /><Button icon={Users} secondary disabled={blocked} onPress={() => router.push({ pathname: '/convite/[id]', params: { id: invite.id } })}>Revisar convite</Button></StoreCard>)}</View>
         <Surface style={{ marginTop: 12 }}><Text style={[type.body, { color: colors.ink, fontWeight: '800' }]}>Minhas solicitações</Text><Text style={[type.small, { color: colors.muted, marginTop: 5 }]}>Acompanhe aprovação e respostas da loja.</Text><View style={{ marginTop: 12 }}><Button icon={Clock3} secondary disabled={blocked} onPress={() => router.push('/solicitacoesVinculo')}>Acompanhar solicitações</Button></View></Surface>
         <View style={{ marginTop: 18 }}><Button icon={Search} secondary disabled={blocked} onPress={() => void data.reload()}>Atualizar vínculos</Button></View>
+        <View style={{ marginTop: 18 }}><LogoutAction /></View>
       </>}
     </Entrance>
   </Screen>;

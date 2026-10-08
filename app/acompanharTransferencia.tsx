@@ -1,0 +1,23 @@
+import React, { useCallback, useRef, useState } from 'react';
+import { Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Check, Clock, MessageCircle, Package, X } from 'lucide-react-native';
+import { cancelTransfer, getTransfers, Transfer } from '../services/routeApi';
+import { getOperationalQueue } from '../services/mobileApi';
+import { useRouteAction } from '../src/hooks/useRouteAction';
+import { AccountNotice } from '../src/ui/AccountKit';
+import { Button, Feedback, Header, Surface, type } from '../src/ui/Kit';
+import { RouteScreen } from '../src/ui/RouteKit';
+import { useZippyTheme } from '../src/ui/theme';
+
+export default function TransferStatusScreen() {
+  const params = useLocalSearchParams<{ id: string }>(), router = useRouter(), action = useRouteAction(), { colors } = useZippyTheme();
+  const [transfer, setTransfer] = useState<Transfer | null>(null), [loading, setLoading] = useState(true), [error, setError] = useState(''), [confirm, setConfirm] = useState(false);
+  const request = useRef<AbortController | null>(null), latest = useRef<Transfer | null>(null);
+  const load = useCallback(async () => { request.current?.abort(); const c = new AbortController(); request.current = c; setError(''); try { const list = await getTransfers(c.signal); if (!c.signal.aborted) { const result = list.find(t => t.id === Number(params.id)) || null; latest.current = result; setTransfer(result); } } catch (e) { if (!c.signal.aborted) setError(e instanceof Error ? e.message : 'Tente novamente.'); } finally { if (!c.signal.aborted) setLoading(false); } }, [params.id]);
+  useFocusEffect(useCallback(() => { void load(); const timer = setInterval(() => { if (latest.current?.status === 'pending_approval') void load(); }, 15000); return () => { clearInterval(timer); request.current?.abort(); }; }, [load]));
+  const pending = transfer?.status === 'pending_approval', completed = transfer?.status === 'completed';
+  const cancel = () => { if (!transfer || !pending) return; void action.run(async () => { const result = await cancelTransfer(transfer.id); await load(); return result.sourceQueue || getOperationalQueue(); }); };
+  return <RouteScreen><Header title="Acompanhar a transferência." subtitle={transfer ? `Pedido #${transfer.pedidoId}` : 'Solicitação'} onBack={() => router.back()} />{loading ? <Feedback title="Conferindo a transferência" loading /> : !transfer ? <Feedback title="Transferência não encontrada" message="Confira as solicitações do seu turno." onRetry={() => void load()} /> : <><View style={{ alignSelf: 'center', width: 82, height: 82, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: pending ? colors.warningSoft : colors.soft, marginVertical: 23 }}>{pending ? <Clock size={34} color={colors.warning} /> : completed ? <Check size={34} color={colors.accent} /> : <X size={34} color={colors.danger} />}</View><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 28, lineHeight: 32, letterSpacing: -1, color: colors.ink, textAlign: 'center' }}>{pending ? 'A loja está conferindo.' : completed ? 'Pedido transferido.' : transfer.status === 'cancelled' ? 'Solicitação cancelada.' : 'A transferência foi recusada.'}</Text><Text style={[type.body, { textAlign: 'center', color: colors.muted, marginVertical: 19 }]}>{pending ? 'Enquanto aguarda, você continua responsável pelo pedido.' : completed ? `A responsabilidade foi atualizada para ${transfer.toMotoboyNome || 'seu colega'}.` : 'Confira o pedido na sua fila e converse com o atendimento.'}</Text><Surface><Text style={[type.body, { color: colors.ink }]}>Pedido #{transfer.pedidoId}</Text><Text style={[type.small, { color: colors.muted, marginTop: 8 }]}>Destino: {transfer.toMotoboyNome || `Motoboy ${transfer.toMotoboyId}`}</Text>{transfer.decisionNote && <Text style={[type.small, { color: colors.muted, marginTop: 8 }]}>{transfer.decisionNote}</Text>}</Surface><View style={{ gap: 10, marginTop: 18 }}><Button icon={MessageCircle} onPress={() => router.push({ pathname: '/conversas', params: { channel: 'store', pedidoId: String(transfer.pedidoId) } })}>Falar com a loja</Button><Button secondary icon={Package} onPress={() => router.replace('/rota')}>Ver minha rota</Button>{pending && <Button secondary icon={X} loading={action.busy} onPress={() => confirm ? cancel() : setConfirm(true)}>{confirm ? 'Confirmar cancelamento da solicitação' : 'Cancelar solicitação'}</Button>}</View></>}{error && <Feedback title="A transferência não atualizou" message={error} onRetry={() => void load()} />}{action.error && <Feedback title="O cancelamento não foi confirmado" message={action.error} />}</RouteScreen>;
+}

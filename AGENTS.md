@@ -74,6 +74,12 @@
 
 ## 4) Padrões Técnicos
 
+### Fidelidade ao protótipo aprovado
+- Antes de criar ou alterar uma tela do redesenho, localizar e ler a tela correspondente em `docs/prototipo-motoboy/prototype.js`, o CSS efetivo em `styles.css` (incluindo sobrescritas de tema) e os assets usados. Os documentos de fluxo descrevem comportamento; não substituem a referência visual.
+- Transpor composição, medidas, tipografia, cores, luz, profundidade e interação da referência. Não improvisar um layout diferente nem usar a implementação atual como modelo aprovado.
+- Conferir capturas do HTML original e do app no mesmo tema e largura. Mudanças em componentes compartilhados exigem revisão das telas afetadas. Para efeitos nativos, conferir também o Android; revisão Web não comprova renderização nativa.
+- Registrar validação funcional e visual separadamente. Capturas geradas do próprio app são evidência da implementação, nunca uma nova referência aprovada. Não declarar fidelidade concluída com divergências abertas; documentar diferenças e limitações na continuidade.
+
 ### 4.1 Frontend (este repo — React Native/Expo)
 - **Hooks funcionais**, evitar classes e `any`.
 - Estilos: `StyleSheet`.

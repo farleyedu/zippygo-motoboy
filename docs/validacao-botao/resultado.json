@@ -1,0 +1,120 @@
+{
+  "completed": true,
+  "source": {
+    "prototype.js": "09017509c9e9736b052e7817ed0dc21fd92e969de38d41ffe69274baec9c06b4",
+    "styles.css": "20a8fcfbc0554c2bb766f055e33aa6424ad90cc77ec8dfe4a20579dea93901a8"
+  },
+  "checks": [
+    "Original e app em claro/escuro e 390/320 px: medidas do botão, cobertura integral do SVG e redução de movimento.",
+    "Reflexo carregado com movimento habilitado; captura durante a passagem.",
+    "Validação local sem HTTP; envio único durante carregamento; spinner, bloqueio e reativação após erro."
+  ],
+  "comparisons": [
+    {
+      "theme": "claro-390",
+      "expected": {
+        "width": 346,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "0px none rgb(255, 255, 255)",
+        "fontSize": "12px"
+      },
+      "actual": {
+        "width": 350,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "0px solid rgb(224, 231, 243)",
+        "fontSize": "12px"
+      },
+      "background": {
+        "x": 20,
+        "y": 566,
+        "width": 350,
+        "height": 50
+      },
+      "scope": "Componente botão; composição completa do login ainda diverge."
+    },
+    {
+      "theme": "claro-320",
+      "expected": {
+        "width": 276,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "0px none rgb(255, 255, 255)",
+        "fontSize": "12px"
+      },
+      "actual": {
+        "width": 280,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "0px solid rgb(224, 231, 243)",
+        "fontSize": "12px"
+      },
+      "background": {
+        "x": 20,
+        "y": 566,
+        "width": 280,
+        "height": 50
+      },
+      "scope": "Componente botão; composição completa do login ainda diverge."
+    },
+    {
+      "theme": "escuro-390",
+      "expected": {
+        "width": 346,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "1px solid rgba(190, 217, 253, 0.333)",
+        "fontSize": "12px"
+      },
+      "actual": {
+        "width": 350,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "1px solid rgba(190, 217, 253, 0.33)",
+        "fontSize": "12px"
+      },
+      "background": {
+        "x": 21,
+        "y": 567,
+        "width": 348,
+        "height": 48
+      },
+      "scope": "Componente botão; composição completa do login ainda diverge."
+    },
+    {
+      "theme": "escuro-320",
+      "expected": {
+        "width": 276,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "1px solid rgba(190, 217, 253, 0.333)",
+        "fontSize": "12px"
+      },
+      "actual": {
+        "width": 280,
+        "height": 50,
+        "radius": "15px",
+        "padding": "12px 17px",
+        "border": "1px solid rgba(190, 217, 253, 0.33)",
+        "fontSize": "12px"
+      },
+      "background": {
+        "x": 21,
+        "y": 567,
+        "width": 278,
+        "height": 48
+      },
+      "scope": "Componente botão; composição completa do login ainda diverge."
+    }
+  ],
+  "errors": [],
+  "note": "Capturas são evidência para inspeção, sem aprovação automática de fidelidade da tela completa."
+}

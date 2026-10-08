@@ -1,0 +1,12 @@
+bundle/
+android-bundle/
+*.png
+!permissoes-claro-390.png
+!permissoes-escuro-320.png
+!permissoes-texto-ampliado-320.png
+!permissao-negada-escuro-320.png
+!sessao-encerrada-claro-390.png
+!logout-claro.png
+!login-apos-sair-claro.png
+!logout-end-conflict.png
+diagnostico-falha.json

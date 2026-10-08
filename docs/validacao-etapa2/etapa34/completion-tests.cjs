@@ -1,0 +1,6 @@
+const {test}=require('node:test'),assert=require('node:assert/strict');
+const {load}=require('../lote3/session-tests.cjs');
+const {parseCents,paymentError,readyToComplete}=load('src/delivery/completionRules.ts');
+test('Centavos são inteiros; rejeita arredondamento e formatos ambíguos',()=>{assert.equal(parseCents('86,90'),8690);assert.equal(parseCents('100.5'),10050);assert.equal(parseCents('86,901'),null);assert.equal(parseCents('1.000,00'),null);assert.equal(parseCents('-1'),null);});
+test('Duas partes, troco e recebimento explícito',()=>{const parts=[{method:'pix',amount:20,receivedConfirmed:true},{method:'dinheiro',amount:66.90,cashReceived:100,receivedConfirmed:true}];assert.equal(paymentError(86.9,parts),null);parts[1].cashReceived=60;assert.ok(paymentError(86.9,parts));parts[1].cashReceived=100;parts[0].receivedConfirmed=false;assert.ok(paymentError(86.9,parts));});
+test('Arraste exige todas as conferências devidas',()=>{const c={requiresCode:true,requiresPayment:true,requiresProof:true,total:86.9};const parts=[{method:'pix',amount:86.9,receivedConfirmed:true}];assert.equal(readyToComplete(c,true,parts,'prova'),true);assert.equal(readyToComplete(c,false,parts,'prova'),false);assert.equal(readyToComplete(c,true,parts),false);assert.equal(readyToComplete(c,true,[],'prova'),false);});

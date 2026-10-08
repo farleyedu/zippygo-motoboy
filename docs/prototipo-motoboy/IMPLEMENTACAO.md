@@ -1,10 +1,10 @@
 # Implementação do app aprovado
 
-> Escopo vigente em 07/10/2026: visual primeiro, integração somente com contratos existentes. Não alterar backend/painel nem publicar. Esta orientação substitui as autorizações históricas abaixo. Etapa 1: [ETAPA-1.md](ETAPA-1.md). Bloqueios futuros: [PENDENCIAS-BACKEND.md](PENDENCIAS-BACKEND.md).
+> Escopo vigente em 08/10/2026: lote 2.4 e etapas 3/4 completos, incluindo backend e ajuste necessário do admin, autorizados por Farley. Código integrado localmente e validado por testes; **aprovação visual nativa e jornada Android/API reais pendentes**. Sem novo commit/push/deploy nem migrations em produção. Resultado: [ETAPA-3-4.md](ETAPA-3-4.md).
 
-> Etapa 2: lotes 2.1 e 2.2 implementados e revisados em Web com aprovação explícita; entrada, cadastro, vínculos e convites. Recuperação indisponível por ausência de contrato. Detalhes: [ETAPA-2.md](ETAPA-2.md). Lotes 2.3–2.4 e validações Android/API reais continuam pendentes.
+> Lotes 2.1–2.3 continuam integrados. Login recomposto pelo HTML/CSS aprovado e revisado no Web junto de cadastro/restauração; sem aprovação da composição completa em Android nesta rodada. Recuperação de senha indisponível por contrato ausente. [ETAPA-2.md](ETAPA-2.md) é o registro anterior; [CONTINUIDADE.md](CONTINUIDADE.md) contém o estado atual. Logout respeita turno, GPS e conclusão pendente.
 
-Atualizado em 07/10/2026. **Autorizado pelo Farley: implementar todas as telas e funcionalidades do protótipo no app e backend, ajustando também o admin quando necessário.** Reaproveitar endpoints, catálogo e regras existentes. A autorização inicial de somente prototipar foi substituída por essa autorização. Não fazer deploy nem testar enviando mensagens/pagamentos reais.
+Atualizado em 08/10/2026. Reaproveitar endpoints, catálogo e regras existentes. Autorização de implementar não equivale a publicar ou testar mensagens/pagamentos reais.
 
 ## Referência obrigatória
 
@@ -108,8 +108,10 @@ Não estimar dias ou percentual global só pelo número de telas: cobrança, tra
 - [x] Paleta azul aplicada nas 61 telas e nos componentes nativos novos; capacete atualizado.
 - [x] Código inicial da etapa 1: tema, Manrope, componentes nativos, pedido detalhado com fotos reais e consulta operacional restrita.
 - [ ] Validação da etapa 1 com app/API reais em ambiente de teste e revisão Android. A revisão Expo Web com API interceptada e testes backend já passou.
-- [ ] Etapas 2–7 permanecem em execução/pendência; o app completo ainda não foi entregue. Antecipados: chat básico de texto (loja/cliente/grupo), modos de câmera/visualização do mapa e proteção do ID na chegada. Isso não conclui as etapas 3 e 5.
+- [x] Código do lote 2.4 e etapas 3/4 implementado localmente, incluindo conta própria, turno/rota e conclusão transacional idempotente.
+- [ ] Conferir estes lotes em Android contra o HTML e percorrer app/API/admin com banco de teste. APK compilado/instalado; conferência nativa bloqueada nesta rodada.
+- [ ] Etapas 5/6/7: comunicação completa, histórico/financeiro/suporte/segurança e auditoria das 61 telas. Chat existente não conclui etapa 5.
 
-Verificação deste lote: TypeScript sem erros; 48 testes backend selecionados passaram; Expo Web em 390 px com nove verificações de pedido/chat e todas as chamadas de API interceptadas. Foram conferidos envio de texto, preservação do rascunho após falha e parâmetros da URL. Não foram enviados pedidos, mensagens ou pagamentos reais. GPS, câmera e notificações ainda precisam de teste Android em aparelho.
+Verificação vigente: backend 949 testes (23 PostgreSQL real local), TypeScript mobile/admin, exportação Web, testes de domínio e roteiros com API interceptada. Android compilado; revisão em aparelho necessária. Resultados em ETAPA-3-4.md; verificações da etapa 1/2 nos documentos respectivos são históricas.
 
 Use `GUIA-MOTORES-CLAUDE.md` para escolher o motor por etapa. A economia vem de escopo preciso, reutilização e testes relevantes, mantendo os requisitos do projeto.

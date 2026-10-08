@@ -1,11 +1,11 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { getSecureItem, setSecureItem } from '../utils/secureStorage';
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
+import { useIsFocused } from '@react-navigation/native';
 import { StyleSheet, Text, View, Image } from 'react-native';
 import * as Location from 'expo-location';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pedido } from '../types/pedido';
-import { requestForegroundLocationPermission } from './locationSetup';
+import { useZippyTheme } from '../src/ui/theme';
 
 type Props = {
   pedidos: Pedido[];
@@ -14,6 +14,7 @@ type Props = {
   routeMode?: boolean;
   mapClean?: boolean;
   onOrderPress?: (pedidoId: number) => void;
+  view3D?: boolean;
 };
 
 const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: number } | null => {
@@ -29,64 +30,15 @@ const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: num
   return null;
 };
 
-export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress }: Props) {
-  const [destinoCoords, setDestinoCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const indiceAtualRef = useRef<number>(0);
-  const [entregasFinalizadas, setEntregasFinalizadas] = useState(false);
+export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress, view3D = false }: Props) {
+  const { dark, reducedMotion } = useZippyTheme();
+  const focused = useIsFocused();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationAuthorized, setLocationAuthorized] = useState(false);
   const mapRef = useRef<MapView>(null);
   const [trackMarkers, setTrackMarkers] = useState(true);
   const hasCenteredOnceRef = useRef(false);
   const headingRef = useRef(0);
-  const intervalsRef = useRef<number[]>([]);
-
-  // Cleanup function para limpar todos os intervals
-  const cleanupIntervals = useCallback(() => {
-    intervalsRef.current.forEach(interval => clearInterval(interval));
-    intervalsRef.current = [];
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      cleanupIntervals();
-    };
-  }, [cleanupIntervals]);
-
-  useEffect(() => {
-    async function carregarDestino() {
-      try {
-        const rawDestinos = await getSecureItem('destinos');
-        const rawIndice = await getSecureItem('indiceAtual');
-        const idx = parseInt(rawIndice || '0', 10);
-        if (rawDestinos) {
-          const destinos: { latitude: number; longitude: number }[] = JSON.parse(rawDestinos);
-          if (idx >= destinos.length) {
-            setEntregasFinalizadas(true);
-            setDestinoCoords(null);
-          } else {
-            indiceAtualRef.current = idx;
-            setDestinoCoords(destinos[idx]);
-          }
-        }
-      } catch (error) {
-        console.error('[MAPA] Erro ao carregar destino:', error);
-      }
-    }
-
-    carregarDestino();
-    const iv = setInterval(carregarDestino, 5000);
-    intervalsRef.current.push(iv);
-    
-    return () => {
-      clearInterval(iv);
-      const index = intervalsRef.current.indexOf(iv);
-      if (index > -1) {
-        intervalsRef.current.splice(index, 1);
-      }
-    };
-  }, []);
-
   // Garante que marcadores customizados renderizem imediatamente no Android
   useEffect(() => {
     setTrackMarkers(true);
@@ -94,16 +46,10 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
     return () => clearTimeout(t);
   }, [pedidos, emEntrega]);
 
-  useEffect(() => {
-    if (entregasFinalizadas) {
-      setDestinoCoords(null);
-    }
-  }, [entregasFinalizadas]);
-
-  const centerTo = useCallback((coords: { latitude: number; longitude: number }) => {
+const centerTo = useCallback((coords: { latitude: number; longitude: number }) => {
     if (mapRef.current) {
       if (routeMode) {
-        mapRef.current.animateCamera({ center: coords, pitch: 48, heading: headingRef.current, zoom: 17 }, { duration: 650 });
+        mapRef.current.animateCamera({ center: coords, pitch: view3D ? 48 : 0, heading: headingRef.current, zoom: 17 }, { duration: reducedMotion ? 0 : 650 });
         return;
       }
       mapRef.current.animateToRegion({
@@ -113,7 +59,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
         longitudeDelta: 0.03,
       });
     }
-  }, [routeMode]);
+  }, [routeMode, view3D, reducedMotion]);
 
   const handleUserLocationChange = useCallback((e: any) => {
     const coord = e.nativeEvent.coordinate;
@@ -129,30 +75,12 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
 
   useEffect(() => {
     if (userLocation) centerTo(userLocation);
-    if (!routeMode) mapRef.current?.animateCamera({ pitch: 0, heading: 0 }, { duration: 450 });
-  }, [routeMode, centerTo]);
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      if (userLocation) {
-        centerTo(userLocation);
-      }
-    }, 25000);
-
-    intervalsRef.current.push(interval);
-    
-    return () => {
-      clearInterval(interval);
-      const index = intervalsRef.current.indexOf(interval);
-      if (index > -1) {
-        intervalsRef.current.splice(index, 1);
-      }
-    };
-  }, [userLocation, centerTo]);
+    if (!routeMode) mapRef.current?.animateCamera({ pitch: view3D ? 48 : 0, heading: 0 }, { duration: reducedMotion ? 0 : 450 });
+  }, [routeMode, view3D, reducedMotion, centerTo]);
 
   // Recentraliza imediatamente quando a tela volta ao foco (token muda)
   useEffect(() => {
-    if (!recenterToken) return;
+    if (!focused || !recenterToken) return;
     if (!locationAuthorized) return;
     if (userLocation) {
       centerTo(userLocation);
@@ -163,11 +91,11 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
           setUserLocation(loc.coords);
           centerTo(loc.coords as any);
         } catch (error) {
-          console.error('[MAPA] Erro ao obter localização:', error);
+          // GPS/permissões são apresentados pela preparação operacional.
         }
       })();
     }
-  }, [recenterToken, userLocation, locationAuthorized, centerTo]);
+  }, [focused, recenterToken, userLocation, locationAuthorized, centerTo]);
 
   useEffect(() => {
     // Ao organizar rota (não emEntrega), enquadra todos os pedidos no mapa
@@ -208,12 +136,16 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
   }, [pedidos, emEntrega]);
 
   useEffect(() => {
+    if (!focused) return;
+    let alive = true;
     (async () => {
       try {
-        const allowed = await requestForegroundLocationPermission();
+        const allowed = (await Location.getForegroundPermissionsAsync()).granted;
+        if (!alive) return;
         setLocationAuthorized(allowed);
         if (allowed) {
           const location = await Location.getCurrentPositionAsync({});
+          if (!alive) return;
           setUserLocation(location.coords);
           // Centraliza assim que obtemos a primeira localização
           if (!hasCenteredOnceRef.current) {
@@ -222,13 +154,15 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
           }
         }
       } catch (error) {
-        console.error('[MAPA] Erro ao obter permissões de localização:', error);
+        // A preparação mostra permissões/GPS; abrir o mapa não solicita acesso.
       }
     })();
-  }, [centerTo]);
+    return () => { alive = false; };
+  }, [centerTo, focused]);
 
   // Memoize os marcadores para evitar re-renders desnecessários
   const markers = useMemo(() => {
+    if (mapClean) return [];
     if (!emEntrega) {
       return pedidos.map((p, i) => {
         const coordinate = getPedidoCoordinate(p);
@@ -262,8 +196,8 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
       const coordinate = getPedidoCoordinate(p);
       if (!coordinate) return null;
 
-      const isAtual = i === indiceAtualRef.current;
-      const isFuturo = i > indiceAtualRef.current;
+      const isAtual = i === 0;
+      const isFuturo = i > 0;
       if (mapClean && !isAtual) return null;
 
       if (isAtual) {
@@ -313,12 +247,16 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
       style={[StyleSheet.absoluteFillObject, { width: '100%', height: '100%', margin: 0, padding: 0 }]}
       provider={PROVIDER_GOOGLE}
       moveOnMarkerPress={false}
+      showsCompass={!mapClean}
+      showsScale={!mapClean}
+      showsMyLocationButton={false}
+      toolbarEnabled={false}
       loadingEnabled
       scrollEnabled
       zoomEnabled
       pitchEnabled
       rotateEnabled
-      customMapStyle={[
+      customMapStyle={dark ? [
         { elementType: 'geometry', stylers: [{ color: '#19283f' }] },
         { elementType: 'labels.text.fill', stylers: [{ color: '#a9c4e5' }] },
         { elementType: 'labels.text.stroke', stylers: [{ color: '#18283f' }] },
@@ -327,7 +265,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
         { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#2d4768' }] },
         { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#4a678d' }] },
         { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#102037' }] },
-      ]}
+      ] : []}
       onMapReady={async () => {
         try {
           if (!locationAuthorized) return;
@@ -339,7 +277,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
             centerTo(loc.coords as any);
           }
         } catch (error) {
-          console.error('[MAPA] Erro no onMapReady:', error);
+          // Preserve a localização real recebida pelo GPS.
         }
       }}
       initialRegion={{
@@ -348,9 +286,10 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
         latitudeDelta: 0.005,
         longitudeDelta: 0.005,
       }}
-      showsUserLocation={locationAuthorized}
+      showsUserLocation={locationAuthorized && focused}
       onUserLocationChange={handleUserLocationChange}
     >
+      {!mapClean && emEntrega && pedidos.length > 1 && <Polyline coordinates={pedidos.map(getPedidoCoordinate).filter((c): c is { latitude: number; longitude: number } => c !== null)} strokeColor="#4c91f6" strokeWidth={3} lineDashPattern={[6, 6]} />}
       {markers}
     </MapView>
   );

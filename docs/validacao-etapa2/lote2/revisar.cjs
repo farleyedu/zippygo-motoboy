@@ -1,6 +1,6 @@
-const { chromium } = require('../../validacao-etapa1/node_modules/playwright');
+const { chromium } = require(process.env.QA_PLAYWRIGHT_MODULE || '../../validacao-etapa1/node_modules/playwright');
 const fs = require('node:fs'), path = require('node:path'), assert = require('node:assert/strict');
-const base = 'http://127.0.0.1:8192';
+const base = process.env.QA_BASE_URL || 'http://127.0.0.1:8192';
 const A = '11111111-1111-1111-1111-111111111111', B = '22222222-2222-2222-2222-222222222222', C = '33333333-3333-3333-3333-333333333333';
 const IA = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', IB = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb';
 const store = (id, nome, cidade) => ({ id, nome, cidade, uf: 'SP', modulosAtivos: ['DELIVERY'] });
@@ -18,6 +18,7 @@ async function setup(options = {}) {
     for (const [key, value] of Object.entries(seed || {})) localStorage.setItem(key, value);
   }, { dark: !!options.dark, seed: options.seed });
   const page = await context.newPage(); page.setDefaultTimeout(60000);
+  await page.routeWebSocket(/.*/, ws => ws.close());
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', async route => {
     const request = route.request(), url = new URL(request.url());
@@ -26,7 +27,7 @@ async function setup(options = {}) {
     requests.push(record);
     const ok = data => route.fulfill({ json: { success: true, data } });
     const fail = (status, error) => route.fulfill({ status, json: { success: false, error } });
-    if (url.pathname.endsWith('/me/estabelecimentos')) return ok(state.links);
+    if (url.pathname.endsWith('/motoboys/me/vinculos')) return ok(state.links);
     if (url.pathname.endsWith('/estabelecimentos-disponiveis')) return state.mode === 'load-error' ? fail(503, 'Lista temporariamente indisponível.') : ok(state.stores);
     if (url.pathname.endsWith('/vinculos/solicitacoes')) return ok(state.requests);
     if (url.pathname.endsWith('/auth/definir-estabelecimento')) {
@@ -54,8 +55,9 @@ async function setup(options = {}) {
     return ok(null);
   });
   async function goto(url) {
-    const ready = page.waitForResponse(response => new URL(response.url()).pathname === '/api/Motoboy', { timeout: 120000 });
-    await page.goto(base + url); await ready;
+    await page.goto(base + url);
+    await page.waitForFunction(() => [...document.querySelectorAll('button,[role="button"]')].some(el => Object.keys(el).some(key => key.startsWith('__reactProps$'))));
+    await page.evaluate(() => document.fonts.ready);
     await page.getByText(/Carregando seus vínculos|Buscando estabelecimentos|Consultando solicitações|Consultando convite/).waitFor({ state: 'hidden' }).catch(() => {});
   }
   return { state, context, page, goto };
@@ -92,7 +94,7 @@ async function main() {
     assert.equal(requests.filter(item => item.path.endsWith('/definir-estabelecimento')).length, initialCount);
     await selection.page.getByRole('button', { name: 'Trabalhar nesta loja', exact: true }).click();
     assert.equal(await selection.page.getByRole('button', { name: 'Trabalhar nesta loja', exact: true }).isDisabled(), true);
-    await selection.page.waitForURL(base + '/');
+    await selection.page.waitForURL(base + '/permissoes');
     assert.equal(requests.filter(item => item.path.endsWith('/definir-estabelecimento')).length, initialCount + 1);
     assert.equal(await selection.page.evaluate(() => JSON.parse(localStorage.getItem('zippygo.estabelecimentoAtual')).id), B);
     await selection.context.close();
