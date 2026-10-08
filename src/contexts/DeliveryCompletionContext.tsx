@@ -9,7 +9,7 @@ import { useAuth } from './AuthContext';
 import { useOperationalSession } from './OperationalSessionContext';
 
 export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt};
-type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<void>;preparePayment:(parts:PaymentPart[])=>Promise<void>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
+type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<void>;preparePayment:(parts:PaymentPart[])=>Promise<void>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
 const Context=createContext<Value|null>(null);
 export function DeliveryCompletionProvider({children}:{children:React.ReactNode}) {
   const auth=useAuth(),turn=useOperationalSession(),[draft,setDraft]=useState<CompletionDraft|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState('');
@@ -43,6 +43,10 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     })();
   },[auth.user?.id]);
   const scope=(d:CompletionDraft)=>{const state=turn.store.getSnapshot(),s=state.session;return owner.current===d.userId && s?.sessionId===d.sessionId && s.epoch===d.epoch && state.queue?.estabelecimentoId===d.storeId;};
+  const assertRouteMutationAllowed=()=>{
+    if(restoredOwner.current!==owner.current)throw new Error('A conferência salva ainda não pôde ser verificada. Consulte a loja antes de alterar a rota ou encerrar o turno.');
+    if(current.current && ['pending','sending'].includes(current.current.phase))throw new Error('Consulte a conclusão pendente antes de alterar a rota ou encerrar o turno.');
+  };
   const run=async<T,>(task:()=>Promise<T>):Promise<T|null>=>{
     if(running.current)return null;running.current=true;setBusy(true);setError('');const user=owner.current;
     try{return await task();}catch(e){if(owner.current===user)setError(e instanceof Error?e.message:'A conferência não foi confirmada.');return null;}finally{running.current=false;setBusy(false);}
@@ -133,6 +137,6 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     if(owner.current && restoredOwner.current!==owner.current)throw new Error('A conferência salva ainda não pôde ser verificada. Aguarde a recuperação antes de sair da conta.');
     if(current.current && ['pending','sending'].includes(current.current.phase))throw new Error('Consulte a conclusão pendente antes de sair da conta. Seu acesso foi mantido.');
   }),[]);
-  return <Context.Provider value={{draft,busy,loading,error,prepare,discardUnsent,validateCode,preparePayment,uploadProof,submit,recover,clearError:()=>setError('')}}>{children}</Context.Provider>;
+  return <Context.Provider value={{draft,busy,loading,error,assertRouteMutationAllowed,prepare,discardUnsent,validateCode,preparePayment,uploadProof,submit,recover,clearError:()=>setError('')}}>{children}</Context.Provider>;
 }
 export function useDeliveryCompletion(){const value=useContext(Context);if(!value)throw new Error('Use DeliveryCompletionProvider.');return value;}

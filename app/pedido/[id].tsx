@@ -5,6 +5,8 @@ import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { Bell, Check, Clock, HelpCircle, Lock, Map, MapPin, MessageCircle, Moon, Navigation, Package, Phone, Route, ShieldCheck, Store, Sun } from 'lucide-react-native';
 import { arriveCurrent, getOperationalOrder, OperationalOrderDetail, OrderItemDetail } from '../../services/mobileApi';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useOperationalSession } from '../../src/contexts/OperationalSessionContext';
+import { useDeliveryCompletion } from '../../src/contexts/DeliveryCompletionContext';
 import { Avatar, Button, Entrance, Feedback, Header, IconButton, money, Pill, Screen, SectionTitle, Surface, type } from '../../src/ui/Kit';
 import { useZippyTheme } from '../../src/ui/theme';
 import { openPreferredNavigation } from '../../services/navigation';
@@ -41,6 +43,7 @@ function Parcel() {
 export default function OrderDetails() {
   const params = useLocalSearchParams<{ id: string }>(); const id = Number(params.id);
   const router = useRouter(); const { estabelecimentoAtual } = useAuth(); const { colors, dark, setPreference } = useZippyTheme();
+  const turn = useOperationalSession(), completion = useDeliveryCompletion();
   const compact = useWindowDimensions().width < 360;
   const [order, setOrder] = useState<OperationalOrderDetail | null>(null); const [error, setError] = useState('');
   const [busy, setBusy] = useState(false); const [refresh, setRefresh] = useState(0);
@@ -63,17 +66,28 @@ export default function OrderDetails() {
   };
   const arrive = async () => {
     if (!order || busy) return;
+    try { completion.assertRouteMutationAllowed(); }
+    catch (caught) { setError(caught instanceof Error ? caught.message : 'Confira a conclusão salva antes de registrar a chegada.'); return; }
     if (!order.isCurrent || order.isOffer) { router.push('/rota'); return; }
     if (!order.pickedUpAtUtc) { router.push('/retirada'); return; }
     if (order.arrivedAtUtc) { router.push('/chegadaEntrega'); return; }
+    const session = turn.store.getSnapshot().session;
+    if (!session) { setError('Recupere seu turno antes de registrar a chegada.'); return; }
+    const sameSession = () => {
+      const active = turn.store.getSnapshot().session;
+      return active?.sessionId === session.sessionId && active.epoch === session.epoch;
+    };
     const currentGeneration = generation.current;
     setBusy(true);
     try {
-      await arriveCurrent(id);
-      const updated = await getOperationalOrder(id);
+      const queue = await arriveCurrent(id);
+      if (!sameSession()) return;
+      turn.store.updateQueue(queue, session.sessionId);
       if (generation.current !== currentGeneration) return;
+      const updated = await getOperationalOrder(id);
+      if (generation.current !== currentGeneration || !sameSession()) return;
       setOrder(updated);
-      if (!updated.isCurrent || !updated.arrivedAtUtc) { setError('A rota mudou. Confira o pedido atual antes de finalizar.'); return; }
+      if (!updated.isCurrent || !updated.arrivedAtUtc || turn.store.getSnapshot().queue?.current?.pedidoId !== id) { setError('A rota mudou. Confira o pedido atual antes de finalizar.'); return; }
       router.push('/chegadaEntrega');
     }
     catch (caught) { if (generation.current === currentGeneration) setError(caught instanceof Error ? caught.message : 'Não foi possível registrar a chegada.'); }

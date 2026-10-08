@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "description": "Ferramentas locais de validacao da etapa 5, sem publicacao",
+  "devDependencies": { "playwright": "1.55.1" }
+}

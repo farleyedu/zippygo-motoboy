@@ -2,6 +2,7 @@ import { HubConnectionBuilder, HttpTransportType, LogLevel } from '@microsoft/si
 import { API_CONFIG } from '../config/apiConfig';
 import { logApiFailure } from './apiErrors';
 import { createOperationalQueueSync, QueueSyncScope } from './operationalQueueSync';
+import { emitChatEvent, ChatEvent } from './chatEvents';
 
 type Ports = {
   onRouteEvent?: (event: { action?: string; pedidoId?: number; version: number }) => void;
@@ -29,6 +30,10 @@ export function startOperationalRealtime(ports: Ports): () => void {
     if (current && payload?.estabelecimentoId?.toLowerCase() === current.establishmentId.toLowerCase() && payload.motoboyId === current.motoboyId && Number.isFinite(payload.version) && payload.version > ports.version()) ports.onRouteEvent?.(payload);
   });
   connection.onreconnecting(() => sync.connection(false));
+  connection.on('delivery.chat.updated', (payload: ChatEvent) => {
+    const scope = ports.scope();
+    if (scope && payload?.estabelecimentoId?.toLowerCase() === scope.establishmentId.toLowerCase()) emitChatEvent(payload);
+  });
   connection.onreconnected(() => { retries = 0; sync.connection(true); });
   function retryStart() {
     if (stopped || retry !== undefined) return;

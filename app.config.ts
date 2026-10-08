@@ -47,7 +47,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'ACCESS_COARSE_LOCATION',
         'ACCESS_BACKGROUND_LOCATION',
         'FOREGROUND_SERVICE',
-        'FOREGROUND_SERVICE_LOCATION'
+        'FOREGROUND_SERVICE_LOCATION',
+        'RECORD_AUDIO'
       ],
       package: 'com.farleyedu.zippygomotoboy',
       jsEngine: 'hermes',
@@ -78,7 +79,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
           isAndroidForegroundServiceEnabled: true
         }
       ],
-      'expo-secure-store'
+      'expo-secure-store',
+      ['expo-audio', { microphonePermission: 'Permitir gravar mensagens de audio para sua equipe e clientes.' }],
+      ['expo-notifications', { sounds: ['./assets/sounds/chat-message.wav', './assets/sounds/chat-mention.wav'] }]
     ],
     
     experiments: {

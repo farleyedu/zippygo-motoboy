@@ -38,6 +38,7 @@ export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = fa
   const mapRef = useRef<MapView>(null);
   const [trackMarkers, setTrackMarkers] = useState(true);
   const hasCenteredOnceRef = useRef(false);
+  const lastRecenterTokenRef = useRef<number | undefined>(0);
   const headingRef = useRef(0);
   // Garante que marcadores customizados renderizem imediatamente no Android
   useEffect(() => {
@@ -78,16 +79,20 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
     if (!routeMode) mapRef.current?.animateCamera({ pitch: view3D ? 48 : 0, heading: 0 }, { duration: reducedMotion ? 0 : 450 });
   }, [routeMode, view3D, reducedMotion, centerTo]);
 
-  // Recentraliza imediatamente quando a tela volta ao foco (token muda)
+  // Cada toque centraliza uma vez; atualizacoes do GPS nao prendem o mapa livre.
   useEffect(() => {
     if (!focused || !recenterToken) return;
     if (!locationAuthorized) return;
+    if (lastRecenterTokenRef.current === recenterToken) return;
+    lastRecenterTokenRef.current = recenterToken;
+    let alive = true;
     if (userLocation) {
       centerTo(userLocation);
     } else {
       (async () => {
         try {
           const loc = await Location.getCurrentPositionAsync({});
+          if (!alive) return;
           setUserLocation(loc.coords);
           centerTo(loc.coords as any);
         } catch (error) {
@@ -95,6 +100,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
         }
       })();
     }
+    return () => { alive = false; };
   }, [focused, recenterToken, userLocation, locationAuthorized, centerTo]);
 
   useEffect(() => {

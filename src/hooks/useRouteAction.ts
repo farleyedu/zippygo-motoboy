@@ -10,7 +10,8 @@ export function useRouteAction() {
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
   const run = async (action: () => Promise<MotoboyQueue>, onSuccess?: (queue: MotoboyQueue) => void) => {
     if (running.current) return;
-    if (completion.loading || ['pending','sending'].includes(completion.draft?.phase || '')) { setError('Consulte a conclusão pendente antes de alterar a rota.'); return; }
+    try { completion.assertRouteMutationAllowed(); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Confira a conclusão salva antes de alterar a rota.'); return; }
     const current = turn.store.getSnapshot(), session = current.session;
     if (!session || !['online', 'reconnecting'].includes(current.phase)) { setError('Recupere seu turno antes de continuar.'); return; }
     running.current = true; setBusy(true); setError(''); setCode('');

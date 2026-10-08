@@ -126,22 +126,27 @@ const fetchAdapter: AxiosAdapter = async (config) => {
     // O transformRequest padrao do Axios normalmente ja converte objetos para
     // JSON antes de chegar ao adapter. Serializar uma string novamente envia
     // um JSON duplamente codificado e quebra o model binding do ASP.NET.
+    const multipart = typeof FormData !== 'undefined' && config.data instanceof FormData;
+    const headers = AxiosHeaders.from(config.headers);
+    if (multipart) headers.delete('Content-Type');
     const requestBody = config.data == null
       ? undefined
+      : multipart ? config.data
       : typeof config.data === 'string'
         ? config.data
         : JSON.stringify(config.data);
 
     const response = await fetch(url, {
       method,
-      headers: config.headers as Record<string, string>,
+      headers: headers.toJSON() as Record<string, string>,
       body: requestBody,
       signal: controller.signal,
     });
     
-    const data = await response.text();
+    const data = config.responseType === 'blob' && response.ok ? await response.blob() : await response.text();
     let parsedData;
-    try {
+    if (typeof data !== 'string') parsedData = data;
+    else try {
       parsedData = JSON.parse(data);
     } catch {
       parsedData = data;

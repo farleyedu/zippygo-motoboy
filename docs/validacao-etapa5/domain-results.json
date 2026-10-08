@@ -1,0 +1,16 @@
+{
+  "passed": 11,
+  "results": [
+    "Persiste antes de enviar e remove somente apos ACK",
+    "ACK perdido preserva identificador no reinicio e reenvio",
+    "Falha de armazenamento impede rede e preserva rascunho externo",
+    "Fila corrompida bloqueia novos envios",
+    "Mudanca de dono durante upload impede envio ao contexto seguinte",
+    "Upload confirmado e persistido nao se repete no retry",
+    "Dois flush simultaneos fazem um unico POST",
+    "ID divergente no ACK nao confirma a mensagem",
+    "Mencao tem precedencia mesmo com mensagem comum mais nova",
+    "Grupo silenciado nao toca comum, mas mencao tem controle proprio",
+    "Historico, mensagens proprias e lidas nao repetem alertas"
+  ]
+}

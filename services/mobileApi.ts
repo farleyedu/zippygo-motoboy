@@ -243,7 +243,7 @@ function errorMessage(payload: any): string {
   return 'Não foi possível concluir a operação.';
 }
 
-function unwrap<T>(response: AxiosResponse<any>): T {
+export function unwrap<T>(response: AxiosResponse<any>): T {
   const payload = response.data;
   if (response.status >= 400 || payload?.success === false) {
     throw new MobileApiError(errorMessage(payload), response.status, payload?.code ?? payload?.error?.code);

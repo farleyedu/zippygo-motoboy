@@ -17,6 +17,7 @@ import { DeliveryCompletionProvider } from '@/src/contexts/DeliveryCompletionCon
 import { useDeliveryCompletion } from '@/src/contexts/DeliveryCompletionContext';
 import { useAuth } from '@/src/contexts/AuthContext';
 import { getSecureItem,setSecureItem } from '@/utils/secureStorage';
+import { ChatNotices } from '@/src/chat/ChatNotices';
 
 import '../components/locationTask';
 
@@ -51,22 +52,6 @@ export default function RootLayout() {
   }, [loaded]);
 
   useEffect(() => {
-    // 🔔 Configura handler para notificações recebidas
-    if (Platform.OS === 'web') return;
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: false,
-        shouldSetBadge: false,
-        shouldShowBanner: true,
-        shouldShowList: true,
-      }),
-    });
-
-    // A tela de preparação explica e solicita notificações por ação do usuário.
-  }, []);
-
-  useEffect(() => {
     if (Platform.OS === 'web') return;
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const url = response.notification.request.content.data?.url as string;
@@ -88,6 +73,7 @@ export default function RootLayout() {
       <DeliveryCompletionProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <RootLayoutNav />
+        <ChatNotices />
       </GestureHandlerRootView>
       </DeliveryCompletionProvider>
       </OperationalSessionProvider>
@@ -126,7 +112,7 @@ function RootLayoutNav() {
   }, [current,completion.draft?.phase,router]);
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldSetBadge: false, shouldPlaySound: preferences.sound }) });
+    Notifications.setNotificationHandler({ handleNotification: async notification => ({ shouldShowAlert: true, shouldShowBanner: true, shouldShowList: true, shouldSetBadge: false, shouldPlaySound: !notification.request.content.data?.chatMessageId && preferences.sound }) });
   }, [preferences.sound]);
   useEffect(() => {
     if (!auth.isLoading && !auth.user && !auth.restoreError && current !== '(auth)' && current !== 'index') router.replace('/(auth)/login');
