@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../contexts/AuthContext';
 import { EstablishmentLink, listAvailableEstablishments, listMotoboyLinkRequests, MotoboyAvailableEstablishment, MotoboyLinkRequest } from '../../services/mobileApi';

@@ -1,7 +1,7 @@
 import React,{useEffect,useRef,useState} from 'react';
 import { Animated,Image,Text,View } from 'react-native';
 import { useRouter,useLocalSearchParams } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { Check,FileCheck,Route,Store } from 'lucide-react-native';
 import { DeliveryReceipt,findDeliveryReceipt,readDeliveryProof } from '../../services/completionApi';
 import { useDeliveryCompletion } from '../contexts/DeliveryCompletionContext';

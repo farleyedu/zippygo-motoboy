@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getSecureItem } from '../../utils/secureStorage';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';

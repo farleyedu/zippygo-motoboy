@@ -1,7 +1,7 @@
 # AGENTS.md — Projeto ZippyGo
 
 > **Projeto-alvo (deste repositório):** **ZippyGo — App do Motoboy (React Native/Expo)**  
-> **Caminho local (Farley):** `D:\TI\Aplicativos\front end\MotoboyApp\zippygo-motoboy`  
+> **Caminho local (Farley):** `C:\Users\farle\TI\Zippy\zippygo-motoboy` (checkout principal, `master`).
 > **Módulos correlatos (fora deste repo):** Painel da Pizzaria (Next.js), Backend (.NET Core + SQL Server), Futuro front/app do Cliente.  
 > **Regra-mestra para o agente:** **Responda e documente sempre em português do Brasil.** Antes de editar/rodar: **mostre o plano, liste arquivos e exiba o diff**. **Comandos de shell e patches são auto‑aprovados (sem prompt)**, exceto ações claramente destrutivas (ex.: apagar arquivos/pastas, `git reset --hard`) ou quando o usuário solicitar confirmação explícita.
 

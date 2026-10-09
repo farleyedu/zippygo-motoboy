@@ -1,7 +1,7 @@
 import React from 'react';
 import { Image, KeyboardAvoidingView, Platform, Pressable, Text, View } from 'react-native';
 import { useRouter, useRootNavigationState, Href } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { ChevronRight, Home, Route, MessageCircle, UserRound, Wallet, LucideIcon } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { Entrance, Feedback, Screen, type } from './Kit';

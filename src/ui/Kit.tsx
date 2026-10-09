@@ -49,7 +49,7 @@ export function Gradient({ colors, glow = false, angle, sheen = false, highlight
     {highlight && <Rect width={size.width} height={1} fill={highlight} />}
     </Svg>
     {sheen && <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ translateX: reflection.interpolate({ inputRange: [0, 1], outputRange: [-size.width * 1.1, size.width * 1.1] }) }] }]}>
-      <Svg width={size.width} height={size.height} viewBox={`0 0 ${size.width} ${size.height}`}><Defs><LinearGradient id={`${id}sheen`} {...gradientPoints(size.width, size.height, 110)} gradientUnits="userSpaceOnUse"><Stop offset=".3" stopColor="#ffffff" stopOpacity="0" /><Stop offset=".5" stopColor="#ffffff" stopOpacity={43 / 255} /><Stop offset=".7" stopColor="#ffffff" stopOpacity="0" /></LinearGradient></Defs><Rect width={size.width} height={size.height} fill={`url(#${id}sheen)`} /></Svg>
+      <Svg width={size.width} height={size.height} viewBox={`0 0 ${size.width} ${size.height}`}><Defs><LinearGradient id={`${id}sheen`} {...gradientPoints(size.width, size.height, 110)} gradientUnits="userSpaceOnUse"><Stop offset="0.3" stopColor="#ffffff" stopOpacity="0" /><Stop offset="0.5" stopColor="#ffffff" stopOpacity={43 / 255} /><Stop offset="0.7" stopColor="#ffffff" stopOpacity="0" /></LinearGradient></Defs><Rect width={size.width} height={size.height} fill={`url(#${id}sheen)`} /></Svg>
     </Animated.View>}
     </>}
   </View>;
@@ -63,7 +63,7 @@ export function Screen({ children, footer }: { children: React.ReactNode; footer
   const [footerHeight, setFooterHeight] = useState(100);
   return <View style={{ flex: 1, backgroundColor: pageColor }}><StatusBar style={dark ? 'light' : 'dark'} />
     {dark && <View pointerEvents="none" style={{ position: 'absolute', top: insets.top, left: 0, right: 0, height: 250 }}>
-      <Svg width="100%" height={250}><Defs><RadialGradient id={glowId} gradientUnits="userSpaceOnUse" cx="100%" cy={0} rx={270} ry={250}><Stop offset="0" stopColor="#74a7ea" stopOpacity={16 / 255}/><Stop offset=".78" stopColor="#74a7ea" stopOpacity="0"/></RadialGradient></Defs><Rect width="100%" height={250} fill={`url(#${glowId})`}/></Svg>
+      <Svg width="100%" height={250}><Defs><RadialGradient id={glowId} gradientUnits="userSpaceOnUse" cx="100%" cy={0} rx={270} ry={250}><Stop offset="0" stopColor="#74a7ea" stopOpacity={16 / 255}/><Stop offset="0.78" stopColor="#74a7ea" stopOpacity="0"/></RadialGradient></Defs><Rect width="100%" height={250} fill={`url(#${glowId})`}/></Svg>
     </View>}
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: footer ? footerHeight + 24 : 36 + insets.bottom }} showsVerticalScrollIndicator={false}>
       <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', paddingHorizontal: 22 }}>{children}</View>
@@ -84,7 +84,7 @@ export function Header({ title, subtitle, onBack, right }: { title: string; subt
 
 export function Surface({ children, hero, style }: { children: React.ReactNode; hero?: boolean; style?: ViewStyle }) {
   const { colors } = useZippyTheme();
-  return <View style={[{ borderRadius: layout.radius.card, borderWidth: 1, borderColor: hero ? '#45638755' : colors.line, backgroundColor: colors.card, padding: 16, overflow: 'hidden', shadowColor: colors.hero, shadowOpacity: hero ? .16 : .04, shadowRadius: hero ? 18 : 8, shadowOffset: { width: 0, height: hero ? 8 : 3 }, elevation: hero ? 3 : 1 }, style]}>{hero && <Gradient colors={[colors.heroEnd, colors.hero]} glow />}{children}</View>;
+  return <View style={[{ borderRadius: layout.radius.card, borderWidth: 1, borderColor: hero ? '#45638755' : colors.line, backgroundColor: colors.card, padding: 16, overflow: 'hidden', shadowColor: colors.hero, shadowOpacity: hero ? .16 : .04, shadowRadius: hero ? 18 : 8, shadowOffset: { width: 0, height: hero ? 8 : 3 }, elevation: hero ? 3 : 1 }, style]}>{hero && <Gradient colors={[colors.heroEnd, colors.hero]} glow />}{hero ? <View collapsable={false} style={{position:'relative',zIndex:1}}>{children}</View> : children}</View>;
 }
 
 export function Button({ children, onPress, icon: Icon = ArrowRight, secondary, danger, loading, disabled }: { children: string; onPress: () => void; icon?: LucideIcon; secondary?: boolean; danger?: boolean; loading?: boolean; disabled?: boolean }) {

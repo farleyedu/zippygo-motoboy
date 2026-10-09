@@ -21,6 +21,7 @@ function fixture(options = {}) {
     '../../services/apiService': { apiClient: { put: async () => { calls.push('put'); return {}; } } },
     '../../services/mobileApi': { unwrap: value => value },
     '../../services/browserNativeTest': { browserNativeTest: !!options.browserMock, reportBrowserMock: () => calls.push('mock') },
+    '../../services/expoGo': { expoGo: false },
     '../../utils/secureStorage': { getSecureItem: async key => key === 'operationalSession' ? JSON.stringify({ sessionId: options.session || 'current' }) : 'access' },
   };
   const source = fs.readFileSync(path.join(root, 'src/chat/push.ts'), 'utf8');
@@ -47,15 +48,26 @@ async function test(name, work) { await work(); results.push(name); console.log(
   });
   await test('Instalacao nova cria canais antes do pedido e registra apos concessao', async () => {
     const f = fixture(); await f.registerChatPush('current', settings);
-    assert.equal(f.channels.length, 8);
+    assert.equal(f.channels.length, 12);
+    assert.equal(new Set(f.channels.map(channel => channel.id)).size, 12);
     assert.ok(f.calls.indexOf('channel') < f.calls.indexOf('request'));
     assert.ok(f.calls.indexOf('request') < f.calls.indexOf('token'));
     assert.equal(f.calls.at(-1), 'put');
-    for (const channel of f.channels) {
+    const chatChannels = f.channels.filter(channel => channel.id.startsWith('chat-'));
+    const offerChannels = f.channels.filter(channel => channel.id.startsWith('delivery-offers-'));
+    assert.equal(chatChannels.length, 8);
+    assert.equal(offerChannels.length, 4);
+    for (const channel of chatChannels) {
       assert.ok(channel.id.endsWith('-v2'));
       assert.equal(channel.importance, channel.id.includes('mentions') ? 4 : 3);
       assert.equal(channel.enableVibrate, channel.id.includes('-vibrate-'));
       assert.equal(channel.sound, channel.id.includes('-silent-') ? null : channel.id.includes('mentions') ? 'chat_mention.wav' : 'chat_message.wav');
+    }
+    for (const channel of offerChannels) {
+      assert.match(channel.id, /^delivery-offers-(sound|silent)-(vibrate|quiet)-v1$/);
+      assert.equal(channel.importance, 4);
+      assert.equal(channel.enableVibrate, channel.id.includes('-vibrate-'));
+      assert.equal(channel.sound, channel.id.includes('-silent-') ? null : 'default');
     }
   });
   await test('Negativa nao repete prompt em atualizacoes automaticas nem busca token', async () => {
@@ -79,7 +91,7 @@ async function test(name, work) { await work(); results.push(name); console.log(
   await test('Chamadas concorrentes compartilham um unico pedido de permissao', async () => {
     const f = fixture();
     assert.deepEqual(await Promise.all([f.ensureChatNotificationPermission(), f.ensureChatNotificationPermission(true)]), ['granted', 'granted']);
-    assert.equal(f.calls.filter(c => c === 'request').length, 1); assert.equal(f.channels.length, 8);
+    assert.equal(f.calls.filter(c => c === 'request').length, 1); assert.equal(f.channels.length, 12);
   });
   await test('Troca de sessao impede vincular token ao turno antigo', async () => {
     const f = fixture({ session: 'other' }); await f.registerChatPush('current', settings);

@@ -50,6 +50,10 @@ import {
 import { createIdentifier } from '../../services/mobileApi';
 import { useAuth } from '../contexts/AuthContext';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
+import { AppNav } from '../ui/AccountKit';
+import { ChatMessageActions } from './ChatMessageActions';
+import { ChatForwardSheet } from './ChatForwardSheet';
+import * as Haptics from 'expo-haptics';
 import { Avatar } from '../ui/Kit';
 import { useZippyTheme } from '../ui/theme';
 import { AudioComposer, ChatMedia } from './ChatMedia';
@@ -99,6 +103,7 @@ export default function ClientConversation() {
     ClientRichChat['messages'][number] | null
   >(null);
   const [reacting, setReacting] = useState(false);
+  const [forwarding, setForwarding] = useState<ClientRichChat['messages'][number] | null>(null);
   const loadedQuery = useRef('');
   const scope = `${owner}:${turn.session?.sessionId}:${pedidoId}`,
     live = useRef(scope);
@@ -121,7 +126,7 @@ export default function ClientConversation() {
     setDraftReady(false);
     setReply(null);
     setMessages([]);
-    setSelected(null);
+    setSelected(null); setForwarding(null);
     setData(null);
     setSearch('');
     setSearching(false);
@@ -250,6 +255,9 @@ export default function ClientConversation() {
       const picked = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.8,
+        // iOS: desde o expo-image-picker 17 o padrao manteria HEIC; o chat envia JPG.
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Automatic,
       });
       if (!picked.canceled)
         await send(draft, {
@@ -355,33 +363,8 @@ export default function ClientConversation() {
           >
             <Search size={18} color={colors.ink} />
           </Pressable>
+          <Pressable accessibilityLabel={'Detalhes do pedido ' + pedidoId} onPress={() => router.push({ pathname: '/pedido/[id]', params: { id: String(pedidoId) } })} style={{ padding: 10, minHeight: 44 }}><Package size={19} color={colors.accent} /><Text style={{ color: colors.accent, fontSize: 9 }}>#{pedidoId}</Text></Pressable>
         </View>
-        <Pressable
-          onPress={() =>
-            router.push({
-              pathname: '/pedido/[id]',
-              params: { id: String(pedidoId) },
-            })
-          }
-          style={{
-            flexDirection: 'row',
-            gap: 10,
-            padding: 14,
-            backgroundColor: colors.soft,
-          }}
-        >
-          <Package size={19} color={colors.accent} />
-          <Text
-            style={{
-              fontFamily: 'Manrope',
-              fontSize: 11,
-              fontWeight: '800',
-              color: colors.ink,
-            }}
-          >
-            Pedido #{pedidoId}
-          </Text>
-        </Pressable>
         {searching && (
           <TextInput
             accessibilityLabel="Buscar mensagens do cliente"
@@ -480,8 +463,8 @@ export default function ClientConversation() {
             return (
               <Pressable
                 key={message.id}
-                onLongPress={() => setSelected(message)}
-                onPress={() => setSelected(message)}
+                delayLongPress={350}
+                onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
                 accessibilityLabel={`Mensagem do cliente: ${message.body || 'anexo'}`}
                 style={{
                   maxWidth: '85%',
@@ -512,7 +495,7 @@ export default function ClientConversation() {
                   </Text>
                 )}
                 {message.attachment && (
-                  <ChatMedia attachment={message.attachment} foreground={fg} />
+                  <ChatMedia attachment={message.attachment} foreground={fg} senderName={message.mine ? auth.user?.nome || 'Você' : name} />
                 )}
                 <Text
                   style={{
@@ -573,7 +556,7 @@ export default function ClientConversation() {
                             alignItems: 'center',
                           }}
                         >
-                          <Icon size={13} color={fg} />
+                          {['like', 'heart', 'check', 'alert'].includes(reaction.reaction) ? <Icon size={13} color={fg} /> : <Text style={{ fontSize: 16 }}>{reaction.reaction}</Text>}
                           <Text style={{ fontSize: 9, color: fg }}>
                             {reaction.count}
                           </Text>
@@ -646,78 +629,9 @@ export default function ClientConversation() {
             </View>
           ))}
         </ScrollView>
-        {selected && (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: 8,
-              backgroundColor: colors.card,
-            }}
-          >
-            <Pressable
-              accessibilityLabel="Responder citando mensagem do cliente"
-              onPress={() => {
-                setReply(selected);
-                setSelected(null);
-              }}
-              style={{ padding: 10 }}
-            >
-              <Reply size={19} color={colors.accent} />
-            </Pressable>
-            {data?.channel.podeReceber &&
-              (
-                [
-                  ['like', ThumbsUp, 'Curtir'],
-                  ['heart', Heart, 'Gostei'],
-                  ['thanks', Check, 'Obrigado'],
-                  ['alert', TriangleAlert, 'Atencao'],
-                ] as const
-              ).map(([key, Icon, label]) => (
-                <Pressable
-                  key={key}
-                  accessibilityLabel={label}
-                  disabled={reacting}
-                  style={{ padding: 10 }}
-                  onPress={() => {
-                    const before = live.current;
-                    setReacting(true);
-                    void reactClientChat(
-                      pedidoId,
-                      selected.id,
-                      selected.reactions?.some(
-                        (r) => r.reaction === key && r.mine,
-                      )
-                        ? null
-                        : key,
-                    )
-                      .then(() => {
-                        if (before === live.current) {
-                          setSelected(null);
-                          setRefresh((n) => n + 1);
-                        }
-                      })
-                      .catch((e) => {
-                        if (before === live.current) setError(String(e));
-                      })
-                      .finally(() => {
-                        if (before === live.current) setReacting(false);
-                      });
-                  }}
-                >
-                  <Icon size={18} color={colors.accent} />
-                </Pressable>
-              ))}
-            <Pressable
-              accessibilityLabel="Fechar acoes da mensagem"
-              onPress={() => setSelected(null)}
-              style={{ padding: 10 }}
-            >
-              <X size={18} color={colors.muted} />
-            </Pressable>
-          </View>
-        )}
+        {forwarding && <ChatForwardSheet message={{ ...forwarding, attachment: forwarding.attachment ? { ...forwarding.attachment, clientPedidoId: pedidoId } : undefined }} outbox={outbox} onDismiss={() => setForwarding(null)} />}
+        {selected && <ChatMessageActions onForward={() => { setForwarding(selected); setSelected(null); }} message={selected} senderName={selected.mine ? auth.user?.nome || 'Você' : name} busy={reacting} onDismiss={() => setSelected(null)} onReply={() => { setReply(selected); setSelected(null); }}
+          onReact={data?.channel.podeReceber ? emoji => { const before = live.current; setReacting(true); void reactClientChat(pedidoId, selected.id, emoji).then(() => { if (before === live.current) { setSelected(null); setRefresh(n => n + 1); } }).catch(e => { if (before === live.current) setError(String(e)); }).finally(() => { if (before === live.current) setReacting(false); }); } : undefined} />}
         {reply && (
           <View
             style={{
@@ -761,7 +675,7 @@ export default function ClientConversation() {
                   <Pressable
                     key={text}
                     disabled={!ready || busy}
-                    onPress={() => void send(text)}
+                    onPress={() => setDraft(text)}
                     style={{
                       borderWidth: 1,
                       borderColor: colors.line,
@@ -781,7 +695,7 @@ export default function ClientConversation() {
                 flexDirection: 'row',
                 gap: 6,
                 paddingHorizontal: 12,
-                paddingBottom: Math.max(insets.bottom, 14),
+                paddingBottom: 10,
                 alignItems: 'flex-end',
               }}
             >
@@ -852,6 +766,7 @@ export default function ClientConversation() {
             </View>
           </>
         )}
+        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>
       </View>
     </KeyboardAvoidingView>
   );

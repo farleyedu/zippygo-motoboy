@@ -29,6 +29,11 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
+# Logs locais de verificação (não fazem parte do código)
+/corrections-*.log
+/integration-*.log
+/android/build-*.log
+
 # macOS
 .DS_Store
 *.pem

@@ -1,0 +1,5 @@
+# Scripts Windows mantêm CRLF no checkout e LF no índice.
+*.bat text eol=crlf
+
+# Em patches unificados, uma linha de contexto vazia começa com um espaço.
+*.patch whitespace=-blank-at-eol

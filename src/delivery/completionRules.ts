@@ -1,4 +1,5 @@
 import type { CompletionContext, PaymentPart } from '../../services/completionApi';
+import { checklistReady, type ChecklistConfirmation } from './checklistRules';
 export function parseCents(text: string): number | null {
   const value=text.trim().replace(/\s/g,'');
   if(!/^\d+(?:[.,]\d{1,2})?$/.test(value)) return null;
@@ -16,6 +17,6 @@ export function paymentError(total: number | undefined,parts: PaymentPart[]): st
   }
   return null;
 }
-export function readyToComplete(context: CompletionContext,codeChecked: boolean,payments: PaymentPart[],proofId?: string) {
-  return (!context.requiresCode || codeChecked) && (!context.requiresPayment || !paymentError(context.total,payments)) && (!context.requiresProof || !!proofId);
+export function readyToComplete(context: CompletionContext,codeChecked: boolean,payments: PaymentPart[],proofId?: string,checklist?: ChecklistConfirmation) {
+  return (!context.checklist || checklistReady(context.checklist,checklist)) && (!context.requiresCode || codeChecked) && (!context.requiresPayment || !paymentError(context.total,payments)) && (!context.requiresProof || !!proofId);
 }

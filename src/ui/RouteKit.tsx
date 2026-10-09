@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Pressable, Text, View } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { useRouter, useRootNavigationState } from 'expo-router';
 import { Check, ChevronRight, Lock, Map, Package, Store } from 'lucide-react-native';
 import { MotoboyQueue, queueToPedidos, RouteStop } from '../../services/mobileApi';

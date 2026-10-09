@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { UserRound } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
 import { Button, Feedback, type } from '../../src/ui/Kit';

@@ -8,30 +8,18 @@
     "scheme": "zippygomotoboy",
     "userInterfaceStyle": "automatic",
 
-    // 🔧 Hermes ligado explicitamente (Expo SDK recente já usa por padrão, mas deixamos explícito)
-    "jsEngine": "hermes",
 
-    // 🔧 Nova arquitetura já está ativa (bom para performance com Hermes)
-    "newArchEnabled": true,
 
-    "splash": {
-      "image": "./assets/images/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
-    },
 
     "ios": {
       "supportsTablet": true,
-      // 🔧 Garante Hermes no iOS também (quando você fizer build para iOS)
-      "jsEngine": "hermes"
     },
 
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#1854cd"
       },
-      "edgeToEdgeEnabled": true,
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
@@ -41,11 +29,7 @@
       ],
       "package": "com.farleyedu.zippygomotoboy",
 
-      // 🔧 Garante Hermes no Android
-      "jsEngine": "hermes",
 
-      // 🔧 Permite comunicação HTTP não criptografada para desenvolvimento
-      "usesCleartextTraffic": true,
 
       "config": {
         "googleMaps": {

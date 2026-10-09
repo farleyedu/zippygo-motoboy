@@ -8,9 +8,10 @@ import { readyToComplete } from '../delivery/completionRules';
 import { useAuth } from './AuthContext';
 import { useOperationalSession } from './OperationalSessionContext';
 import { assertRealProof } from '../../services/browserNativeTest';
+import { checklistReady, type ChecklistConfirmation } from '../delivery/checklistRules';
 
 export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt};
-type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<void>;preparePayment:(parts:PaymentPart[])=>Promise<void>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
+type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<void>;preparePayment:(parts:PaymentPart[])=>Promise<void>;confirmItems:(confirmation:ChecklistConfirmation)=>Promise<boolean>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
 const Context=createContext<Value|null>(null);
 export function DeliveryCompletionProvider({children}:{children:React.ReactNode}) {
   const auth=useAuth(),turn=useOperationalSession(),[draft,setDraft]=useState<CompletionDraft|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState('');
@@ -78,6 +79,13 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     await persist({...d,request:{...d.request,proofId}});
     return true;
   });
+  const confirmItems=async(confirmation:ChecklistConfirmation)=>!!await run(async()=>{
+    const d=current.current;
+    if(!d || d.phase!=='draft' || !scope(d) || confirmation.pedidoId!==d.context.pedidoId || !d.context.checklist || !checklistReady(d.context.checklist,confirmation))
+      throw new Error('Os itens mudaram. Volte e confira a entrega atual.');
+    await persist({...d,request:{...d.request,checklist:confirmation}});
+    return true;
+  });
   const discardUnsent=async()=>!!await run(async()=>{
     const d=current.current;
     if(!d || d.phase!=='draft') throw new Error('Uma conclusão enviada precisa ser consultada; não pode ser descartada.');
@@ -108,7 +116,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     }
   };
   const submit=()=>run(async()=>{
-    const d=current.current;if(!d || d.phase!=='draft' || !readyToComplete(d.context,d.codeChecked,d.request.payments,d.request.proofId))throw new Error('Conclua as conferências antes de arrastar.');
+    const d=current.current;if(!d || d.phase!=='draft' || !readyToComplete(d.context,d.codeChecked,d.request.payments,d.request.proofId,d.request.checklist))throw new Error('Conclua as conferências antes de arrastar.');
     return send(d);
   });
   const recover=(retry=false)=>run(async()=>{
@@ -139,6 +147,6 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     if(owner.current && restoredOwner.current!==owner.current)throw new Error('A conferência salva ainda não pôde ser verificada. Aguarde a recuperação antes de sair da conta.');
     if(current.current && ['pending','sending'].includes(current.current.phase))throw new Error('Consulte a conclusão pendente antes de sair da conta. Seu acesso foi mantido.');
   }),[]);
-  return <Context.Provider value={{draft,busy,loading,error,assertRouteMutationAllowed,prepare,discardUnsent,validateCode,preparePayment,uploadProof,submit,recover,clearError:()=>setError('')}}>{children}</Context.Provider>;
+  return <Context.Provider value={{draft,busy,loading,error,assertRouteMutationAllowed,prepare,discardUnsent,validateCode,preparePayment,confirmItems,uploadProof,submit,recover,clearError:()=>setError('')}}>{children}</Context.Provider>;
 }
 export function useDeliveryCompletion(){const value=useContext(Context);if(!value)throw new Error('Use DeliveryCompletionProvider.');return value;}

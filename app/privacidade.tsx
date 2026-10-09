@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Switch, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { useRouter } from 'expo-router';
 import { LocateFixed, MapPin, ShieldCheck } from 'lucide-react-native';
 import { getSharing, setSharing } from '../services/routeApi';

@@ -2,6 +2,7 @@ import * as Location from 'expo-location';
 import * as Notifications from 'expo-notifications';
 import { Platform, Linking } from 'react-native';
 import { browserNativeTest, reportBrowserMock } from './browserNativeTest';
+import { expoGo } from './expoGo';
 
 export type PermissionKind = 'foreground' | 'background' | 'notifications' | 'services';
 export type PermissionValue = { granted: boolean; canAskAgain: boolean; supported: boolean };
@@ -11,6 +12,8 @@ export type OperationalPermissions = {
 };
 const unsupported: PermissionValue = { granted: false, canAskAgain: false, supported: false };
 const permission = (value: { granted: boolean; canAskAgain: boolean }): PermissionValue => ({ ...value, supported: true });
+// Expo Go nao oferece segundo plano: o turno segue so com o app aberto.
+const expoGoBackground: PermissionValue = { granted: true, canAskAgain: false, supported: false };
 
 export async function readOperationalPermissions(): Promise<OperationalPermissions> {
   if (browserNativeTest) {
@@ -19,7 +22,7 @@ export async function readOperationalPermissions(): Promise<OperationalPermissio
   }
   const foreground = permission(await Location.getForegroundPermissionsAsync());
   const services = await Location.hasServicesEnabledAsync();
-  const background = Platform.OS === 'web' ? unsupported : permission(await Location.getBackgroundPermissionsAsync());
+  const background = Platform.OS === 'web' ? unsupported : expoGo ? expoGoBackground : permission(await Location.getBackgroundPermissionsAsync());
   const notifications = Platform.OS === 'web' ? unsupported : permission(await Notifications.getPermissionsAsync());
   return { foreground, background, notifications, services, ready: services && foreground.granted && background.granted };
 }
@@ -31,6 +34,7 @@ export async function askOperationalPermission(kind: PermissionKind): Promise<vo
   if (kind === 'foreground') { await Location.requestForegroundPermissionsAsync(); return; }
   if (Platform.OS === 'web') throw new Error('Esta permissão precisa do aplicativo instalado no aparelho.');
   if (kind === 'background') {
+    if (expoGo) return;
     if (!(await Location.getForegroundPermissionsAsync()).granted) throw new Error('Permita primeiro a localização com o app aberto.');
     await Location.requestBackgroundPermissionsAsync();
     return;

@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Ícone ZippyGo · prévia</title>
+  <style>
+    @font-face{font-family:Manrope;src:url('assets/manrope.woff2') format('woff2');font-weight:200 800;font-display:swap}
+    *{box-sizing:border-box}body{margin:0;background:#f6f8fc;color:#18243a;font-family:Manrope,system-ui,sans-serif}
+    main{max-width:1050px;margin:auto;padding:48px 28px}.eyebrow{font-size:11px;font-weight:800;letter-spacing:2px;color:#306cdf}
+    h1{font-size:38px;letter-spacing:-1.5px;margin:12px 0}p{color:#6c7b92;line-height:1.7;margin:0 0 28px}
+    .grid{display:grid;grid-template-columns:1fr 320px;gap:28px}.card{background:#fff;border:1px solid #e0e7f3;border-radius:24px;padding:28px}
+    h2{font-size:17px;margin:0 0 24px}.icons{display:flex;justify-content:space-around;gap:24px;padding:16px 0 32px}
+    figure{margin:0;text-align:center}figcaption{font-size:12px;color:#6c7b92;margin-top:16px}
+    .legacy{width:132px;height:132px;display:block;object-fit:contain}.squircle{border-radius:30px}
+    .adaptive{width:132px;height:132px;position:relative;overflow:hidden;background:#1854cd;border-radius:50%}
+    .adaptive img{position:absolute;width:198px;height:198px;left:-33px;top:-33px}
+    .small{display:flex;gap:32px;align-items:center;border-top:1px solid #e0e7f3;padding-top:24px}.small img{display:block;border-radius:22%}
+    .phone{height:570px;border:8px solid #18243a;border-radius:36px;background:#10192b;position:relative;overflow:hidden;display:grid;place-items:center}
+    .phone img{width:168px;height:168px;object-fit:contain}.phone:before{content:'';width:75px;height:20px;background:#18243a;border-radius:0 0 13px 13px;position:absolute;top:0;left:50%;transform:translateX(-50%)}
+    .phone:after{content:'';width:90px;height:4px;background:#dbe6fa;border-radius:6px;position:absolute;bottom:12px;left:50%;transform:translateX(-50%)}
+    .note{font-size:12px;margin:22px 0 0}.source{margin-top:26px;font-size:12px;color:#6c7b92}a{color:#306cdf}
+    @media(max-width:760px){main{padding:28px 18px}.grid{grid-template-columns:1fr}.icons{gap:12px}.legacy,.adaptive{width:110px;height:110px}.adaptive img{width:165px;height:165px;left:-27.5px;top:-27.5px}.phone{max-width:320px;width:100%;margin:auto}}
+  </style>
+</head>
+<body>
+  <main>
+    <span class="eyebrow">ZIPPYGO · IDENTIDADE DO APP</span>
+    <h1>Seu próximo movimento.</h1>
+    <p>O capacete aprovado, redesenhado para reconhecer o app num olhar.</p>
+    <div class="grid">
+      <section class="card">
+        <h2>Na tela do celular</h2>
+        <div class="icons">
+          <figure><img class="legacy squircle" src="../../assets/images/icon.png" alt="Ícone ZippyGo quadrado com cantos arredondados"><figcaption>Quadrado</figcaption></figure>
+          <figure><div class="adaptive"><img src="../../assets/images/adaptive-icon.png" alt="Ícone ZippyGo na máscara circular adaptativa Android"></div><figcaption>Adaptativo Android</figcaption></figure>
+        </div>
+        <div class="small">
+          <figure><img src="../../assets/images/icon.png" width="64" height="64" alt="Ícone com 64 pixels"><figcaption>64 px</figcaption></figure>
+          <figure><img src="../../assets/images/icon.png" width="48" height="48" alt="Ícone com 48 pixels"><figcaption>48 px</figcaption></figure>
+          <figure><img src="../../assets/images/favicon.png" width="32" height="32" alt="Ícone com 32 pixels"><figcaption>32 px</figcaption></figure>
+        </div>
+        <p class="note">Uma arte-mestra. Fundos e margens preparados para cada plataforma; as versões por resolução são geradas pelo Expo.</p>
+      </section>
+      <section>
+        <div class="phone"><img src="../../assets/images/splash-icon.png" alt="Capacete ZippyGo na abertura do app"></div>
+        <p class="note">Prévia da abertura. O sistema operacional controla sua apresentação e duração.</p>
+      </section>
+    </div>
+    <p class="source">Arte original e processo: <a href="ICONE.md">ICONE.md</a>. Esta página apresenta somente o ícone e a abertura; as telas aprovadas continuam no protótipo principal.</p>
+  </main>
+</body>
+</html>

@@ -2,13 +2,31 @@ import * as Location from 'expo-location';
 import { Alert, Linking, Platform } from 'react-native';
 import { getSecureItem } from '../utils/secureStorage';
 import { browserNativeTest, reportBrowserMock } from '../services/browserNativeTest';
+import { expoGo } from '../services/expoGo';
 import {
+  maintainOperationalPresence,
   sendCurrentLocation,
+  sendLocation,
   setTrackingMode,
   TrackingMode,
 } from '../services/trackingService';
 
 const LOCATION_TASK_NAME = 'background-location-task';
+let expoGoWatch: Location.LocationSubscription | null = null;
+
+// Expo Go nao tem localizacao em segundo plano: acompanha so com o app aberto,
+// fazendo o mesmo que a tarefa nativa (presenca + GPS), para percorrer os fluxos.
+async function iniciarAcompanhamentoExpoGo(mode: TrackingMode): Promise<boolean> {
+  if (!(await Location.getForegroundPermissionsAsync()).granted || !(await Location.hasServicesEnabledAsync())) return false;
+  await setTrackingMode(mode);
+  expoGoWatch?.remove();
+  expoGoWatch = await Location.watchPositionAsync(
+    { accuracy: Location.Accuracy.Balanced, distanceInterval: 0, timeInterval: 5000 },
+    (location) => { void Promise.all([maintainOperationalPresence(), sendLocation(location, mode)]).catch(() => undefined); },
+  );
+  void sendCurrentLocation(mode).catch(() => undefined);
+  return true;
+}
 
 export function showLocationSettingsAlert(message: string) {
   Alert.alert('Permissão de localização necessária', message, [
@@ -49,6 +67,7 @@ export async function iniciarMonitoramentoLocalizacao(mode: TrackingMode = 'onli
       console.log('[ZIPPY] Ignorado - sem sessao operacional.');
       return false;
     }
+    if (expoGo) return await iniciarAcompanhamentoExpoGo(mode);
 
     // A preparação solicita permissões. Restaurar sessão não abre diálogos do sistema.
     const foreground = await Location.getForegroundPermissionsAsync();
@@ -98,6 +117,8 @@ export async function iniciarMonitoramentoLocalizacao(mode: TrackingMode = 'onli
 }
 
 export async function pararMonitoramentoLocalizacao() {
+  expoGoWatch?.remove();
+  expoGoWatch = null;
   if (Platform.OS === 'web') return;
   try {
     const running = await Location.hasStartedLocationUpdatesAsync(LOCATION_TASK_NAME);

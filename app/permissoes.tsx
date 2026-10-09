@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useIsFocused } from '@react-navigation/native';
+import { useIsFocused } from 'expo-router/react-navigation';
 import { Bell, Check, LocateFixed, MapPin, Navigation, ShieldCheck } from 'lucide-react-native';
 import { useAuth } from '../src/contexts/AuthContext';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';

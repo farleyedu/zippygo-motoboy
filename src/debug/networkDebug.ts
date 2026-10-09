@@ -26,10 +26,10 @@ if (isDev) {
   }
   
   // Salvar referência original do fetch
-  const originalFetch = global.fetch;
+  const originalFetch = globalThis.fetch;
   
   // Patch do fetch global
-  global.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  globalThis.fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
     const method = init?.method || 'GET';
     

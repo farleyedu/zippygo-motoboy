@@ -1,10 +1,11 @@
 import { apiClient } from './apiService';
+import type { OrderChecklist, ChecklistConfirmation } from '../src/delivery/checklistRules';
 import { createIdentifier, MobileApiError, MotoboyQueue } from './mobileApi';
 import { assertRealProof, browserMockProofPrefix, browserNativeTest, isBrowserMockPhoto, isBrowserMockProof, reportBrowserMock } from './browserNativeTest';
 export type PaymentMethod = 'dinheiro' | 'pix' | 'debito' | 'credito';
 export type PaymentPart = { method: PaymentMethod; amount: number; cashReceived?: number; receivedConfirmed: boolean };
-export type CompletionContext = { pedidoId: number; version: number; nomeCliente?: string; total?: number; requiresCode: boolean; requiresPayment: boolean; requiresProof: boolean };
-export type CompletionRequest = { operationId: string; expectedPedidoId: number; expectedVersion: number; codigo?: string; proofId?: string; payments: PaymentPart[] };
+export type CompletionContext = { pedidoId: number; version: number; nomeCliente?: string; total?: number; requiresCode: boolean; requiresPayment: boolean; requiresProof: boolean; checklist?: OrderChecklist };
+export type CompletionRequest = { operationId: string; expectedPedidoId: number; expectedVersion: number; codigo?: string; proofId?: string; payments: PaymentPart[]; checklist?: ChecklistConfirmation };
 export type DeliveryReceipt = { operationId: string; pedidoId: number; nomeCliente?: string; total?: number; completedAtUtc: string; codeChecked: boolean; paidBeforeDelivery: boolean; payments: PaymentPart[]; proofId?: string };
 function unwrap<T>(r: { status: number; data: { success?: boolean; data: T; error?: string; code?: string } }): T {
   if (r.status >= 400 || r.data.success === false) throw new MobileApiError(r.data.error || 'A conferência não foi confirmada.',r.status,r.data.code);

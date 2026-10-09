@@ -78,6 +78,10 @@ import {
   SectionTitle,
   type,
 } from '../ui/Kit';
+import { AppNav } from '../ui/AccountKit';
+import { ChatMessageActions } from './ChatMessageActions';
+import { ChatForwardSheet } from './ChatForwardSheet';
+import * as Haptics from 'expo-haptics';
 import { useZippyTheme } from '../ui/theme';
 import { AudioComposer, ChatMedia } from './ChatMedia';
 import { retainChatFile } from './media';
@@ -203,6 +207,7 @@ export default function CommunicationScreen() {
     [search, setSearch] = useState(''),
     [searching, setSearching] = useState(false),
     [filter, setFilter] = useState('Todas');
+  const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
   const [selected, setSelected] = useState<ChatMessage | null>(null),
     [reply, setReply] = useState<ChatMessage | null>(null),
     [menu, setMenu] = useState(false),
@@ -272,7 +277,7 @@ export default function CommunicationScreen() {
   useEffect(() => {
     setMessages([]);
     setContacts([]);
-    setSelected(null);
+    setSelected(null); setForwarding(null);
     setSearch('');
     setSearching(false);
     setMore(false);
@@ -483,6 +488,9 @@ export default function CommunicationScreen() {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         quality: 0.8,
+        // iOS: desde o expo-image-picker 17 o padrao manteria HEIC; o chat envia JPG.
+        preferredAssetRepresentationMode:
+          ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Automatic,
       });
       if (!result.canceled) {
         const asset = result.assets[0];
@@ -568,7 +576,7 @@ export default function CommunicationScreen() {
   );
   if (params.view === 'group' || params.view === 'contacts')
     return (
-      <Screen>
+      <Screen footer={<AppNav active="chats" />}>
         <Stack.Screen options={{ headerShown: false }} />
         <Header
           title={params.view === 'group' ? 'Sua equipe.' : 'Nova conversa'}
@@ -650,7 +658,7 @@ export default function CommunicationScreen() {
     );
   if (params.view === 'notifications')
     return (
-      <Screen>
+      <Screen footer={<AppNav active="chats" />}>
         <Stack.Screen options={{ headerShown: false }} />
         <Header
           title="Notificações"
@@ -730,7 +738,7 @@ export default function CommunicationScreen() {
     );
   if (!target)
     return (
-      <Screen>
+      <Screen footer={<AppNav active="chats" />}>
         <Stack.Screen options={{ headerShown: false }} />
         <Header
           title="Conversas"
@@ -778,6 +786,8 @@ export default function CommunicationScreen() {
         />
         <ScrollView
           horizontal
+          style={{ flexGrow: 0, flexShrink: 0, height: 46 }}
+          keyboardShouldPersistTaps="handled"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ gap: 8, marginVertical: 14 }}
         >
@@ -999,45 +1009,6 @@ export default function CommunicationScreen() {
             </Pressable>
           </View>
         )}
-        <Pressable
-          onPress={() =>
-            channel === 'group'
-              ? router.push({
-                  pathname: '/conversas',
-                  params: { view: 'group' },
-                })
-              : target.pedidoId
-                ? router.push({
-                    pathname: '/pedido/[id]',
-                    params: { id: String(target.pedidoId) },
-                  })
-                : router.push({
-                    pathname: '/conversas',
-                    params: { view: 'contacts' },
-                  })
-          }
-          style={[
-            styles.context,
-            { backgroundColor: dark ? '#253b58' : '#dee6f0' },
-          ]}
-        >
-          <Users color={colors.accent} size={18} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.name, { color: colors.ink, fontSize: 11 }]}>
-              {target.pedidoId
-                ? `Pedido #${target.pedidoId}`
-                : channel === 'group'
-                  ? 'Avisos da equipe'
-                  : `Equipe · ${store}`}
-            </Text>
-            <Text style={[styles.small, { color: colors.muted, fontSize: 9 }]}>
-              {channel === 'group'
-                ? 'Conversa do estabelecimento'
-                : 'Combine o proximo passo'}
-            </Text>
-          </View>
-          <ChevronRight size={15} color={colors.muted} />
-        </Pressable>
         {searching && (
           <TextInput
             accessibilityLabel="Buscar mensagens"
@@ -1155,10 +1126,13 @@ export default function CommunicationScreen() {
                     </Text>
                   </Pressable>
                 )}
+                {message.forwarded && <Text style={[styles.small, { color: colors.muted, marginBottom: 6 }]}>↪ Encaminhada</Text>}
                 {message.attachment && (
                   <ChatMedia
                     attachment={message.attachment}
                     foreground={foreground}
+                    senderName={message.senderName}
+                    avatarUri={contacts.find(c => c.motoboyId === message.motoboyId)?.avatar}
                   />
                 )}
                 {!!message.body && (
@@ -1210,9 +1184,7 @@ export default function CommunicationScreen() {
                         <Pressable
                           key={r.reaction}
                           accessibilityLabel={`${r.reaction}: ${r.count}`}
-                          onPress={() => {
-                            setSelected(message);
-                          }}
+                          onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }} delayLongPress={350}
                           style={[
                             styles.row,
                             {
@@ -1223,7 +1195,7 @@ export default function CommunicationScreen() {
                             },
                           ]}
                         >
-                          <Icon size={12} color={colors.accent} />
+                          {reactionIcons[r.reaction as keyof typeof reactionIcons] ? <Icon size={12} color={colors.accent} /> : <Text style={{ fontSize: 16 }}>{r.reaction}</Text>}
                           <Text style={[styles.small, { color: colors.ink }]}>
                             {r.count}
                           </Text>
@@ -1245,8 +1217,8 @@ export default function CommunicationScreen() {
                     });
                 }}
                 accessibilityLabel={`Mensagem de ${message.senderName}${message.mentioned ? ', mencionou voce' : ''}: ${message.body || 'anexo'}`}
-                onLongPress={() => setSelected(message)}
-                onPress={() => setSelected(message)}
+                delayLongPress={350}
+                onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
                 style={[
                   styles.bubble,
                   {
@@ -1343,63 +1315,9 @@ export default function CommunicationScreen() {
             </View>
           ))}
         </ScrollView>
-        {selected && (
-          <View
-            style={[
-              styles.row,
-              {
-                backgroundColor: colors.card,
-                borderTopWidth: 1,
-                borderColor: colors.line,
-                padding: 9,
-                flexWrap: 'wrap',
-              },
-            ]}
-          >
-            <Pressable
-              accessibilityLabel="Responder citando mensagem"
-              onPress={() => {
-                setReply(selected);
-                setSelected(null);
-              }}
-              style={styles.tool}
-            >
-              <Reply size={20} color={colors.accent} />
-            </Pressable>
-            {Object.entries(reactionIcons).map(([key, Icon]) => (
-              <Pressable
-                accessibilityLabel={
-                  reactionLabels[key as keyof typeof reactionLabels]
-                }
-                key={key}
-                onPress={() =>
-                  void react(
-                    selected.reactions.some((r) => r.reaction === key && r.mine)
-                      ? null
-                      : key,
-                  )
-                }
-                style={styles.tool}
-              >
-                <Icon
-                  color={
-                    selected.reactions.some((r) => r.reaction === key && r.mine)
-                      ? colors.accent
-                      : colors.muted
-                  }
-                  size={18}
-                />
-              </Pressable>
-            ))}
-            <Pressable
-              accessibilityLabel="Fechar acoes da mensagem"
-              onPress={() => setSelected(null)}
-              style={styles.tool}
-            >
-              <X size={18} color={colors.muted} />
-            </Pressable>
-          </View>
-        )}
+        {forwarding && <ChatForwardSheet message={forwarding} outbox={outbox} onDismiss={() => setForwarding(null)} />}
+        {selected && <ChatMessageActions onForward={() => { setForwarding(selected); setSelected(null); }} message={selected} senderName={selected.senderName} onDismiss={() => setSelected(null)} onReply={() => { setReply(selected); setSelected(null); }} onReact={emoji => void react(emoji)}
+          onMention={channel === 'group' && selected.motoboyId && contacts.some(c => c.motoboyId === selected.motoboyId) ? () => { const person = contacts.find(c => c.motoboyId === selected.motoboyId)!; setDraft(text => text + '@' + person.nome + ' '); setMentions(current => [...current.filter(c => c.motoboyId !== person.motoboyId), person]); setSelected(null); } : undefined} />}
         {reply && (
           <View
             style={[styles.row, { padding: 10, backgroundColor: colors.soft }]}
@@ -1457,6 +1375,7 @@ export default function CommunicationScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
+          style={{ flexGrow: 0, flexShrink: 0, height: 46 }}
           contentContainerStyle={{
             paddingHorizontal: 16,
             gap: 7,
@@ -1473,7 +1392,7 @@ export default function CommunicationScreen() {
             <Pressable
               key={text}
               disabled={!ready || busy}
-              onPress={() => void send(text)}
+              onPress={() => setDraft(text)}
               style={[
                 styles.chip,
                 { backgroundColor: colors.soft, borderColor: colors.line },
@@ -1492,7 +1411,7 @@ export default function CommunicationScreen() {
             styles.row,
             {
               paddingHorizontal: 12,
-              paddingBottom: Math.max(insets.bottom, 14),
+              paddingBottom: 10,
               alignItems: 'flex-end',
               gap: 6,
             },
@@ -1568,6 +1487,7 @@ export default function CommunicationScreen() {
             )}
           </Pressable>
         </View>
+        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>
       </View>
     </KeyboardAvoidingView>
   );

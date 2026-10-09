@@ -1,0 +1,187 @@
+diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java b/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java
+index 3438313..2f576a1 100644
+--- a/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java
++++ b/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java
+@@ -16,6 +16,14 @@ package com.google.android.react.navsdk;
+ import android.annotation.SuppressLint;
+ import android.app.Activity;
+ import android.util.Log;
++import android.graphics.Bitmap;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.Paint;
++import android.graphics.Path;
++import android.graphics.RectF;
++import android.graphics.Typeface;
++import android.util.LruCache;
+ import androidx.core.util.Supplier;
+ import com.facebook.react.bridge.UiThreadUtil;
+ import com.google.android.gms.maps.CameraUpdateFactory;
+@@ -230,6 +238,43 @@ public class MapViewController implements INavigationViewControllerProperties {
+     }
+   }
+ 
++
++  // ?cones numerados din?micos: nenhum PNG por parada, cache limitado a 32 desenhos.
++  private static final LruCache<String, Bitmap> zippyPinCache = new LruCache<>(32);
++
++  private BitmapDescriptor markerIcon(String imagePath) {
++    if (!imagePath.startsWith("zippy-pin:")) return BitmapDescriptorFactory.fromAsset(imagePath);
++    boolean minor = imagePath.startsWith("zippy-pin:future:");
++    boolean store = imagePath.equals("zippy-pin:store");
++    String label = store ? "" : imagePath.substring(imagePath.lastIndexOf(':') + 1);
++    if (!store && !label.matches("[1-9][0-9]{0,4}")) throw new IllegalArgumentException("N?mero de parada inv?lido");
++    float scale = activitySupplier.get().getResources().getDisplayMetrics().density;
++    String key = imagePath + ":" + scale;
++    Bitmap bitmap = zippyPinCache.get(key);
++    if (bitmap == null) {
++      float w = minor ? 28 : 36, h = minor ? 32 : 41, r = minor ? 12 : 16;
++      bitmap = Bitmap.createBitmap((int) Math.ceil((w + 4) * scale), (int) Math.ceil((h + 9) * scale), Bitmap.Config.ARGB_8888);
++      Canvas canvas = new Canvas(bitmap); canvas.scale(scale, scale); canvas.translate(2, 2);
++      Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
++      Path shape = new Path(); shape.addRoundRect(new RectF(0, 0, w, h), new float[]{r,r,r,r,r,r,5,5}, Path.Direction.CW);
++      canvas.save(); canvas.translate(0, minor ? 4 : 5);
++      paint.setColor(Color.parseColor(store ? "#775940" : minor ? "#273548" : "#476a98")); canvas.drawPath(shape, paint); canvas.restore();
++      paint.setColor(Color.parseColor(store ? "#b48a60" : minor ? "#44566e" : "#8cb9f5")); canvas.drawPath(shape, paint);
++      paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setColor(Color.parseColor(store ? "#e3c89d" : minor ? "#6e86a6" : "#d5e7fe")); canvas.drawPath(shape, paint);
++      paint.setColor(Color.parseColor(store ? "#fff8e8" : minor ? "#d6dee9" : "#202b39"));
++      if (store) {
++        paint.setStrokeWidth(1.8f); Path roof = new Path(); roof.moveTo(9, 18); roof.lineTo(18, 11); roof.lineTo(27, 18); canvas.drawPath(roof, paint);
++        canvas.drawRect(11, 18, 25, 29, paint); canvas.drawRect(16, 22, 20, 29, paint);
++      } else {
++        paint.setStyle(Paint.Style.FILL); paint.setTextAlign(Paint.Align.CENTER); paint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
++        paint.setTextSize(label.length() > 3 ? 10 : minor ? 12 : 13);
++        canvas.drawText(label, w / 2, h / 2 - (paint.ascent() + paint.descent()) / 2, paint);
++      }
++      zippyPinCache.put(key, bitmap);
++    }
++    return BitmapDescriptorFactory.fromBitmap(bitmap);
++  }
++
+   public Marker addMarker(Map<String, Object> optionsMap) {
+     if (mGoogleMap == null) {
+       return null;
+@@ -272,7 +317,7 @@ public class MapViewController implements INavigationViewControllerProperties {
+     MarkerOptions options = new MarkerOptions();
+     if (imagePath != null && !imagePath.isEmpty()) {
+       try {
+-        BitmapDescriptor icon = BitmapDescriptorFactory.fromAsset(imagePath);
++        BitmapDescriptor icon = markerIcon(imagePath);
+         options.icon(icon);
+       } catch (Exception e) {
+         throw new IllegalArgumentException(JsErrors.INVALID_IMAGE_ERROR_MESSAGE);
+@@ -329,7 +374,7 @@ public class MapViewController implements INavigationViewControllerProperties {
+ 
+     if (imagePath != null && !imagePath.isEmpty()) {
+       try {
+-        BitmapDescriptor icon = BitmapDescriptorFactory.fromAsset(imagePath);
++        BitmapDescriptor icon = markerIcon(imagePath);
+         marker.setIcon(icon);
+       } catch (Exception e) {
+         throw new IllegalArgumentException(JsErrors.INVALID_IMAGE_ERROR_MESSAGE);
+diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavAutoModule.mm b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavAutoModule.mm
+index 12449c7..69286f8 100644
+--- a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavAutoModule.mm
++++ b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavAutoModule.mm
+@@ -145,7 +145,7 @@ static NavAutoModuleReadyCallback _navAutoModuleReadyCallback;
+       NSString *imgPath = optionsCopy.imgPath();
+       UIImage *icon = nil;
+       if (imgPath && [imgPath isKindOfClass:[NSString class]] && imgPath.length > 0) {
+-        icon = [UIImage imageNamed:imgPath];
++        icon = [ObjectTranslationUtil zippyMarkerImage:imgPath];
+         if (!icon) {
+           reject(@"INVALID_IMAGE", @"Failed to load image from the provided path", nil);
+           return;
+@@ -330,7 +330,7 @@ static NavAutoModuleReadyCallback _navAutoModuleReadyCallback;
+     dispatch_async(dispatch_get_main_queue(), ^{
+       NSString *imgPath = optionsCopy.imgPath();
+       UIImage *icon = (imgPath && [imgPath isKindOfClass:[NSString class]])
+-                          ? [UIImage imageNamed:imgPath]
++                          ? [ObjectTranslationUtil zippyMarkerImage:imgPath]
+                           : nil;
+ 
+       if (!icon) {
+diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavViewModule.mm b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavViewModule.mm
+index acf12d8..16f996f 100644
+--- a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavViewModule.mm
++++ b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/NavViewModule.mm
+@@ -148,7 +148,7 @@ static NavViewModule *sharedInstance = nil;
+       NSString *imgPath = optionsCopy.imgPath();
+       UIImage *icon = nil;
+       if (imgPath && [imgPath isKindOfClass:[NSString class]] && imgPath.length > 0) {
+-        icon = [UIImage imageNamed:imgPath];
++        icon = [ObjectTranslationUtil zippyMarkerImage:imgPath];
+         if (!icon) {
+           reject(@"INVALID_IMAGE", @"Failed to load image from the provided path", nil);
+           return;
+@@ -297,7 +297,7 @@ static NavViewModule *sharedInstance = nil;
+     dispatch_async(dispatch_get_main_queue(), ^{
+       NSString *imgPath = optionsCopy.imgPath();
+       UIImage *icon = (imgPath && [imgPath isKindOfClass:[NSString class]])
+-                          ? [UIImage imageNamed:imgPath]
++                          ? [ObjectTranslationUtil zippyMarkerImage:imgPath]
+                           : nil;
+ 
+       if (!icon) {
+diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.h b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.h
+index e7556f0..f90b7c7 100644
+--- a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.h
++++ b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.h
+@@ -21,6 +21,8 @@
+ 
+ @interface ObjectTranslationUtil : NSObject
+ 
+++ (nullable UIImage *)zippyMarkerImage:(NSString *)imagePath;
++
+ + (NSDictionary *)transformNavigationWaypointToDictionary:(GMSNavigationWaypoint *)waypoint;
+ + (NSDictionary *)transformCoordinateToDictionary:(CLLocationCoordinate2D)coordinate;
+ + (NSDictionary *)transformCLLocationToDictionary:(CLLocation *)location;
+diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm
+index 4232c8b..43d5d67 100644
+--- a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm
++++ b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm
+@@ -18,6 +18,44 @@
+ 
+ @implementation ObjectTranslationUtil
+ 
++// ?cones numerados din?micos; cache limitado, sem imagens inclu?das no bundle.
+++ (UIImage *)zippyMarkerImage:(NSString *)imagePath {
++  if (![imagePath hasPrefix:@"zippy-pin:"]) return [UIImage imageNamed:imagePath];
++  static NSCache<NSString *, UIImage *> *cache;
++  static dispatch_once_t onceToken;
++  dispatch_once(&onceToken, ^{ cache = [NSCache new]; cache.countLimit = 32; });
++  UIImage *existing = [cache objectForKey:imagePath]; if (existing) return existing;
++  BOOL minor = [imagePath hasPrefix:@"zippy-pin:future:"];
++  BOOL store = [imagePath isEqualToString:@"zippy-pin:store"];
++  NSString *label = [[imagePath componentsSeparatedByString:@":"] lastObject];
++  if (!store && ([label rangeOfString:@"^[1-9][0-9]{0,4}$" options:NSRegularExpressionSearch].location == NSNotFound)) return nil;
++  CGFloat w = minor ? 28 : 36, h = minor ? 32 : 41, r = minor ? 12 : 16;
++  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(w + 4, h + 9)];
++  UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
++    CGContextTranslateCTM(context.CGContext, 2, 2);
++    UIBezierPath *shape = [UIBezierPath bezierPath];
++    [shape moveToPoint:CGPointMake(r, 0)]; [shape addLineToPoint:CGPointMake(w-r, 0)];
++    [shape addQuadCurveToPoint:CGPointMake(w, r) controlPoint:CGPointMake(w, 0)]; [shape addLineToPoint:CGPointMake(w, h-r)];
++    [shape addQuadCurveToPoint:CGPointMake(w-r, h) controlPoint:CGPointMake(w, h)]; [shape addLineToPoint:CGPointMake(5, h)];
++    [shape addQuadCurveToPoint:CGPointMake(0, h-5) controlPoint:CGPointMake(0, h)]; [shape addLineToPoint:CGPointMake(0, r)];
++    [shape addQuadCurveToPoint:CGPointMake(r, 0) controlPoint:CGPointZero]; [shape closePath];
++    CGContextSaveGState(context.CGContext); CGContextTranslateCTM(context.CGContext, 0, minor ? 4 : 5);
++    [[UIColor colorWithRed:(store ? 119 : minor ? 39 : 71)/255.0 green:(store ? 89 : minor ? 53 : 106)/255.0 blue:(store ? 64 : minor ? 72 : 152)/255.0 alpha:1] setFill]; [shape fill]; CGContextRestoreGState(context.CGContext);
++    [[UIColor colorWithRed:(store ? 180 : minor ? 68 : 140)/255.0 green:(store ? 138 : minor ? 86 : 185)/255.0 blue:(store ? 96 : minor ? 110 : 245)/255.0 alpha:1] setFill]; [shape fill];
++    [[UIColor colorWithRed:(store ? 227 : minor ? 110 : 213)/255.0 green:(store ? 200 : minor ? 134 : 231)/255.0 blue:(store ? 157 : minor ? 166 : 254)/255.0 alpha:1] setStroke]; shape.lineWidth = 2; [shape stroke];
++    UIColor *text = [UIColor colorWithRed:(store ? 255 : minor ? 214 : 32)/255.0 green:(store ? 248 : minor ? 222 : 43)/255.0 blue:(store ? 232 : minor ? 233 : 57)/255.0 alpha:1];
++    if (store) {
++      [text setStroke]; UIBezierPath *roof = [UIBezierPath bezierPath]; [roof moveToPoint:CGPointMake(9,18)]; [roof addLineToPoint:CGPointMake(18,11)]; [roof addLineToPoint:CGPointMake(27,18)]; roof.lineWidth = 1.8; [roof stroke];
++      UIBezierPath *body = [UIBezierPath bezierPathWithRect:CGRectMake(11,18,14,11)]; body.lineWidth = 1.8; [body stroke]; UIBezierPath *door = [UIBezierPath bezierPathWithRect:CGRectMake(16,22,4,7)]; door.lineWidth = 1.8; [door stroke];
++    } else {
++      NSDictionary *attributes = @{ NSFontAttributeName: [UIFont boldSystemFontOfSize:label.length > 3 ? 10 : minor ? 12 : 13], NSForegroundColorAttributeName: text };
++      CGSize size = [label sizeWithAttributes:attributes]; [label drawAtPoint:CGPointMake((w-size.width)/2,(h-size.height)/2) withAttributes:attributes];
++    }
++  }];
++  [cache setObject:image forKey:imagePath]; return image;
++}
++
++
+ #pragma mark - Transformation Methods
+ 
+ + (NSDictionary *)transformCoordinateToDictionary:(CLLocationCoordinate2D)coordinate {

@@ -5,6 +5,7 @@ import { Pedido } from '../types/pedido';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import { operationalRequests } from './operationalRequests';
 import type { PayQuote } from './workApi';
+import type { OrderChecklist, ChecklistConfirmation } from '../src/delivery/checklistRules';
 
 export type EstablishmentLink = {
   estabelecimentoId: string;
@@ -162,17 +163,19 @@ export type OperationalLocationAck = {
 };
 
 export type OrderItemDetail = {
+  itemId?: string | null;
   produtoId?: string | null;
   nome: string;
   quantidade: number;
   precoUnitario?: number | null;
   observacao?: string | null;
-  adicionais: { id?: string | null; nome: string; preco: number }[];
+  adicionais: { id?: string | null; nome: string; preco: number; quantidade?: number }[];
   total?: number | null;
   imagemUrl?: string | null;
 };
 
 export type OperationalOrderDetail = {
+  checklist: OrderChecklist;
   id: number; queueVersion: number; position: number; stopStatus: string;
   isCurrent: boolean; isOffer: boolean; locked: boolean;
   assignedAtUtc: string; pickedUpAtUtc?: string | null; arrivedAtUtc?: string | null;
@@ -370,8 +373,8 @@ export async function getOperationalQueue(): Promise<MotoboyQueue> {
   });
 }
 
-export async function acceptOffer(expectedOfferId?: string, expectedVersion?: number): Promise<MotoboyQueue> {
-  const response = await apiClient.post(API_CONFIG.ENDPOINTS.ACCEPT_OFFER, expectedOfferId ? { expectedOfferId, expectedVersion } : undefined);
+export async function acceptOffer(expectedOfferId?: string, expectedVersion?: number, acceptedPedidoIds?: number[]): Promise<MotoboyQueue> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.ACCEPT_OFFER, expectedOfferId ? { expectedOfferId, expectedVersion, acceptedPedidoIds } : undefined);
   return unwrap<MotoboyQueue>(response);
 }
 
@@ -398,7 +401,7 @@ export async function arrivedAtStore(): Promise<MotoboyQueue> {
   return unwrap<MotoboyQueue>(response);
 }
 
-export async function pickUpCurrent(confirmation?: { expectedPedidoId: number; expectedVersion: number; pedidoIds: number[] }): Promise<MotoboyQueue> {
+export async function pickUpCurrent(confirmation?: { expectedPedidoId: number; expectedVersion: number; pedidoIds: number[]; checklists?: ChecklistConfirmation[] }): Promise<MotoboyQueue> {
   const response = await apiClient.post(API_CONFIG.ENDPOINTS.PICKUP_CURRENT, confirmation);
   return unwrap<MotoboyQueue>(response);
 }

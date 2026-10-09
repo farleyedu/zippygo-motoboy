@@ -1,24 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  AppState,
-  Image,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
-import {
-  AudioModule,
-  RecordingPresets,
-  setAudioModeAsync,
-  useAudioPlayer,
-  useAudioPlayerStatus,
-  useAudioRecorder,
-  useAudioRecorderState,
-} from 'expo-audio';
+import { ActivityIndicator, AppState, Image, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useIsFocused } from 'expo-router/react-navigation';
+import { AudioModule, RecordingPresets, setAudioModeAsync, useAudioPlayer, useAudioPlayerStatus, useAudioRecorder, useAudioRecorderState } from 'expo-audio';
 import { Mic, Pause, Play, Send, Trash2, X } from 'lucide-react-native';
 import { ChatAttachment, LocalChatFile } from '../../services/communicationApi';
 import { useZippyTheme } from '../ui/theme';
@@ -26,168 +9,86 @@ import { openChatFile } from './media';
 import { browserNativeTest } from '../../services/browserNativeTest';
 import { BrowserAudioComposer } from './BrowserAudioComposer';
 
-const clock = (seconds: number) =>
-  `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
-export function ChatMedia({
-  attachment,
-  foreground,
-}: {
-  attachment: ChatAttachment;
-  foreground: string;
+const clock = (seconds: number) => Math.floor(Math.max(0, seconds) / 60) + ':' + String(Math.floor(Math.max(0, seconds) % 60)).padStart(2, '0');
+const audioStops = new Set<() => void>();
+export function ChatMedia({ attachment, foreground, senderName = 'Áudio', avatarUri }: {
+  attachment: ChatAttachment; foreground: string; senderName?: string; avatarUri?: string;
 }) {
-  const [uri, setUri] = useState<string | null>(null),
-    [loading, setLoading] = useState(false),
-    [error, setError] = useState(''),
-    [expanded, setExpanded] = useState(false);
-  const player = useAudioPlayer(null),
-    status = useAudioPlayerStatus(player);
+  const { colors } = useZippyTheme(), focused = useIsFocused();
+  const [uri, setUri] = useState<string | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState(''), [expanded, setExpanded] = useState(false), [speed, setSpeed] = useState(1);
+  const player = useAudioPlayer(null, { updateInterval: 250 }), status = useAudioPlayerStatus(player);
   const image = attachment.contentType.startsWith('image/');
+  const pending = useRef(false), active = useRef(true), request = useRef(0), timer = useRef<ReturnType<typeof setTimeout> | null>(null), width = useRef(1);
+  const loaded = useRef(false); loaded.current = status.isLoaded;
   useEffect(() => {
-    let alive = true;
+    active.current = true;
+    const stop = () => { pending.current = false; request.current++; try { player.pause(); } catch {} if (active.current) setLoading(false); };
+    audioStops.add(stop);
+    const listener = AppState.addEventListener('change', next => { if (next !== 'active') stop(); });
+    return () => { active.current = false; request.current++; pending.current = false; audioStops.delete(stop); listener.remove(); if (timer.current) clearTimeout(timer.current); };
+  }, [player]);
+  useEffect(() => { if (!focused) { pending.current = false; request.current++; player.pause(); setLoading(false); setExpanded(false); } }, [focused, player]);
+  useEffect(() => {
+    if (!pending.current || !status.isLoaded || !focused) return;
+    pending.current = false;
+    if (timer.current) clearTimeout(timer.current);
+    player.setPlaybackRate(speed); player.play(); setLoading(false);
+  }, [status.isLoaded, focused, player, speed]);
+  useEffect(() => {
+    let alive = true; setUri(null); setError('');
     if (image) {
-      setUri(null);
-      setError('');
       setLoading(true);
-      void openChatFile(attachment.id, attachment.clientPedidoId)
-        .then(
-          (value) => {
-            if (alive) setUri(value);
-          },
-          () => {
-            if (alive) setError('Nao foi possivel abrir a foto.');
-          },
-        )
-        .finally(() => {
-          if (alive) setLoading(false);
-        });
+      void openChatFile(attachment.id, attachment.clientPedidoId).then(value => { if (alive) setUri(value); })
+        .catch(() => { if (alive) setError('Não foi possível abrir a foto.'); }).finally(() => { if (alive) setLoading(false); });
     }
-    return () => {
-      alive = false;
-    };
+    return () => { alive = false; };
   }, [attachment.id, attachment.clientPedidoId, image]);
   const play = async () => {
+    if (loading) return;
+    if (status.playing) { player.pause(); return; }
+    const run = ++request.current;
     try {
-      if (status.playing) {
-        player.pause();
-        return;
-      }
-      setLoading(true);
       setError('');
-      if (!uri) {
-        const source = await openChatFile(
-          attachment.id,
-          attachment.clientPedidoId,
-        );
-        setUri(source);
-        player.replace(source);
-      }
-      await setAudioModeAsync({
-        allowsRecording: false,
-        playsInSilentMode: false,
-      });
-      if (status.didJustFinish) await player.seekTo(0);
-      player.play();
+      // Interrompe outros áudios antes de adquirir o foco do aparelho.
+      for (const stop of audioStops) stop();
+      request.current = run;
+      setLoading(true);
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: 'doNotMix' });
+      const source = uri || await openChatFile(attachment.id, attachment.clientPedidoId);
+      if (!active.current || !focused || request.current !== run) return;
+      if (!uri) { setUri(source); pending.current = true; player.replace(source); }
+      else if (loaded.current) {
+        if (status.didJustFinish || status.currentTime >= status.duration && status.duration > 0) await player.seekTo(0);
+        player.setPlaybackRate(speed); player.play(); setLoading(false); return;
+      } else pending.current = true;
+      timer.current = setTimeout(() => { if (!active.current || !pending.current) return; pending.current = false; setLoading(false); setError('O áudio não abriu. Toque para tentar novamente.'); setUri(null); }, 15000);
     } catch {
-      setError('Nao foi possivel reproduzir. Toque para tentar novamente.');
-    } finally {
-      setLoading(false);
+      if (active.current && request.current === run) { pending.current = false; setLoading(false); setUri(null); setError('Não foi possível reproduzir. Toque para tentar novamente.'); }
     }
   };
-  return (
-    <View style={{ minWidth: image ? 180 : 160, maxWidth: '100%' }}>
-      {image ? (
-        <Pressable
-          accessibilityLabel="Ampliar foto"
-          onPress={() => setExpanded(true)}
-        >
-          {uri ? (
-            <Image
-              source={{ uri }}
-              style={{
-                width: 220,
-                maxWidth: '100%',
-                aspectRatio: 4 / 3,
-                borderRadius: 8,
-              }}
-              resizeMode="cover"
-            />
-          ) : (
-            <ActivityIndicator color={foreground} />
-          )}
+  const progress = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
+  const percent = `${progress * 100}%` as `${number}%`;
+  return <View style={{ minWidth: image ? 180 : 224, maxWidth: '100%' }}>
+    {image ? <Pressable accessibilityRole="button" accessibilityLabel="Ampliar foto" disabled={!uri} onPress={() => setExpanded(true)}>
+      {uri ? <Image source={{ uri }} style={{ width: 240, maxWidth: '100%', aspectRatio: 4 / 3, borderRadius: 12 }} resizeMode="cover" /> : <ActivityIndicator color={foreground} />}
+    </Pressable> : <View style={styles.row}>
+      <View style={{ width: 32, height: 32, borderRadius: 16, overflow: 'hidden', backgroundColor: colors.accentSoft, justifyContent: 'center', alignItems: 'center' }}>
+        {avatarUri ? <Image source={{ uri: avatarUri }} style={StyleSheet.absoluteFill} /> : <Text style={{ color: colors.accent, fontFamily: 'ManropeExtraBold', fontSize: 10 }}>{senderName.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase()}</Text>}
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={status.playing ? 'Pausar áudio' : 'Reproduzir áudio'} onPress={() => void play()} style={{ width: 36, height: 44, justifyContent: 'center', alignItems: 'center' }}>
+        {loading ? <ActivityIndicator color={foreground} /> : status.playing ? <Pause color={foreground} size={21} /> : <Play color={foreground} size={21} />}
+      </Pressable>
+      <View style={{ flex: 1, minWidth: 70 }}>
+        <Pressable accessibilityRole="adjustable" accessibilityLabel="Posição do áudio" accessibilityValue={{ min: 0, max: Math.round(status.duration), now: Math.round(status.currentTime), text: clock(status.currentTime) }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={e => { if (status.isLoaded) void player.seekTo(Math.max(0, Math.min(status.duration, status.currentTime + (e.nativeEvent.actionName === 'increment' ? 5 : -5)))).catch(() => setError('Não foi possível mudar a posição.')); }} onLayout={e => { width.current = e.nativeEvent.layout.width; }} onPress={e => { if (status.isLoaded && status.duration > 0) void player.seekTo(Math.max(0, Math.min(1, e.nativeEvent.locationX / width.current)) * status.duration).catch(() => setError('Não foi possível mudar a posição.')); }} style={{ height: 34, justifyContent: 'center' }}>
+          <View style={{ height: 4, borderRadius: 3, backgroundColor: foreground + '40' }}><View style={{ height: 4, borderRadius: 3, backgroundColor: foreground, width: percent }} /><View style={{ position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: foreground, top: -3, left: percent }} /></View>
         </Pressable>
-      ) : (
-        <View style={styles.row}>
-          <Pressable
-            accessibilityLabel={
-              status.playing ? 'Pausar audio' : 'Reproduzir audio'
-            }
-            onPress={() => void play()}
-            style={styles.tool}
-          >
-            {loading ? (
-              <ActivityIndicator color={foreground} />
-            ) : status.playing ? (
-              <Pause color={foreground} size={18} />
-            ) : (
-              <Play color={foreground} size={18} />
-            )}
-          </Pressable>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{ color: foreground, fontFamily: 'Manrope', fontSize: 11 }}
-            >
-              Mensagem de audio
-            </Text>
-            <Text style={{ color: foreground, fontSize: 9 }}>
-              {clock(status.currentTime)} /{' '}
-              {status.duration
-                ? clock(status.duration)
-                : attachment.size
-                  ? `${Math.round(attachment.size / 1024)} KB`
-                  : '--:--'}
-            </Text>
-          </View>
-        </View>
-      )}
-      {!!error && (
-        <Text
-          accessibilityRole="alert"
-          style={{ color: foreground, fontSize: 10 }}
-        >
-          {error}
-        </Text>
-      )}
-      <Modal
-        visible={expanded}
-        transparent
-        onRequestClose={() => setExpanded(false)}
-      >
-        <View
-          style={{
-            flex: 1,
-            backgroundColor: '#101820ee',
-            justifyContent: 'center',
-            padding: 16,
-          }}
-        >
-          <Pressable
-            accessibilityLabel="Fechar foto"
-            onPress={() => setExpanded(false)}
-            style={{ alignSelf: 'flex-end', padding: 12 }}
-          >
-            <X color="#fff" />
-          </Pressable>
-          {uri && (
-            <Image
-              source={{ uri }}
-              style={{ width: '100%', height: '70%' }}
-              resizeMode="contain"
-            />
-          )}
-        </View>
-      </Modal>
-    </View>
-  );
+        <Text style={{ color: foreground, fontFamily: 'Manrope', fontSize: 9 }}>{clock(status.currentTime)} / {status.duration ? clock(status.duration) : '—:—'}</Text>
+      </View>
+      <Pressable accessibilityRole="button" accessibilityLabel={'Velocidade ' + speed + ' vezes'} onPress={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); player.setPlaybackRate(next); }} style={{ minWidth: 38, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: foreground, fontFamily: 'ManropeExtraBold', fontSize: 10 }}>{speed}×</Text></Pressable>
+    </View>}
+    {!!error && <Text accessibilityRole="alert" style={{ color: foreground, fontSize: 10, marginTop: 6 }}>{error}</Text>}
+    <Modal visible={expanded} transparent onRequestClose={() => setExpanded(false)}><View style={{ flex: 1, backgroundColor: '#101820ee', justifyContent: 'center', padding: 16 }}><Pressable accessibilityLabel="Fechar foto" onPress={() => setExpanded(false)} style={{ alignSelf: 'flex-end', padding: 12 }}><X color="#fff" /></Pressable>{uri && <Image source={{ uri }} style={{ width: '100%', height: '70%' }} resizeMode="contain" />}</View></Modal>
+  </View>;
 }
 
 export function AudioComposer(props: { disabled: boolean; send: (file: LocalChatFile) => Promise<void>; onError: (error: string) => void }) {
@@ -224,7 +125,10 @@ function NativeAudioComposer({
     return () => {
       active.current = false;
       listener.remove();
-      if (recorder.isRecording) void recorder.stop().catch(() => undefined);
+      // No desmontar, o expo-audio ja liberou o gravador antes deste cleanup.
+      try {
+        if (recorder.isRecording) void recorder.stop().catch(() => undefined);
+      } catch {}
     };
   }, [recorder, onError]);
   const stop = async (keep: boolean) => {
@@ -258,7 +162,7 @@ function NativeAudioComposer({
         );
       await setAudioModeAsync({
         allowsRecording: true,
-        playsInSilentMode: false,
+        playsInSilentMode: true,
       });
       await recorder.prepareToRecordAsync();
       recorder.record();

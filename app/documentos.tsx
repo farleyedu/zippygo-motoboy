@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Image, Modal, Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { useRouter } from 'expo-router';
 import { Bike, Camera, Check, FileText, ImageIcon, ShieldCheck, X } from 'lucide-react-native';
 import { getOwnDocumentImage, getOwnDocuments, OwnDocument, sendOwnImage } from '../services/accountApi';

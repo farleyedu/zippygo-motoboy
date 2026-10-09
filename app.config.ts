@@ -19,18 +19,9 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     icon: './assets/images/icon.png',
     scheme: 'zippygomotoboy',
     userInterfaceStyle: 'automatic',
-    jsEngine: 'hermes',
-    newArchEnabled: true,
-    
-    splash: {
-      image: './assets/images/splash-icon.png',
-      resizeMode: 'contain',
-      backgroundColor: '#ffffff'
-    },
-    
+
     ios: {
       supportsTablet: true,
-      jsEngine: 'hermes',
       infoPlist: {
         UIBackgroundModes: ['location']
       }
@@ -39,9 +30,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     android: {
       adaptiveIcon: {
         foregroundImage: './assets/images/adaptive-icon.png',
-        backgroundColor: '#ffffff'
+        backgroundColor: '#1854cd'
       },
-      edgeToEdgeEnabled: true,
       permissions: [
         'ACCESS_FINE_LOCATION',
         'ACCESS_COARSE_LOCATION',
@@ -51,10 +41,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'RECORD_AUDIO'
       ],
       package: 'com.farleyedu.zippygomotoboy',
-      jsEngine: 'hermes',
-      // @ts-ignore - usesCleartextTraffic is a valid Android config option but not typed in Expo config
-      usesCleartextTraffic: !isProd,
-      
+
       config: {
         googleMaps: {
           apiKey: 'AIzaSyBGZgGgmNMq6Vew5M6NMS_6DRt5QiGc30U'
@@ -70,6 +57,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     
     plugins: [
       'expo-router',
+      './plugins/withNativeNavigation',
       [
         'expo-location',
         {
@@ -80,6 +68,11 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         }
       ],
       'expo-secure-store',
+      'expo-asset',
+      ['expo-splash-screen', { image: './assets/images/splash-icon.png', imageWidth: 168, resizeMode: 'contain', backgroundColor: '#10192b' }],
+      // HTTP sem TLS so fora de producao (Metro e API local).
+      ['expo-build-properties', { android: { usesCleartextTraffic: !isProd }, ios: { deploymentTarget: '16.4' } }],
+      ['expo-image-picker', { photosPermission: 'Permitir selecionar fotos para comprovantes e mensagens.', cameraPermission: 'Permitir fotografar o comprovante e a entrega.' }],
       ['expo-audio', { microphonePermission: 'Permitir gravar mensagens de audio para sua equipe e clientes.' }],
       ['expo-notifications', { sounds: ['./assets/sounds/chat_message.wav', './assets/sounds/chat_mention.wav'] }]
     ],

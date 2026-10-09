@@ -36,6 +36,7 @@ export type ChatMessage = {
   replyTo?: string;
   replyBody?: string;
   replySender?: string;
+  forwarded?: boolean;
   reactions: { reaction: string; count: number; mine: boolean }[];
 };
 export type ChatPage = {
@@ -50,6 +51,7 @@ export type ChatRequest = {
   replyTo?: string;
   mentions: number[];
   pedidoId?: number;
+  forwarded?: boolean;
 };
 export type ChatContact = {
   motoboyId: number;

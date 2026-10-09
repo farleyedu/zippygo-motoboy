@@ -1,0 +1,10 @@
+import { apiClient } from './apiService';
+import { unwrap } from './mobileApi';
+import { workWindow, type WorkPeriod } from './workApi';
+import type { OrderChecklist, ChecklistConfirmation } from '../src/delivery/checklistRules';
+export type RouteHistory = { id: string; status: 'active' | 'returning' | 'completed' | 'interrupted'; startedAtUtc: string; endedAtUtc?: string; orderCount: number; completedCount: number; earnings: number; storeCash: number; unpricedCount: number };
+export type HistoryRouteStop = { stopId: number; pedidoId: number; position: number; status: string; district?: string; latitude?: number; longitude?: number; pickedUpAtUtc?: string; arrivedAtUtc?: string; updatedAtUtc: string; amount?: number; mode?: string; storeCash: number; operationId?: string; manifest?: OrderChecklist; pickup?: ChecklistConfirmation; delivery?: ChecklistConfirmation; receipt?: { codeChecked: boolean; paidBeforeDelivery: boolean; completedAtUtc: string; payments: { method: string; amount: number; cashReceived?: number }[] } };
+export type HistoryRouteDetail = { route: RouteHistory; stops: HistoryRouteStop[]; segments: { lat: number; lng: number; capturedAtUtc: string }[][]; pathAvailable: boolean };
+export type RouteHistoryPage = { routes: RouteHistory[]; hasMore: boolean; nextOffset: number };
+export const routeHistory = async (store: string, period: WorkPeriod, offset: number, signal?: AbortSignal): Promise<RouteHistoryPage> => unwrap(await apiClient.get('/motoboys/me/routes', { params: { store, ...workWindow(period), offset }, signal }));
+export const routeHistoryDetail = async (store: string, id: string, signal?: AbortSignal): Promise<HistoryRouteDetail> => unwrap(await apiClient.get('/motoboys/me/routes/' + encodeURIComponent(id), { params: { store }, signal }));

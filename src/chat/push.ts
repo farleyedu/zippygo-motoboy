@@ -4,12 +4,20 @@ import { apiClient } from '../../services/apiService';
 import { unwrap } from '../../services/mobileApi';
 import { getSecureItem } from '../../utils/secureStorage';
 import { browserNativeTest, reportBrowserMock } from '../../services/browserNativeTest';
+import { expoGo } from '../../services/expoGo';
 
 type NotificationAccess = 'granted' | 'denied' | 'blocked' | 'unsupported';
 let permissionFlight: Promise<NotificationAccess> | null = null;
 let automaticPrompted = false;
 
 async function configureChatChannels() {
+  if (Platform.OS === 'android')
+    for (const sound of [false, true]) for (const vibration of [false, true])
+      await Notifications.setNotificationChannelAsync('delivery-offers-' + (sound ? 'sound' : 'silent') + '-' + (vibration ? 'vibrate' : 'quiet') + '-v1', {
+        name: 'Novas ofertas de entrega', importance: Notifications.AndroidImportance.HIGH,
+        sound: sound ? 'default' : null, enableVibrate: vibration,
+        vibrationPattern: vibration ? [0, 120, 80, 120] : undefined, lightColor: '#2872e3', bypassDnd: false,
+      });
   if (Platform.OS === 'android')
     for (const mentioned of [false, true])
       for (const sound of [false, true])
@@ -80,7 +88,8 @@ export async function registerChatPush(
     mentionAlerts: boolean;
   },
 ) {
-  if (Platform.OS === 'web') return;
+  // Expo Go nao registra push remoto; avisos locais continuam funcionando.
+  if (Platform.OS === 'web' || expoGo) return;
   if ((await ensureChatNotificationPermission()) !== 'granted') return;
   const token = await Notifications.getExpoPushTokenAsync({
     projectId: 'fcf691e3-47a6-446f-9e6a-5c2bcf7ee6c7',

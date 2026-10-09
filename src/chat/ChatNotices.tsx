@@ -79,6 +79,7 @@ function MountedChatNotices() {
             const data = event.notification.request.content.data;
             if (
               !alive ||
+              !data ||
               typeof data.chatMessageId !== 'string' ||
               typeof data.threadKey !== 'string' ||
               data.recipientSessionId !== turn.session?.sessionId
@@ -194,8 +195,11 @@ function MountedChatNotices() {
       unsubscribe();
       state.remove();
       setNotice(null);
-      regular.pause();
-      mention.pause();
+      // No desmontar, o expo-audio ja liberou os players antes deste cleanup.
+      try {
+        regular.pause();
+        mention.pause();
+      } catch {}
     };
   }, [owner, turn.session?.sessionId, tenant, regular, mention]);
   useEffect(() => {

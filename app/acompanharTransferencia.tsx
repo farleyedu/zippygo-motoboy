@@ -1,6 +1,6 @@
 import React, { useCallback, useRef, useState } from 'react';
 import { Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Check, Clock, MessageCircle, Package, X } from 'lucide-react-native';
 import { cancelTransfer, getTransfers, Transfer } from '../services/routeApi';

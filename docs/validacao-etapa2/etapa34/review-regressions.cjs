@@ -40,7 +40,7 @@ function harness(relative, mocks = {}) {
   mod.require = name => {
     if (name === 'react') return react;
     if (name === 'react-native') return native;
-    if (name === '@react-navigation/native') return { useIsFocused: () => true, useFocusEffect: fn => react.useEffect(fn, [fn]) };
+    if (name === '@react-navigation/native' || name === 'expo-router/react-navigation') return { useIsFocused: () => true, useFocusEffect: fn => react.useEffect(fn, [fn]) };
     if (Object.hasOwn(mocks, name)) return mocks[name];
     if (name.includes('/ui/Kit') || name === './Kit') return { Button: 'Button', Screen: 'Screen', type: {}, money: String };
     if (name.endsWith('/theme')) return { useZippyTheme: () => ({ colors: {}, dark: false, reducedMotion: true }) };
@@ -100,8 +100,8 @@ test('Acao de rota nao chama a API quando a recuperacao esta bloqueada', async (
   assert.equal(calls, 0); assert.equal(h.render('useRouteAction').error, 'Registro ilegivel');
 });
 
-test('Centrar e consumido uma vez; novo GPS nao centraliza; outro toque centraliza', () => {
-  const h = harness('components/Mapa.native.tsx', { 'expo-location': { getForegroundPermissionsAsync: async () => ({ granted: false }) } });
+test('Mapa legado: Centrar e consumido uma vez; novo GPS nao centraliza; outro toque centraliza', () => {
+  const h = harness('components/LegacyMapa.tsx', { 'expo-location': { getForegroundPermissionsAsync: async () => ({ granted: false }) } });
   const calls = [];
   h.render('default', { pedidos: [], emEntrega: true });
   h.refs[0].current = { animateToRegion: coords => calls.push(coords), animateCamera() {} };
@@ -116,8 +116,8 @@ test('Centrar e consumido uma vez; novo GPS nao centraliza; outro toque centrali
   h.close();
 });
 
-test('Modo rota continua acompanhando cada posicao do GPS', () => {
-  const h = harness('components/Mapa.native.tsx', { 'expo-location': { getForegroundPermissionsAsync: async () => ({ granted: false }) } });
+test('Mapa legado: Modo rota continua acompanhando cada posicao do GPS', () => {
+  const h = harness('components/LegacyMapa.tsx', { 'expo-location': { getForegroundPermissionsAsync: async () => ({ granted: false }) } });
   const calls = [];
   h.render('default', { pedidos: [], emEntrega: true, routeMode: true });
   h.refs[0].current = { animateCamera: camera => calls.push(camera) };
@@ -136,6 +136,10 @@ function orderFixture({ changedSession = false, blocked = false } = {}) {
   const h = harness('app/pedido/[id].tsx', {
     'expo-router': { useLocalSearchParams: () => ({ id: '23' }), useRouter: () => ({ push: route => calls.push(['push', route]) }), Stack: {} },
     '../../src/contexts/AuthContext': { useAuth: () => ({}) },
+    '../../src/hooks/useOrderChecklists': { useOrderChecklists: () => ({
+      loading: false, error: '', confirmations: [], primaryReady: false, ready: false,
+      toggle: async () => {},
+    }) },
     '../../src/contexts/DeliveryCompletionContext': { useDeliveryCompletion: () => ({ assertRouteMutationAllowed() { if (blocked) throw new Error('Registro ilegivel'); } }) },
     '../../src/contexts/OperationalSessionContext': { useOperationalSession: () => ({ store: {
       getSnapshot: () => ({ session, queue }), updateQueue: saved => { queue = saved; calls.push(['queue', saved]); },

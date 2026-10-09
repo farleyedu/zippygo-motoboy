@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect } from 'expo-router/react-navigation';
 import { useRouter } from 'expo-router';
 import { Check, MapPin, MessageCircle, Navigation, Store } from 'lucide-react-native';
 import { arrivedAtStore } from '../services/mobileApi';

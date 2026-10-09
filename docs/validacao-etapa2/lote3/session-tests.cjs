@@ -163,6 +163,7 @@ function trackingFixture(options = {}) {
     'expo-location': { Accuracy: { Balanced: 3 }, getCurrentPositionAsync: async () => options.currentPosition ? options.currentPosition() : location(0), hasStartedLocationUpdatesAsync: async () => true, stopLocationUpdatesAsync: async () => lifecycle.push('stop') },
     '../utils/secureStorage': storage,
     './mobileApi': api,
+    'react-native': { Platform: { OS: 'android' }, Linking: {} },
   });
   return { tracking, api, secure, queues, sent, requests, lifecycle, fail: value => { failure = value; } };
 }
