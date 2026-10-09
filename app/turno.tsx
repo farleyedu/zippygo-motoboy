@@ -23,7 +23,7 @@ export default function TurnScreen() {
     <Surface><Text style={[type.small, { color: colors.muted }]}>Estabelecimento</Text><Text style={[type.body, { color: colors.ink, marginBottom: 12 }]}>{auth.estabelecimentoAtual?.nome}</Text><Text style={[type.small, { color: colors.muted }]}>Situação</Text><Text style={[type.body, { color: colors.ink }]}>{paused ? 'Chamados pausados' : 'Disponível para novos chamados'}</Text></Surface>
     <AccountNotice icon={ShieldCheck}>A localização permanece compartilhada com a loja enquanto seu turno estiver ativo, inclusive na pausa.</AccountNotice>
     <Button secondary icon={Wallet} onPress={() => router.push('/resumoTurno')}>Conferir resumo do turno</Button>
-    {action.error && <Feedback title="A disponibilidade não mudou" message={action.error} />}{endError && <Feedback title="Seu turno foi mantido" message={endError} />}
+    {!!action.error && <Feedback title="A disponibilidade não mudou" message={action.error} />}{!!endError && <Feedback title="Seu turno foi mantido" message={endError} />}
     <View style={{ marginTop: 18 }}><Button secondary icon={Check} disabled={ending || action.busy} onPress={() => setConfirmEnd(v => !v)}>{confirmEnd ? 'Continuar o turno' : 'Encerrar meu turno'}</Button>{confirmEnd && <View style={{ marginTop: 10 }}><Button icon={Check} loading={ending} onPress={() => void end()}>Confirmar encerramento</Button></View>}</View>
   </RouteScreen>;
 }

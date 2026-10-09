@@ -18,7 +18,7 @@ export default function SettingsScreen() {
       <MenuRow icon={Waves} title="Reduzir movimento" subtitle="Menos efeitos e animação decorativa." right={<Switch accessibilityLabel="Reduzir movimento" value={theme.reducedMotion} onValueChange={v => void set('reducedMotion', v)} trackColor={{ false: colors.line, true: '#629afb' }} />} />
       <MenuRow icon={Bell} title="Som & vibração" subtitle="Chamados importantes e mensagens." last onPress={() => router.push('/somVibracao')} />
     </Surface>
-    {error && <Feedback title="Confira suas preferências" message={error} />}
+    {!!error && <Feedback title="Confira suas preferências" message={error} />}
     <SectionTitle>No caminho</SectionTitle>
     <Surface style={{ paddingHorizontal: 15, paddingVertical: 0 }}>
       <MenuRow icon={Map} title="Navegador preferido" subtitle={`${theme.navigationApp} · abrir por pedido`} onPress={() => setNavigation(true)} />

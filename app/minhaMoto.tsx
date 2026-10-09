@@ -25,9 +25,9 @@ export default function VehicleScreen() {
   return <AccountScreen>
     <Header title="Seu parceiro de caminho." subtitle="Minha moto" onBack={() => router.back()} />
     <Surface hero style={{ alignItems: 'center', padding: 24 }}><Bike size={44} color="#a8c4e9" strokeWidth={1.3} style={{ marginTop: 5, marginBottom: 17 }} /><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 26, letterSpacing: -1, color: colors.heroInk, textAlign: 'center', marginBottom: 6 }}>{data.account?.modeloMoto || 'Sua moto'}</Text><Text style={{ fontFamily: 'Manrope', fontSize: 11, color: colors.heroMuted, marginBottom: 12 }}>{data.account?.anoMoto ? `Modelo ${data.account.anoMoto}` : 'Seu parceiro de entregas'}</Text>{data.account?.placaMoto && <Pill icon={ShieldCheck} inverse>{data.account.placaMoto}</Pill>}</Surface>
-    {data.loading && <Feedback title="Carregando sua moto" loading />}{data.error && <Feedback title="Sua moto não carregou" message={data.error} onRetry={() => void data.reload()} />}
+    {data.loading && <Feedback title="Carregando sua moto" loading />}{!!data.error && <Feedback title="Sua moto não carregou" message={data.error} onRetry={() => void data.reload()} />}
     <View style={{ gap: 15, marginTop: 22, marginBottom: 18 }}><Field label="Modelo" value={modelo} onChangeText={setModelo} editable={!blocked} maxLength={120} error={errors.modelo} /><Field label="Placa" value={placa} onChangeText={setPlaca} autoCapitalize="characters" editable={!blocked} maxLength={8} error={errors.placa} /><Field label="Ano" value={ano} onChangeText={setAno} keyboardType="number-pad" editable={!blocked} maxLength={4} error={errors.ano} /></View>
-    {save.failure && <Feedback title="Sua moto foi mantida" message={save.failure} />}{save.success && <AccountNotice icon={Check}>{save.success}</AccountNotice>}
+    {!!save.failure && <Feedback title="Sua moto foi mantida" message={save.failure} />}{!!save.success && <AccountNotice icon={Check}>{save.success}</AccountNotice>}
     <Button icon={Check} loading={save.saving} disabled={blocked} onPress={submit}>Salvar veículo</Button><View style={{ height: 15 }} /><Button secondary icon={FileText} onPress={() => router.push('/documentos')}>Ver documentos</Button>
   </AccountScreen>;
 }

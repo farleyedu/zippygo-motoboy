@@ -1,0 +1,18 @@
+{
+  "results": [
+    "claro: 2/5 telas restantes abriram sem crash/overflow",
+    "escuro: 2/5 telas restantes abriram sem crash/overflow"
+  ],
+  "errors": [
+    "http://127.0.0.1:8198/ :: console: Failed to load resource: net::ERR_FAILED",
+    "http://127.0.0.1:8198/mapa :: console: Failed to load resource: net::ERR_FAILED"
+  ],
+  "failures": [
+    "11-online-claro: page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    "12-pause-claro: page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    "14-orders-claro: page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    "11-online-escuro: page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    "12-pause-escuro: page.evaluate: Execution context was destroyed, most likely because of a navigation",
+    "14-orders-escuro: page.evaluate: Execution context was destroyed, most likely because of a navigation"
+  ]
+}

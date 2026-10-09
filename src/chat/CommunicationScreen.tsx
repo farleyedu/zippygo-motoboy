@@ -1461,6 +1461,7 @@ export default function CommunicationScreen() {
             paddingHorizontal: 16,
             gap: 7,
             paddingBottom: 10,
+            alignItems: 'center',
           }}
         >
           {(channel === 'store'
@@ -1608,6 +1609,7 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   chip: {
+    alignSelf: 'center',
     borderWidth: 1,
     borderRadius: 20,
     paddingVertical: 8,

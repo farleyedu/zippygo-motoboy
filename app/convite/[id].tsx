@@ -26,7 +26,7 @@ export default function ConviteScreen() {
     <Header title="Tem um convite pra você." onBack={() => { if (!blocked) router.replace('/selecionarRestaurante'); }} />
     <View style={{ gap: 18, marginBottom: 26 }}><View style={{ width: 76, height: 76, borderRadius: 25, backgroundColor: colors.accentSoft, alignItems: 'center', justifyContent: 'center' }}><Users size={32} color={colors.accent} /></View><Text accessibilityRole="header" style={[type.title, { fontSize: 32, lineHeight: 40, color: colors.ink }]}>Uma nova equipe.{'\n'}Mais um <Text style={{ color: colors.accent }}>caminho.</Text></Text></View>
     {data.loading && <Feedback title="Consultando convite" loading />}
-    {data.error && <Feedback title="Não foi possível continuar" message={data.error} onRetry={() => void data.reload()} />}
+    {!!data.error && <Feedback title="Não foi possível continuar" message={data.error} onRetry={() => void data.reload()} />}
     {!data.loading && !data.error && (result ? <>
       <Feedback title={result === 'accepted' ? 'Convite aceito' : 'Convite recusado'} message={result === 'accepted' ? 'A loja confirmou seu vínculo. Confira seus estabelecimentos antes de iniciar o turno.' : 'Sua resposta foi registrada. Você pode procurar outra equipe.'} />
       <Button onPress={() => router.replace('/selecionarRestaurante')}>Ver meus vínculos</Button>

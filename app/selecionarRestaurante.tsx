@@ -36,7 +36,7 @@ export default function SelecionarRestauranteScreen() {
       <Header title="Onde vamos hoje?" subtitle="Escolha seu estabelecimento." onBack={() => { if (!blocked) router.replace(current ? '/' : '/(auth)/login'); }} />
       <Surface hero><Text style={[type.eyebrow, { color: colors.heroMuted }]}>SUA EQUIPE, SUA BASE.</Text><Text accessibilityRole="header" style={[type.title, { color: colors.heroInk, fontSize: 28, lineHeight: 35, marginTop: 15 }]}>O turno começa aqui.</Text><Text style={[type.body, { color: colors.heroMuted, marginTop: 12 }]}>Um lugar de cada vez. Um caminho bem definido.</Text></Surface>
       {data.loading && <View style={{ marginTop: 18 }}><Feedback title="Carregando seus vínculos" loading /></View>}
-      {data.error && <View style={{ marginTop: 18 }}><Feedback title="Não foi possível continuar" message={data.error} onRetry={() => void data.reload()} /></View>}
+      {!!data.error && <View style={{ marginTop: 18 }}><Feedback title="Não foi possível continuar" message={data.error} onRetry={() => void data.reload()} /></View>}
       {!data.loading && <>
         <SectionTitle right={<AuthLink disabled={blocked} onPress={() => router.push('/solicitarRestaurante')}>Buscar loja</AuthLink>}>Meus vínculos</SectionTitle>
         <View style={{ gap: 12 }}>{data.links.map(link => <StoreCard key={link.estabelecimentoId} name={link.nome} detail="Vínculo de motoboy ativo" selected={selectedId === link.estabelecimentoId} disabled={blocked} onPress={() => setPending(link.estabelecimentoId)}><Pill>APROVADO</Pill></StoreCard>)}</View>

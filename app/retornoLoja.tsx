@@ -24,6 +24,6 @@ export default function ReturnScreen() {
     <Surface hero><Store size={32} color={colors.heroMuted} /><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 29, lineHeight: 33, letterSpacing: -1, color: colors.heroInk, marginTop: 16 }}>{'De volta\nà sua equipe.'}</Text><Text style={[type.small, { color: colors.heroMuted, marginTop: 12 }]}>{auth.estabelecimentoAtual?.nome}</Text></Surface><View style={{ height: 15 }} /><MiniRouteMap queue={turn.queue} caption="A loja acompanha seu retorno." />
     <AccountNotice icon={MapPin}>{turn.queue?.routeState === 'returning' ? 'Seu retorno faz parte da operação. Confirme a chegada somente quando estiver no estabelecimento.' : 'O retorno foi encerrado. Confira o início para a próxima rota.'}</AccountNotice>
     <View style={{ gap: 10 }}><Button secondary icon={Navigation} disabled={!store} onPress={() => void navigate()}>Navegar até a loja</Button><Button secondary icon={MessageCircle} onPress={() => router.push({ pathname: '/conversas', params: { channel: 'store' } })}>Falar com o estabelecimento</Button></View>
-    {(error || action.error) && <Feedback title="Confira seu retorno" message={error || action.error} />}
+    {!!(error || action.error) && <Feedback title="Confira seu retorno" message={error || action.error} />}
   </RouteScreen>;
 }

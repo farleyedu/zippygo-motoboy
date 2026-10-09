@@ -22,6 +22,6 @@ export default function PickupScreen() {
     <Surface style={{ paddingVertical: 0 }}>{stops.map((s, i) => <StopRow key={s.pedidoId} stop={s} index={i} checked={checked.includes(s.pedidoId)} onCheck={() => { if (!action.busy && !s.pickedUpAtUtc) setChecked(previous => previous.includes(s.pedidoId) ? previous.filter(id => id !== s.pedidoId) : [...previous, s.pedidoId]); }} />)}{!stops.length && <Text style={[type.body, { color: colors.muted, paddingVertical: 20 }]}>Não há pedidos para retirar.</Text>}</Surface>
     {stops.filter(s => s.pedido?.tipoPagamento?.toLowerCase().includes('dinheiro') && s.pedido.statusPagamento?.toLowerCase() !== 'pago').map(s => <AccountNotice key={s.pedidoId} icon={Wallet} warning>{`#${s.pedidoId} · Dinheiro previsto.${s.pedido?.troco != null && s.pedido.value != null ? ` Troco: ${money(Math.max(0, s.pedido.troco - s.pedido.value))}.` : ' Confira o troco com a loja.'}`}</AccountNotice>)}
     <View style={{ height: 14 }} /><Button secondary icon={MessageCircle} onPress={() => router.push({ pathname: '/conversas', params: { channel: 'store' } })}>Falar com o estabelecimento</Button>
-    {action.error && <Feedback title="A retirada não foi confirmada" message={action.error} onRetry={() => void turn.store.refreshQueue()} />}
+    {!!action.error && <Feedback title="A retirada não foi confirmada" message={action.error} onRetry={() => void turn.store.refreshQueue()} />}
   </RouteScreen>;
 }

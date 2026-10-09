@@ -110,7 +110,9 @@ Não estimar dias ou percentual global só pelo número de telas: cobrança, tra
 - [ ] Validação da etapa 1 com app/API reais em ambiente de teste e revisão Android. A revisão Expo Web com API interceptada e testes backend já passou.
 - [x] Código do lote 2.4 e etapas 3/4 implementado localmente, incluindo conta própria, turno/rota e conclusão transacional idempotente.
 - [ ] Conferir estes lotes em Android contra o HTML e percorrer app/API/admin com banco de teste. APK compilado/instalado; conferência nativa bloqueada nesta rodada.
-- [ ] Etapas 5/6/7: comunicação completa, histórico/financeiro/suporte/segurança e auditoria das 61 telas. Chat existente não conclui etapa 5.
+- [x] Etapa 5: comunicação completa (chat loja/cliente/colega/grupo), confirmada ponta a ponta em 08/10/2026.
+- [x] Etapa 6: histórico/financeiro/suporte/segurança, incluindo período parcial proporcional e aplicação retroativa a pedidos antigos, implementados em 08/10/2026.
+- [ ] Etapa 7 (auditoria das 61 telas): varredura estrutural das 61/61 telas concluída em 08/10/2026 (claro/escuro, 0 avisos de console, 2 bugs reais corrigidos). Falta: verificação manual do mapa (9 telas, headless não renderiza Mapbox), fidelidade visual pixel a pixel contra o HTML, jornada HTTP real (7.2) e Android físico (7.3). Ver [validacao-etapa7/README.md](../validacao-etapa7/README.md).
 
 Verificação vigente: backend 949 testes (23 PostgreSQL real local), TypeScript mobile/admin, exportação Web, testes de domínio e roteiros com API interceptada. Android compilado; revisão em aparelho necessária. Resultados em ETAPA-3-4.md; verificações da etapa 1/2 nos documentos respectivos são históricas.
 

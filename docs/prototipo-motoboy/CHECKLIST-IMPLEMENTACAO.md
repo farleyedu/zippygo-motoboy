@@ -35,14 +35,14 @@ Cada tela pertence a uma etapa principal. Recuperação de rede, permissões, ca
 | 25 | Comprovante da entrega · `proof` | 4 | Implementado no Expo/API pertinente | Câmera/galeria e foto privada; política autoritativa por loja/pedido | PostgreSQL local e Web com API interceptada; Android/API reais pendentes; EXIF testado no backend; câmera/galeria nativas pendentes |
 | 26 | Entrega concluída · `success` | 4 | Implementado no Expo/API pertinente | Recibo imutável do dono; próximo somente após ACK | PostgreSQL local e Web com API interceptada; Android/API reais pendentes |
 | 27 | Retorno à loja · `return` | 3 | Implementado no Expo/API pertinente | Endereço real da loja e arrived-at-store existentes | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
-| 28 | Central de conversas · `chats` | 5 | Código inicial | Texto inicial; completar central/contadores | Pendente |
-| 29 | Chat · estabelecimento · `chat-store` | 5 | Código inicial | Texto existente; completar histórico/mídia/interações | Pendente |
-| 30 | Chat · cliente · `chat-client` | 5 | Código inicial | Leitura/canal adicionados; completar mídia/interações | Web simulado; integração/Android pendentes |
-| 31 | Chat · outro motoboy · `chat-rider` | 5 | Pendente | Criar conversa privada; reutilizar vínculos/contatos | Pendente |
-| 32 | Grupo da loja · `chat-group` | 5 | Código inicial | Texto existente; completar mídia/interações | Pendente |
-| 33 | Detalhes do grupo · `group-details` | 5 | Pendente | Reutilizar roster; completar participantes/preferências | Pendente |
-| 34 | Nova conversa · `contacts` | 5 | Pendente | Consulta operacional adicionada; completar seleção/canais | Pendente |
-| 35 | Notificações · `notifications` | 5 | Pendente | Verificar eventos/push e persistência de leitura | Pendente |
+| 28 | Central de conversas · `chats` | 5 | Implementado (`view=contacts/group/notifications` dentro de `CommunicationScreen.tsx`) | Abas Todas/Loja/Clientes/Colegas, badge de não lida por canal | Auditado em 08/10/2026 (reconsulta de código, sem captura nova nesta rodada); corrige status anterior desatualizado |
+| 29 | Chat · estabelecimento · `chat-store` | 5 | Implementado ponta a ponta | `CommunicationController`/`CommunicationService`; texto, mídia (foto/áudio), reply, reação; fila offline com retry (`src/chat/outbox.ts`) | Auditado em 08/10/2026; admin consome o mesmo endpoint |
+| 30 | Chat · cliente · `chat-client` | 5 | Implementado dentro do escopo de negócio do WhatsApp | `ClientCommunicationController`, envio real via `WhatsAppSender`; sem reação/menção por regra de negócio (não existem no WhatsApp real do cliente) | Auditado em 08/10/2026; integração/Android pendentes |
+| 31 | Chat · outro motoboy · `chat-rider` | 5 | Implementado — canal interno chama-se `private`, não "rider" | Thread simétrica `private:{min}:{max}`, exige vínculo ativo na mesma loja dos dois lados | Auditado em 08/10/2026; testado em `Tests/Unit/CommunicationTests.cs`/`Tests/Integration/CommunicationDatabaseTests.cs` |
+| 32 | Grupo da loja · `chat-group` | 5 | Implementado nas 3 pontas | Texto/mídia/reply/reação (4 tipos, incl. "alert", corrigido no admin em 08/10/2026)/menção com autocomplete | Auditado em 08/10/2026 |
+| 33 | Detalhes do grupo · `group-details` | 5 | Implementado (`view=group`) | Participantes + online derivado de `motoboy_active_sessions`; mute e aviso de menção persistidos | Auditado em 08/10/2026 |
+| 34 | Nova conversa · `contacts` | 5 | Implementado (`view=contacts`) | `GET .../session/contacts`, busca por nome, badge de não lida por colega | Auditado em 08/10/2026 |
+| 35 | Notificações · `notifications` | 5 | Implementado ponta a ponta | Registro de token Expo, `ChatPushWorker` real, dismiss persistido, toast in-app, deep link ao tocar | Auditado em 08/10/2026 |
 | 36 | Histórico de entregas · `history` | 6 | Implementado localmente | Consulta própria por loja e datas, ocorrências, sem dados privados do cliente | SQL/testes locais; Web em validação; Android/API integrada pendentes; ETAPA-6.md |
 | 37 | Recibo & linha do tempo · `history-detail` | 6 | Implementado localmente | Recibo autorizado e timestamps do servidor, sem código/foto privada | SQL/testes locais; Web em validação; Android/API integrada pendentes; ETAPA-6.md |
 | 38 | Meus ganhos · `earnings` | 6 | Implementado com limites | Loja define modalidade, cotação congelada, saldo separado do dinheiro dos clientes, período parcial proporcional, entregas antigas aplicáveis sob demanda (backfill) | Testes SQL/regras unitários; testes de integração do período parcial/backfill escritos mas não executados nesta sessão (sem Postgres local); ETAPA-6.md |
@@ -68,7 +68,7 @@ Cada tela pertence a uma etapa principal. Recuperação de rede, permissões, ca
 | 58 | Rota atualizada pela loja · `changed` | 3 | Implementado no Expo/API pertinente | Fila/eventos versionados e revisão da sequência | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
 | 59 | Revisar sequência · `conflict` | 3 | Implementado no Expo/API pertinente | Conflito 409 preserva servidor e pede revisão | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
 | 60 | Oferta encerrada · `offer-expired` | 3 | Implementado no Expo/API pertinente | Oferta vencida/substituída não aceita por ID antigo | Web/TypeScript e regras backend pertinentes; Android/API reais pendentes |
-| 61 | Canal indisponível · `channel-unavailable` | 5 | Pendente | Canal/regras existentes; completar estado nativo | Pendente |
+| 61 | Canal indisponível · `channel-unavailable` | 5 | Implementado em `ClientConversation.tsx` | Estados iFood/sem conversa/nunca escreveu/janela fechada (`channelReasons`), cada um com texto próprio | Auditado em 08/10/2026 |
 
 ## Atualização ao concluir um lote
 

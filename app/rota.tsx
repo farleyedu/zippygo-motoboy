@@ -24,6 +24,6 @@ export default function RouteOrganizeScreen() {
     {changed && <AccountNotice warning icon={Lock}>A loja mudou a fila. Sua edição foi descartada: confira a nova sequência antes de continuar.</AccountNotice>}
     <SectionTitle>Sequência das entregas</SectionTitle><Surface style={{ paddingVertical: 0 }}>{ids.map((id, index) => { const stop = stops.find(s => s.pedidoId === id); return stop && <View key={id} onLayout={event=>{rowHeights.current[id]=event.nativeEvent.layout.height;}}><StopRow stop={stop} index={index} right={allowed && index >= firstMovable && !stop.locked ? <ReorderHandle label={`Mudar posição do pedido ${id}`} onDrop={distance=>drop(index,distance)}/> : <Lock size={15} color={colors.muted} />} /></View>; })}{!ids.length && <Text style={[type.body, { color: colors.muted, paddingVertical: 20 }]}>Sua fila está vazia. Novas ofertas aparecem no início.</Text>}</Surface>
     <AccountNotice icon={Lock}>{allowed ? 'A entrega atual e os pedidos travados mantêm sua posição. A loja acompanha a sequência que você confirma.' : 'A loja mantém a ordem fixa nesta operação.'}</AccountNotice>
-    {action.error && <Feedback title="A sequência não foi salva" message={action.error} onRetry={() => void turn.store.refreshQueue()} />}
+    {!!action.error && <Feedback title="A sequência não foi salva" message={action.error} onRetry={() => void turn.store.refreshQueue()} />}
   </RouteScreen>;
 }

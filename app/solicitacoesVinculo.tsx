@@ -21,7 +21,7 @@ export default function SolicitacoesVinculoScreen() {
     <Header title="Solicitação de vínculo" subtitle="Acompanhe as respostas." onBack={() => { if (!blocked) router.replace('/selecionarRestaurante'); }} />
     <View style={{ gap: 16, marginBottom: 24 }}><View style={{ width: 72, height: 72, borderRadius: 24, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.warningSoft }}><Clock3 size={30} color={colors.warning} /></View><Text accessibilityRole="header" style={[type.title, { fontSize: 30, lineHeight: 38, color: colors.ink }]}>{title}</Text><Text style={[type.body, { color: colors.muted }]}>A solicitação só libera o trabalho depois da aprovação e da confirmação do vínculo ativo.</Text></View>
     {data.loading && <Feedback title="Consultando solicitações" loading />}
-    {data.error && <Feedback title="Não foi possível consultar" message={data.error} onRetry={() => void data.reload()} />}
+    {!!data.error && <Feedback title="Não foi possível consultar" message={data.error} onRetry={() => void data.reload()} />}
     {!data.loading && !data.error && <View style={{ gap: 14 }}>
       {visible.map(item => {
         const linked = data.links.some(link => link.estabelecimentoId === item.estabelecimentoId);

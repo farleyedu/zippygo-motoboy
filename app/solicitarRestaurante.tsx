@@ -26,7 +26,7 @@ export default function SolicitarRestauranteScreen() {
     <Field label="Buscar estabelecimento" placeholder="Nome ou cidade…" value={query} onChangeText={setQuery} autoCorrect={false} editable={!data.busy} />
     <Surface style={{ marginTop: 18, marginBottom: 18 }}><View style={{ flexDirection: 'row', gap: 10 }}><ShieldCheck size={20} color={colors.accent} /><Text style={[type.body, { color: colors.muted, flex: 1 }]}>A loja precisa aprovar o vínculo antes do seu primeiro turno.</Text></View></Surface>
     {data.loading && <Feedback title="Buscando estabelecimentos" loading />}
-    {data.error && <Feedback title="Não foi possível continuar" message={data.error} onRetry={() => void data.reload()} />}
+    {!!data.error && <Feedback title="Não foi possível continuar" message={data.error} onRetry={() => void data.reload()} />}
     {!data.loading && !data.error && <View style={{ gap: 12 }}>
       {found.map(store => {
         const linked = data.links.some(link => link.estabelecimentoId === store.id);

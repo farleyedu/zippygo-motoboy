@@ -20,7 +20,7 @@ export default function ProfileScreen() {
       {account && <Pill icon={ShieldCheck} tone={account.statusCadastro === 'ativo' ? 'accent' : 'warning'}>{account.statusCadastro === 'ativo' ? 'CADASTRO ATIVO' : account.statusCadastro.toUpperCase()}</Pill>}
       <View style={{ marginTop: 16, alignItems: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 16, color: colors.ink }}>{auth.estabelecimentos.length}</Text><Text style={{ fontFamily: 'Manrope', fontSize: 8, color: colors.muted, marginTop: 4 }}>vínculos ativos</Text></View>
     </View>
-    {loading && <Feedback title="Carregando seu cadastro" loading />}{error && <Feedback title="Seu cadastro não carregou" message={error} onRetry={() => void reload()} />}
+    {loading && <Feedback title="Carregando seu cadastro" loading />}{!!error && <Feedback title="Seu cadastro não carregou" message={error} onRetry={() => void reload()} />}
     <Surface style={{ paddingVertical: 0, paddingHorizontal: 15 }}>
       <MenuRow icon={UserRound} title="Meus dados" subtitle="Nome, telefone e acesso" onPress={() => router.push('/dadosPessoais')} />
       <MenuRow icon={Bike} title="Minha moto" subtitle={account?.modeloMoto ? [account.modeloMoto, account.placaMoto].filter(Boolean).join(' · ') : 'Modelo, placa e ano'} onPress={() => router.push('/minhaMoto')} />
