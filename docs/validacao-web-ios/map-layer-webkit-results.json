@@ -1,0 +1,45 @@
+{
+  "engine": "webkit",
+  "baseline": false,
+  "cases": [
+    {
+      "theme": "light",
+      "mode": "delivery",
+      "panResume": true,
+      "chooser": true,
+      "routeLink": true,
+      "checks": "/pedido/23"
+    },
+    {
+      "theme": "light",
+      "mode": "pickup",
+      "checks": "/retirada"
+    },
+    {
+      "theme": "light",
+      "mode": "return",
+      "checks": "/retornoLoja"
+    },
+    {
+      "theme": "dark",
+      "mode": "delivery",
+      "panResume": true,
+      "chooser": true,
+      "routeLink": true,
+      "checks": "/pedido/23"
+    },
+    {
+      "theme": "dark",
+      "mode": "pickup",
+      "checks": "/retirada"
+    },
+    {
+      "theme": "dark",
+      "mode": "return",
+      "checks": "/retornoLoja"
+    }
+  ],
+  "errors": [],
+  "failedRequests": [],
+  "ok": true
+}

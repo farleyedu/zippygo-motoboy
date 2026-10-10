@@ -16,6 +16,20 @@ O backend recebe `clientPlatform: "web"` no início e guarda `device_type = 'web
 
 **Horários:** o painel usa o horário da captura confirmada, não o horário de chegada de um lote antigo. `HasRecentLocation` informa frescor independentemente de `Location`, que conserva a última posição. Não inferir localização atual a partir do estado do turno.
 
+## Controles do mapa web — 10/10/2026
+
+Corrigida a sobreposição dos tiles e panes do Leaflet sobre o painel da rota no tema claro. O elemento do mapa tem posição relativa, `zIndex: 0` e `isolation: isolate`: as camadas internas continuam ordenadas dentro dele, abaixo dos controles do app. Antes, um botão podia aceitar cliques mesmo estando visualmente coberto pelo mapa.
+
+O painel web oferece **Conferir pedido**, **Conferir coleta** ou **Conferir retorno**, conforme a parada atual. Esses botões abrem os fluxos existentes; código, pagamento, conferências e confirmação da entrega continuam nessas telas. Após a retirada, o link `/mapa?modo=rota` conserva os controles web e a escolha de Maps/Waze.
+
+Roteiro: `node docs/validacao-web-ios/map-layer-tests.cjs`, com Playwright no `NODE_PATH`. `QA_BROWSER=webkit` seleciona WebKit instalado; por padrão, usa Chrome. O roteiro verifica tanto pixels do botão quanto o elemento que recebe o clique, pois apenas a presença no DOM não detecta esta falha. Exerce arrastar, centralizar, retorno, menu, escolha do navegador e abertura das três conferências nos dois temas. A API e o GPS são controlados; a API de teste usa a mesma origem do servidor local.
+
+TypeScript e build web passaram. As seis combinações de tema/parada passaram no [Chromium](validacao-web-ios/map-layer-chromium-results.json) e no [WebKit](validacao-web-ios/map-layer-webkit-results.json), sem erros JavaScript. [Prévia web no tema claro](validacao-web-ios/map-layer-webkit-light.png).
+
+A reprodução anterior está em [map-layer-baseline-results.json](validacao-web-ios/map-layer-baseline-results.json) e [map-layer-before.png](validacao-web-ios/map-layer-before.png). `QA_EXPECT_COVERED=1` serve somente para o bundle anterior à correção, derivado do commit `8a76ff6`.
+
+Revisão visual separada: referências HTML e capturas do app em 390 × 844, nos dois temas, ficam em `docs/validacao-web-ios/map-reference-*.png` e `map-layer-*.png`. Conferidos visibilidade dos controles, painel e rodapé e o mapa pequeno do retorno. Esta revisão não declara fidelidade completa ao protótipo: a web usa OSM e navegador externo, e acrescenta o acesso explícito às conferências. Homologação no iPhone físico e novo deploy continuam pendentes.
+
 ## Publicar e instalar
 
 1. Publicar o backend e o painel com estas mudanças. Uma API antiga ainda usa o timeout curto e pode apagar a posição velha do mapa.

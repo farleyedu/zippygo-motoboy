@@ -29,5 +29,6 @@ export default function Mapa({ pedidos, mapClean, onOrderPress, recenterToken, r
       if (coords.length > 1) L.polyline(coords, { color: '#4c91f6', weight: 3, dashArray: '6,6' }).addTo(layer!);
     }); return () => { alive = false; layer?.remove(); }; }, [ready, pedidos, mapClean, onOrderPress]);
   useEffect(() => { if (position.current && map.current) map.current.setView(position.current, routeMode ? 17 : 15); }, [recenterToken, routeMode]);
-  return <div ref={container} style={{ width: '100%', height: '100%', background: dark ? '#19283f' : '#e8eff8', filter: dark ? 'brightness(.8)' : undefined }} />;
+  // Os z-index internos do Leaflet pertencem ao mapa, abaixo dos controles do app.
+  return <div ref={container} style={{ position: 'relative', zIndex: 0, isolation: 'isolate', width: '100%', height: '100%', background: dark ? '#19283f' : '#e8eff8', filter: dark ? 'brightness(.8)' : undefined }} />;
 }
