@@ -1,15 +1,16 @@
 import React, { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { jwtDecode } from 'jwt-decode';
 import { useAuth } from './AuthContext';
 import { createOperationalSessionStore, OperationalPorts } from '../session/operationalSessionStore';
 import { clearOperationalSession, createIdentifier, endOperationalSession, getOperationalQueue, getOperationalSession, heartbeatOperationalSession, saveOperationalSession, startOperationalSession } from '../../services/mobileApi';
 import { readOperationalPermissions } from '../../services/operationalPermissions';
 import { registerOperationalLogoutGuard, subscribeOperationalFailures } from '../../services/sessionEvents';
-import { clearCurrentTrackingData, clearTrackingMode } from '../../services/trackingService';
+import { clearCurrentTrackingData, clearTrackingMode, flushLocationQueue } from '../../services/trackingService';
 import { iniciarMonitoramentoLocalizacao, pararMonitoramentoLocalizacao } from '../../components/locationSetup';
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { startOperationalRealtime } from '../../services/operationalRealtime';
+import { subscribeWebForeground } from '../../services/webForegroundLocation';
 
 const ATTEMPT_KEY = 'operationalStartAttempt';
 async function stored() {
@@ -37,7 +38,7 @@ function createPorts(): OperationalPorts {
       return attemptId;
     },
     clearAttempt: () => deleteSecureItem(ATTEMPT_KEY),
-    start: attemptId => startOperationalSession({ attemptId, persist: false }),
+    start: attemptId => startOperationalSession({ attemptId, persist: false, clientPlatform: Platform.OS === 'web' ? 'web' : 'native' }),
     current: getOperationalSession,
     heartbeat: force => heartbeatOperationalSession({ persist: false, force }),
     queue: getOperationalQueue,
@@ -55,6 +56,7 @@ function createPorts(): OperationalPorts {
     permissions: readOperationalPermissions,
     monitor: iniciarMonitoramentoLocalizacao,
     stopMonitor: pararMonitoramentoLocalizacao,
+    locationOptional: Platform.OS === 'web',
   };
 }
 type Store = ReturnType<typeof createOperationalSessionStore>;
@@ -78,6 +80,19 @@ export function OperationalSessionProvider({ children }: { children: React.React
     if (userId && establishmentId) void store.restore();
   }, [store, auth.isLoading, userId, establishmentId]);
   useEffect(() => {
+    if (Platform.OS === 'web') {
+      const resume = () => {
+        const active = document.visibilityState === 'visible';
+        setAppState(active ? 'active' : 'background');
+        if (active) void store.whenIdle().then(async () => {
+          if (document.visibilityState !== 'visible') return;
+          if (await store.restore()) await flushLocationQueue();
+        }).catch(() => { /* A fila permanece salva quando a conexão falha. */ });
+      };
+      const unsubscribe = subscribeWebForeground(resume);
+      window.addEventListener('online', resume);
+      return () => { unsubscribe(); window.removeEventListener('online', resume); };
+    }
     const listener = AppState.addEventListener('change', next => {
       setAppState(next);
       if (next === 'active') void store.restore();

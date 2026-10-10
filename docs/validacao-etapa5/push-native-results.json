@@ -1,5 +1,5 @@
 {
-  "passed": 10,
+  "passed": 12,
   "results": [
     "Web nao solicita permissao nem registra push",
     "Web de teste libera permissao mock sem gerar token ou HTTP",
@@ -10,6 +10,8 @@
     "Chamadas concorrentes compartilham um unico pedido de permissao",
     "Troca de sessao impede vincular token ao turno antigo",
     "iOS solicita alertas e som sem criar canais Android",
+    "Preparacao Android usa som do sistema e cria canal antes de pedir permissao",
+    "Preparacao iOS solicita notificacoes sem criar canal Android",
     "WAV nativo corresponde ao asset e contratos usam nomes validos"
   ],
   "scope": "SDKs simulados e integridade de assets; nao comprova execucao em aparelho."

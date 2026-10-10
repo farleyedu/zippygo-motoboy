@@ -1,0 +1,11 @@
+{
+  "name": "ZippyGo — Motoboy",
+  "short_name": "ZippyGo",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#13233b",
+  "theme_color": "#13233b",
+  "icons": [{ "src": "/icon.png", "sizes": "1024x1024", "type": "image/png", "purpose": "any" }]
+}

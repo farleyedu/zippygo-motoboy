@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { AppState, PixelRatio, Platform, StyleSheet, View } from 'react-native';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
-import { AudioGuidance, CameraPerspective, MapColorScheme, MapView, NavigationSessionStatus, NavigationView, NavigationNightMode, RouteStatus, TravelMode, useNavigation, type MapViewController, type NavigationViewController } from '@googlemaps/react-native-navigation-sdk';
+import { AudioGuidance, CameraPerspective, MapColorScheme, MapView, NavigationSessionStatus, NavigationView, NavigationNightMode, NavigationUIEnabledPreference, RouteStatus, TravelMode, useNavigation, type MapViewController, type NavigationViewController } from '@googlemaps/react-native-navigation-sdk';
 import { useZippyTheme } from '../src/ui/theme';
-import { waitForNavigationReset } from '../src/delivery/NativeNavigationProvider';
+import { waitForNavigationReset, waitForNavigationStop } from '../src/delivery/NativeNavigationProvider';
+import { NavigationJourney } from '../src/delivery/navigationJourney';
+import { NavigationDiagnostics, diagnoseNavigationConnection } from '../src/delivery/navigationDiagnostics';
 import type { MapaProps, MapCoordinate } from './mapTypes';
 
 const coordinate = (value: MapCoordinate | undefined): value is MapCoordinate => !!value && Number.isFinite(value.lat) && Number.isFinite(value.lng) && Math.abs(value.lat) <= 90 && Math.abs(value.lng) <= 180;
@@ -19,17 +21,17 @@ function useMarkers(controller: MapViewController | null, props: MapaProps, read
   useEffect(() => {
     if (!controller || !ready) return;
     let alive = true;
-    const markers = props.pedidos.filter(p => coordinate(p.coordinates));
+    const markers = props.routeMode ? [] : props.pedidos.filter(p => coordinate(p.coordinates));
     pending.current = pending.current.catch(() => {}).then(async () => {
       if (!alive) return;
       if (owner.current !== controller) { previous.current.clear(); owner.current = controller; }
       const desired = new Set(markers.map(p => 'order:' + p.id));
-      if (coordinate(props.collectionDestination)) desired.add('store');
+      if (!props.routeMode && coordinate(props.collectionDestination)) desired.add('store');
       for (const id of previous.current) {
         if (!desired.has(id)) { await controller.removeMarker(id); previous.current.delete(id); }
       }
       if (!alive) return;
-      if (coordinate(props.collectionDestination)) {
+      if (!props.routeMode && coordinate(props.collectionDestination)) {
         const store = await controller.addMarker({ id: 'store', position: props.collectionDestination, title: 'Coleta no estabelecimento', imgPath: 'zippy-pin:store' });
         if (alive) previous.current.add(store.id);
         else { await controller.removeMarker(store.id); previous.current.delete(store.id); return; }
@@ -44,7 +46,7 @@ function useMarkers(controller: MapViewController | null, props: MapaProps, read
       }
     }).catch(() => { /* A tela informa problemas de mapa; os pedidos continuam na lista. */ });
     return () => { alive = false; };
-  }, [controller, key, ready, props.selectedPedidoId]);
+  }, [controller, key, ready, props.selectedPedidoId, props.routeMode]);
 }
 
 function OverviewMap(props: MapaProps) {
@@ -74,59 +76,157 @@ function OverviewMap(props: MapaProps) {
 }
 
 function RouteMap(props: MapaProps) {
-  const { dark, sound } = useZippyTheme(), focused = useIsFocused(), insets = useSafeAreaInsets();
+  const { dark, sound } = useZippyTheme(), insets = useSafeAreaInsets();
+  const mapPadding = useMemo(() => {
+    // O SDK 0.16.3 recebe pixels físicos no Android e pontos no iOS.
+    const nativeSize = (size: number) => Platform.OS === 'android' ? PixelRatio.getPixelSizeForLayoutSize(size) : size;
+    return { top: 0, left: nativeSize(12), right: nativeSize(12), bottom: nativeSize(props.navigationBottomInset || 0) };
+  }, [props.navigationBottomInset]);
   const nav = useNavigation(), { navigationController: engine } = nav;
-  const [map, setMap] = useState<MapViewController | null>(null), [view, setView] = useState<NavigationViewController | null>(null), [mapReady, setMapReady] = useState(false), [initialized, setInitialized] = useState(false), [gpsReady, setGpsReady] = useState(false), [routeReady, setRouteReady] = useState(false);
-  const generation = useRef(0), observer = useRef(props.onNavigationState); observer.current = props.onNavigationState;
-  const arrived = useRef(false), receivedGps = useRef(false), initComplete = useRef(false), latest = useRef(props); latest.current = props;
-  const routing = useRef(Promise.resolve());
-  const targets = props.collectionDestination ? [props.collectionDestination].filter(coordinate) : props.pedidos.map(p => p.coordinates).filter(coordinate);
-  const targetKey = targets.map(p => p.lat + ':' + p.lng).join('|');
+  const [map, setMap] = useState<MapViewController | null>(null), [view, setView] = useState<NavigationViewController | null>(null);
+  const [mapReady, setMapReady] = useState(false), [initialized, setInitialized] = useState(false), [gpsReady, setGpsReady] = useState(false);
+  const observer = useRef(props.onNavigationState); observer.current = props.onNavigationState;
+  const latest = useRef(props); latest.current = props;
+  const perspective = useRef(props.view3D); perspective.current = props.view3D;
+  const journey = useRef<NavigationJourney | null>(null);
+  const diagnostic = useRef(new NavigationDiagnostics(__DEV__));
+  const lastGps = useRef<number | null>(null);
+  const touch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const targets = props.collectionDestination ? [{ position: props.collectionDestination, title: 'Endereço da coleta' }] : props.pedidos.map(p => ({
+    position: p.coordinates, title: p.enderecoEntrega || p.bairro || 'Endereço de destino',
+  }));
+  const targetKey = targets.map(p => p.position?.lat + ':' + p.position?.lng).join('|');
+  const destinationKey = props.collectionDestination ? 'store:' + targetKey : props.pedidos.map(p => p.id).join(',') + ':' + targetKey;
+  // While driving, expose destination addresses, not order cards or product details.
   useMarkers(map, props, mapReady);
+
   useEffect(() => {
-    if (!focused || !mapReady) return;
-    initComplete.current = false; receivedGps.current = false; setInitialized(false); setGpsReady(false); setRouteReady(false);
-    let alive = true;
-    nav.setOnLocationChanged(() => { if (alive) { receivedGps.current = true; setGpsReady(true); } });
-    nav.setOnArrival(() => { if (!alive) return; arrived.current = true; void engine.stopGuidance(); observer.current?.({ status: 'arrived' }); });
-    nav.setOnReroutingRequestedByOffRoute(() => observer.current?.({ status: 'rerouting', message: 'Recalculando o caminho…' }));
-    nav.setOnRouteChanged(() => { if (!arrived.current) observer.current?.({ status: latest.current.routeMode ? 'guiding' : 'ready' }); });
-    nav.setOnRemainingTimeOrDistanceChanged(value => observer.current?.({ status: arrived.current ? 'arrived' : latest.current.routeMode ? 'guiding' : 'ready', meters: value.meters, seconds: value.seconds }));
-    observer.current?.({ status: 'loading', message: 'Preparando sua localização e o percurso…' });
+    if (!mapReady) { diagnostic.current.event('bootstrap.waiting.map', { retry: props.retryToken || 0, viewReady: !!view }); return; }
+    let alive = true, receivedGps = false;
+    const log = new NavigationDiagnostics(__DEV__); diagnostic.current = log; lastGps.current = null;
+    log.event('bootstrap.begin', { retry: props.retryToken || 0, mapReady, viewReady: !!view });
+    const appStateSubscription = __DEV__ ? AppState.addEventListener('change', state => log.event('app.state', { state })) : null;
+    if (__DEV__) {
+      log.event('environment', { platform: Platform.OS, osVersion: String(Platform.Version), appState: AppState.currentState });
+      // Read-only checks: never open a permission dialog or delay SDK startup.
+      void Promise.all([Location.getForegroundPermissionsAsync(), Location.hasServicesEnabledAsync()])
+        .then(([permission, locationEnabled]) => { if (alive) log.event('gps.permission', { status: permission.status, canAskAgain: permission.canAskAgain, locationEnabled }); })
+        .catch(error => { if (alive) log.error('gps.permission.error', error); });
+    }
+    setInitialized(false); setGpsReady(false);
+    const seen = new Set<string>();
+    const receiveGps = (source: string, value: MapCoordinate & { accuracy?: number; time?: number }) => {
+      if (!alive) return;
+      const valid = coordinate(value);
+      if (!seen.has(source)) { seen.add(source); log.event('gps.first', { source, valid, accuracyMeters: value?.accuracy, fixAgeMs: value?.time ? Date.now() - value.time : undefined }, !valid); }
+      if (valid) { lastGps.current = Date.now(); receivedGps = true; setGpsReady(true); }
+    };
+    nav.setOnLocationChanged(value => receiveGps('snapped', value));
+    nav.setOnRawLocationChanged(value => receiveGps('raw', value));
+    nav.setLogDebugInfo(message => log.event('sdk.native.message', { message }, true));
+    nav.setOnArrival(() => { if (alive) { log.event('sdk.arrival'); journey.current?.arrival(); } });
+    nav.setOnReroutingRequestedByOffRoute(() => { if (alive) { log.event('sdk.rerouting'); journey.current?.rerouting(); } });
+    nav.setOnRemainingTimeOrDistanceChanged(value => { if (alive) journey.current?.remaining(value.meters, value.seconds); });
+    observer.current?.({ status: 'loading', message: 'Preparando o GPS e a navegação…' });
     void (async () => {
-      await waitForNavigationReset(); if (!alive) return;
+      const resetFinished = log.operation('reset.wait');
+      await waitForNavigationReset(); resetFinished(); if (!alive) return;
+      log.event('reset.finished');
       const accepted = await engine.areTermsAccepted() || await engine.showTermsAndConditionsDialog();
-      if (!accepted || !alive) { if (alive) observer.current?.({ status: 'error', message: 'Aceite os termos da navegação para abrir o percurso no app.' }); return; }
+      log.event('terms.result', { accepted });
+      if (!alive) return;
+      if (!accepted) throw new Error('Aceite os termos da navegação para abrir o percurso no app.');
+      const initStarted = Date.now(); log.event('sdk.init.begin');
       const status = await engine.init();
+      log.event('sdk.init.result', { status, durationMs: Date.now() - initStarted }, status !== NavigationSessionStatus.OK);
       if (!alive) return;
       if (status !== NavigationSessionStatus.OK) throw new Error(status === NavigationSessionStatus.NOT_AUTHORIZED ? 'O serviço de navegação ainda não está habilitado para este app.' : status === NavigationSessionStatus.LOCATION_PERMISSION_MISSING ? 'Permita a localização para iniciar a navegação.' : 'A navegação não iniciou. Confira a conexão e tente novamente.');
-      initComplete.current = true; setInitialized(true);
-    })().catch(error => { if (alive) observer.current?.({ status: 'error', message: error instanceof Error ? error.message : 'Não foi possível iniciar a navegação.' }); });
-    const timeout = setTimeout(() => { if (alive && !receivedGps.current) observer.current?.({ status: 'error', message: 'Ainda aguardando o GPS. Confira a localização do aparelho.' }); }, 20000);
-    return () => { alive = false; clearTimeout(timeout); generation.current++; nav.setOnLocationChanged(null); nav.setOnArrival(null); nav.setOnRouteChanged(null); nav.setOnReroutingRequestedByOffRoute(null); nav.setOnRemainingTimeOrDistanceChanged(null); void engine.stopGuidance().catch(() => {}); };
-  }, [focused, mapReady, engine, props.retryToken, props.sessionKey]);
+      // Registering the JS callback does not start the native location provider.
+      // Raw GPS can arrive before the road-snapped position, especially stationary.
+      engine.startUpdatingLocation();
+      log.event('gps.updates.requested');
+      if (__DEV__) void engine.getNavSDKVersion().then(version => { if (alive) log.event('sdk.version', { version }); }).catch(error => log.error('sdk.version.error', error));
+      setInitialized(true);
+    })().catch(error => { if (alive) { log.error('bootstrap.error', error); observer.current?.({ status: 'error', message: error instanceof Error ? error.message : 'Não foi possível iniciar a navegação.' }); } });
+    const timeout = setTimeout(() => { if (alive && !receivedGps) { log.event('gps.timeout', { timeoutMs: 20000 }, true); observer.current?.({ status: 'error', message: 'Ainda aguardando o GPS. Confira a localização do aparelho.' }); } }, 20000);
+    return () => {
+      alive = false; clearTimeout(timeout); appStateSubscription?.remove(); log.close(); engine.stopUpdatingLocation(); if (journey.current) waitForNavigationStop(journey.current.dispose()); journey.current = null;
+      log.event('bootstrap.dispose');
+      nav.setLogDebugInfo(null);
+      nav.setOnLocationChanged(null); nav.setOnRawLocationChanged(null); nav.setOnArrival(null); nav.setOnReroutingRequestedByOffRoute(null); nav.setOnRemainingTimeOrDistanceChanged(null);
+      // Session lifecycle owns shutdown. Screen blur must not interrupt voice guidance.
+    };
+  }, [mapReady, engine, props.retryToken, props.sessionKey]);
+
   useEffect(() => {
-    if (!initComplete.current || !initialized || !gpsReady || !focused || !view) return;
-    const run = ++generation.current; setRouteReady(false); arrived.current = false;
-    if (!targets.length || !props.collectionDestination && targets.length !== props.pedidos.length) { observer.current?.({ status: 'error', message: 'Há pedido sem coordenadas. Confira o endereço com a loja antes de iniciar a rota.' }); return; }
-    routing.current = routing.current.catch(() => {}).then(async () => {
-      if (run !== generation.current || !initComplete.current) return;
-      observer.current?.({ status: 'loading', message: 'Calculando o caminho pelas ruas…' });
-      await engine.stopGuidance();
-      if (run !== generation.current || !initComplete.current) return;
-      const result = await engine.setDestinations(targets.map((position, index) => ({ position, title: props.collectionDestination ? 'Coleta no estabelecimento' : 'Pedido #' + props.pedidos[index]?.id, vehicleStopover: true })), { routingOptions: { travelMode: TravelMode.DRIVING }, displayOptions: { showDestinationMarkers: false } });
-      if (run !== generation.current) return;
-      if (result !== RouteStatus.OK) throw new Error(result === RouteStatus.QUOTA_CHECK_FAILED ? 'A navegação está indisponível no momento. Fale com a loja.' : 'Não foi possível calcular o percurso. Confira o GPS e a conexão.');
-      setRouteReady(true); await view.showRouteOverview(); observer.current?.({ status: 'ready' });
-    }).catch(error => { if (run === generation.current) observer.current?.({ status: 'error', message: error instanceof Error ? error.message : 'Não foi possível calcular a rota.' }); });
-  }, [initialized, gpsReady, focused, view, targetKey]);
+    diagnostic.current.event('route.readiness', { retry: props.retryToken || 0, initialized, gpsReady, viewReady: !!view });
+    if (!initialized || !gpsReady || !view) return;
+    const coordinator = new NavigationJourney({
+      prepare: async request => {
+        const log = diagnostic.current, started = Date.now();
+        log.event('route.begin', { destinations: request.destinations.length, validCoordinates: request.destinations.every(d => coordinate(d.position)), travelMode: 'TWO_WHEELER', lastGpsAgeMs: lastGps.current === null ? undefined : started - lastGps.current });
+        if (!request.destinations.length || request.destinations.some(d => !coordinate(d.position))) throw new Error('Confira as coordenadas do endereço antes de iniciar a rota.');
+        const finished = log.operation('route.native', { travelModeValue: TravelMode.TWO_WHEELER, vehicleStopover: true, showDestinationMarkers: true, appState: __DEV__ ? AppState.currentState : undefined });
+        let result: RouteStatus;
+        try { result = await engine.setDestinations(request.destinations.map(d => ({ ...d, vehicleStopover: true })), {
+          routingOptions: { travelMode: TravelMode.TWO_WHEELER }, displayOptions: { showDestinationMarkers: true },
+        }); } catch (error) { finished({ rejected: true }, true); log.error('route.exception', error); throw error; }
+        finished({ status: result, lastGpsAgeMs: lastGps.current === null ? undefined : Date.now() - lastGps.current, appState: __DEV__ ? AppState.currentState : undefined }, result !== RouteStatus.OK);
+        log.event('route.result', { status: result, durationMs: Date.now() - started }, result !== RouteStatus.OK);
+        if (result !== RouteStatus.OK) {
+          console.warn('[Navegação] Cálculo não concluído:', result);
+          if (result === RouteStatus.NETWORK_ERROR) diagnoseNavigationConnection(log);
+          throw new Error(result === RouteStatus.QUOTA_CHECK_FAILED ? 'A navegação está indisponível no momento. Fale com a loja.' : result === RouteStatus.LOCATION_UNKNOWN || result === RouteStatus.LOCATION_DISABLED ? 'O navegador ainda não recebeu uma posição válida. Aguarde o GPS e tente novamente.' : result === RouteStatus.NO_ROUTE_FOUND ? 'O navegador não encontrou um caminho para este endereço.' : result === RouteStatus.NETWORK_ERROR ? 'Não foi possível consultar o percurso. Confira a conexão e tente novamente.' : 'Não foi possível calcular o percurso. Confira o GPS e a conexão.');
+        }
+      },
+      start: async () => { diagnostic.current.event('guidance.begin'); await engine.startGuidance(); diagnostic.current.event('guidance.started'); },
+      stop: async () => {
+        const log = diagnostic.current, finished = log.operation('guidance.stop');
+        try { await engine.stopGuidance(); finished(); } catch (error) { finished({ rejected: true }, true); log.error('guidance.stop.error', error); throw error; }
+      },
+      navigationUI: value => view.setNavigationUIEnabled(value),
+      audio: muted => engine.setAudioGuidanceType(muted ? AudioGuidance.SILENT : AudioGuidance.VOICE_ALERTS_AND_GUIDANCE | AudioGuidance.BLUETOOTH_AUDIO),
+      follow: () => view.setFollowingPerspective(perspective.current ? CameraPerspective.TILTED : CameraPerspective.TOP_DOWN_HEADING_UP),
+      overview: async () => { await view.showRouteOverview(); },
+    }, state => observer.current?.(state));
+    journey.current = coordinator;
+    return () => { waitForNavigationStop(coordinator.dispose()); if (journey.current === coordinator) journey.current = null; };
+  }, [initialized, gpsReady, view, engine, props.retryToken]);
+
   useEffect(() => {
-    if (!routeReady || !focused || !view) return;
-    engine.setAudioGuidanceType(props.routeMode && sound ? AudioGuidance.VOICE_ALERTS_AND_GUIDANCE | AudioGuidance.BLUETOOTH_AUDIO : AudioGuidance.SILENT);
-    void view.setNavigationUIEnabled(!!props.routeMode);
-    if (props.routeMode && !arrived.current) void engine.startGuidance().then(() => view.setFollowingPerspective(props.view3D ? CameraPerspective.TILTED : CameraPerspective.TOP_DOWN_HEADING_UP)).then(() => { if (!arrived.current) observer.current?.({ status: 'guiding' }); }).catch(() => observer.current?.({ status: 'error', message: 'Não foi possível iniciar as instruções. Tente novamente.' }));
-    else { void engine.stopGuidance(); void view.showRouteOverview(); }
-  }, [routeReady, focused, props.routeMode, props.view3D, props.recenterToken, sound, engine, view]);
-  return <View style={[StyleSheet.absoluteFill, { top: props.routeMode && !props.mapClean ? insets.top : 0 }]}><NavigationView style={{ flex: 1 }} onMapViewControllerCreated={setMap} onNavigationViewControllerCreated={setView} onMapReady={() => setMapReady(true)} mapColorScheme={dark ? MapColorScheme.DARK : MapColorScheme.LIGHT} navigationNightMode={dark ? NavigationNightMode.FORCE_NIGHT : NavigationNightMode.FORCE_DAY} headerEnabled={!!props.routeMode && !props.mapClean} footerEnabled={false} tripProgressBarEnabled={false} recenterButtonEnabled={false} reportIncidentButtonEnabled={false} myLocationButtonEnabled={false} speedLimitIconEnabled={!!props.routeMode && !props.mapClean} navigationUIEnabledPreference={1} androidStylingOptions={{ primaryDayModeThemeColor: '#2872e3', primaryNightModeThemeColor: '#1b3051', headerInstructionsTextColor: '#ffffff', headerDistanceValueTextColor: '#ffffff' }} iOSStylingOptions={{ navigationHeaderPrimaryBackgroundColor: '#2872e3', navigationHeaderPrimaryBackgroundColorNightMode: '#1b3051', navigationHeaderInstructionsTextColor: '#ffffff' }} onMapClick={props.onMapPress} onMarkerClick={marker => { const id = Number(marker.id.split(':')[1]); if (id > 0) props.onOrderPress?.(id); }} /></View>;
+    if (!initialized || !gpsReady || !view || !journey.current) return;
+    void journey.current.sync({
+      key: destinationKey, destinations: targets as { position: MapCoordinate; title: string }[],
+      enabled: !!props.routeMode, follow: props.cameraFollowing !== false,
+      cameraToken: String(props.recenterToken || 0) + ':' + !!props.view3D,
+      muted: props.navigationMuted ?? !sound,
+    });
+  }, [initialized, gpsReady, view, destinationKey, props.routeMode, props.cameraFollowing, props.view3D, props.recenterToken, props.navigationMuted, sound, props.retryToken]);
+
+  const inset = props.routeMode ? insets.top : 0;
+  return <View style={[StyleSheet.absoluteFill, { top: inset }]}
+    onTouchStart={event => { const p = event.nativeEvent; touch.current = { x: p.pageX, y: p.pageY, moved: false }; }}
+    onTouchMove={event => {
+      const start = touch.current, p = event.nativeEvent;
+      if (props.routeMode && start && !start.moved && (p.touches.length > 1 || Math.hypot(p.pageX - start.x, p.pageY - start.y) > 8)) {
+        start.moved = true; latest.current.onCameraExplore?.();
+      }
+    }}
+    onTouchEnd={() => { touch.current = null; }}
+    onTouchCancel={() => { touch.current = null; }}>
+    <NavigationView style={{ flex: 1 }}
+      onMapViewControllerCreated={setMap} onNavigationViewControllerCreated={setView} onMapReady={() => setMapReady(true)}
+      mapColorScheme={dark ? MapColorScheme.DARK : MapColorScheme.LIGHT}
+      navigationNightMode={dark ? NavigationNightMode.FORCE_NIGHT : NavigationNightMode.FORCE_DAY}
+      mapPadding={mapPadding}
+      headerEnabled={!!props.routeMode} footerEnabled={false} tripProgressBarEnabled={false}
+      recenterButtonEnabled={false} reportIncidentButtonEnabled={false} myLocationButtonEnabled={false}
+      speedLimitIconEnabled={!!props.routeMode} navigationUIEnabledPreference={NavigationUIEnabledPreference.AUTOMATIC}
+      scrollGesturesEnabled zoomGesturesEnabled rotateGesturesEnabled tiltGesturesEnabled
+      androidStylingOptions={{ primaryDayModeThemeColor: '#2872e3', primaryNightModeThemeColor: '#1b3051', headerInstructionsTextColor: '#ffffff', headerDistanceValueTextColor: '#ffffff' }}
+      iOSStylingOptions={{ navigationHeaderPrimaryBackgroundColor: '#2872e3', navigationHeaderPrimaryBackgroundColorNightMode: '#1b3051', navigationHeaderInstructionsTextColor: '#ffffff' }}
+      onMapClick={() => { if (!props.routeMode) props.onMapPress?.(); }}
+      onMarkerClick={marker => { if (!props.routeMode) { const id = Number(marker.id.split(':')[1]); if (id > 0) props.onOrderPress?.(id); } }} />
+  </View>;
 }
 export default function SdkMapa(props: MapaProps) { return props.navigationEnabled ? <RouteMap {...props} /> : <OverviewMap {...props} />; }

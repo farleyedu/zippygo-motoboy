@@ -1,0 +1,16 @@
+{
+  "ok": true,
+  "gpsRequests": 7,
+  "platform": "Chromium, GPS/API controlados",
+  "cases": [
+    "início web sem background",
+    "posição ao abrir",
+    "pausa oculta",
+    "posição ao retornar",
+    "falha não zera idade",
+    "recuperação da fila",
+    "permissões",
+    "manifest/ícone"
+  ],
+  "errors": []
+}

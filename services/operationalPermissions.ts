@@ -3,6 +3,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform, Linking } from 'react-native';
 import { browserNativeTest, reportBrowserMock } from './browserNativeTest';
 import { expoGo } from './expoGo';
+import { readWebLocationPermission, requestWebLocationPermission, webLocationAvailable } from './webLocationPermission';
 
 export type PermissionKind = 'foreground' | 'background' | 'notifications' | 'services';
 export type PermissionValue = { granted: boolean; canAskAgain: boolean; supported: boolean };
@@ -20,18 +21,22 @@ export async function readOperationalPermissions(): Promise<OperationalPermissio
     const allowed = { granted: true, canAskAgain: false, supported: true };
     return { foreground: { ...allowed }, background: { ...allowed }, notifications: { ...allowed }, services: true, ready: true };
   }
-  const foreground = permission(await Location.getForegroundPermissionsAsync());
-  const services = await Location.hasServicesEnabledAsync();
+  const foreground = Platform.OS === 'web' ? await readWebLocationPermission() : permission(await Location.getForegroundPermissionsAsync());
+  const services = Platform.OS === 'web' ? webLocationAvailable() : await Location.hasServicesEnabledAsync();
   const background = Platform.OS === 'web' ? unsupported : expoGo ? expoGoBackground : permission(await Location.getBackgroundPermissionsAsync());
   const notifications = Platform.OS === 'web' ? unsupported : permission(await Notifications.getPermissionsAsync());
-  return { foreground, background, notifications, services, ready: services && foreground.granted && background.granted };
+  return { foreground, background, notifications, services, ready: services && foreground.granted && (Platform.OS === 'web' || background.granted) };
 }
 
 // Chamadas de solicitação ocorrem apenas nas ações explicadas pela tela de preparação.
 export async function askOperationalPermission(kind: PermissionKind): Promise<void> {
   if (browserNativeTest) { reportBrowserMock('Permissao MOCK liberada no navegador, sem dialogo nativo.'); return; }
   if (kind === 'services') { await openOperationalSettings(); return; }
-  if (kind === 'foreground') { await Location.requestForegroundPermissionsAsync(); return; }
+  if (kind === 'foreground') {
+    if (Platform.OS === 'web') await requestWebLocationPermission();
+    else await Location.requestForegroundPermissionsAsync();
+    return;
+  }
   if (Platform.OS === 'web') throw new Error('Esta permissão precisa do aplicativo instalado no aparelho.');
   if (kind === 'background') {
     if (expoGo) return;
@@ -41,7 +46,8 @@ export async function askOperationalPermission(kind: PermissionKind): Promise<vo
   }
   if (Platform.OS === 'android') await Notifications.setNotificationChannelAsync('default', {
     name: 'ZippyGo Notificações', importance: Notifications.AndroidImportance.HIGH,
-    sound: 'default', vibrationPattern: [0, 250, 250, 250], lightColor: '#2872e3',
+    // O som padrao do Android e selecionado ao omitir sound.
+    vibrationPattern: [0, 250, 250, 250], lightColor: '#2872e3',
   });
   await Notifications.requestPermissionsAsync();
 }

@@ -58,6 +58,60 @@ function harness(relative, mocks = {}) {
   };
 }
 
+function authFixture() {
+  const user = { id: 'qa', nome: 'Motoboy QA', email: 'qa@exemplo.invalid', role: 'motoboy' };
+  const shop = { id: 'loja-qa', nome: 'Loja QA' };
+  const secure = new Map(Object.entries({
+    'zippygo.user': JSON.stringify(user), authToken: 'principal-qa', 'zippygo.token': 'principal-qa', refreshToken: 'refresh-qa',
+    'zippygo.estabelecimentoAtual': JSON.stringify(shop), operationalAccessToken: 'turno-qa', operationalSession: 'sessao-qa',
+    'tracking.queue.v3.turno-qa.4': 'gps-pendente-qa',
+  }));
+  let listener, delayedRead;
+  const h = harness('src/contexts/AuthContext.tsx', {
+    '../../utils/secureStorage': {
+      getSecureItem: async key => { if (key === 'authToken' && delayedRead) { const next = delayedRead; delayedRead = null; return next; } return secure.get(key) ?? null; },
+      setSecureItem: async (key, value) => secure.set(key, value), deleteSecureItem: async key => secure.delete(key),
+    },
+    '../../services/sessionEvents': {
+      subscribeAccountAuthenticationFailures: callback => { listener = callback; return () => { listener = null; }; },
+      requestOperationalLogout: async () => { throw new Error('Recusa da conta não deve encerrar o turno.'); },
+    },
+    '../../services/mobileApi': {
+      listMotoboyLinks: async () => [{ estabelecimentoId: shop.id, nome: shop.nome }],
+      MobileApiError: class extends Error {},
+    },
+  });
+  const read = () => h.render('AuthProvider', { children: null }).props.value;
+  read(); h.effects();
+  return { h, secure, read, notify: token => listener({ token }), delay: promise => { delayedRead = promise; } };
+}
+
+test('401 definitivo da conta retorna ao login preservando proprietário, restaurante, turno e GPS', async () => {
+  const f = authFixture(); await tick(); await tick();
+  assert.equal(f.read().user.id, 'qa');
+  f.notify('principal-qa'); await tick(); await tick();
+  assert.equal(f.read().user, null); assert.equal(f.read().isLoading, false); assert.equal(f.read().didSignOut, true);
+  for (const key of ['authToken', 'zippygo.token', 'refreshToken']) assert.equal(f.secure.has(key), false);
+  for (const key of ['zippygo.user', 'zippygo.estabelecimentoAtual', 'operationalAccessToken', 'operationalSession', 'tracking.queue.v3.turno-qa.4']) assert.equal(f.secure.has(key), true);
+  f.h.close();
+});
+
+test('401 atrasado de outra credencial não apaga o acesso atual', async () => {
+  const f = authFixture(); await tick(); await tick();
+  f.notify('principal-antigo'); f.notify(''); await tick();
+  assert.equal(f.read().user.id, 'qa'); assert.equal(f.secure.get('authToken'), 'principal-qa');
+  f.h.close();
+});
+
+test('restaurar um novo contexto enquanto a recusa aguarda storage invalida o callback antigo', async () => {
+  const f = authFixture(); await tick(); await tick();
+  let resolve; f.delay(new Promise(done => { resolve = done; }));
+  f.notify('principal-qa');
+  await f.read().loadUserFromStorage(); resolve('principal-qa'); await tick();
+  assert.equal(f.read().user.id, 'qa'); assert.equal(f.secure.get('refreshToken'), 'refresh-qa');
+  f.h.close();
+});
+
 test('Conferencia ilegivel continua bloqueando a rota mesmo apos limpar o aviso', async () => {
   const h = harness('src/contexts/DeliveryCompletionContext.tsx', {
     './AuthContext': { useAuth: () => ({ user: { id: 'qa' } }) },

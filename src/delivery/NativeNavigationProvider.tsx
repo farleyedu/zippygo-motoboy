@@ -3,7 +3,14 @@ import { nativeNavigationAvailable } from '../../services/nativeNavigation';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
 
 let reset = Promise.resolve();
+// The SDK memoizes its controller using this object's identity. Keep it stable
+// when operational session updates cause the provider to render again.
+const navigationTerms = { title: 'Sua rota no ZippyGo', companyName: 'ZippyGo' };
 export const waitForNavigationReset = () => reset;
+// Include pending native commands in the session barrier before the next init.
+export function waitForNavigationStop(work: Promise<void>) {
+  reset = Promise.all([reset.catch(() => {}), work.catch(() => {})]).then(() => {});
+}
 function NavigationLifecycle() {
   const turn = useOperationalSession();
   const sdk = require('@googlemaps/react-native-navigation-sdk') as typeof import('@googlemaps/react-native-navigation-sdk');
@@ -18,5 +25,5 @@ function NavigationLifecycle() {
 export function NativeNavigationProvider({ children }: { children: React.ReactNode }) {
   if (!nativeNavigationAvailable) return <>{children}</>;
   const sdk = require('@googlemaps/react-native-navigation-sdk') as typeof import('@googlemaps/react-native-navigation-sdk');
-  return <sdk.NavigationProvider termsAndConditionsDialogOptions={{ title: 'Sua rota no ZippyGo', companyName: 'ZippyGo' }} taskRemovedBehavior={sdk.TaskRemovedBehavior.CONTINUE_SERVICE}><NavigationLifecycle />{children}</sdk.NavigationProvider>;
+  return <sdk.NavigationProvider termsAndConditionsDialogOptions={navigationTerms} taskRemovedBehavior={sdk.TaskRemovedBehavior.CONTINUE_SERVICE}><NavigationLifecycle />{children}</sdk.NavigationProvider>;
 }

@@ -1,26 +1,35 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, AppState, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
+import * as Location from 'expo-location';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft, ChevronUp, Layers, LocateFixed, Map, MessageCircle, MoreHorizontal, Navigation, Package, Route, Store, X } from 'lucide-react-native';
 import Mapa from '../components/Mapa';
-import type { MapaProps } from '../components/mapTypes';
+import type { MapaProps, NavigationState } from '../components/mapTypes';
+import { NavigationChrome } from '../src/ui/NavigationChrome';
+import { NavigationDiagnostics } from '../src/delivery/navigationDiagnostics';
 import { queueToPedidos } from '../services/mobileApi';
 import { getStoreDestination, type StoreDestination } from '../services/routeApi';
-import { openPreferredNavigation } from '../services/navigation';
+import { openGoogleMapsRoute, openPreferredNavigation } from '../services/navigation';
+import { distanceMeters, type ExternalStop } from '../src/delivery/externalRoute';
 import { nativeNavigationAvailable } from '../services/nativeNavigation';
+import { navigationSdkEnabled } from '../services/navigationFlag';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
 import { AppNav } from '../src/ui/AccountKit';
-import { Button, Pill, type } from '../src/ui/Kit';
+import { Button, Pill, Surface, type } from '../src/ui/Kit';
 import { activeStops, StopRow } from '../src/ui/RouteKit';
 import { useZippyTheme } from '../src/ui/theme';
 import { StatusBar } from 'expo-status-bar';
 
+const ARRIVAL_RADIUS_M = 300;
+
 export default function MapScreen() {
-  const router = useRouter(), params = useLocalSearchParams<{ modo?: string; pedidoId?: string; destino?: string }>(), turn = useOperationalSession(), insets = useSafeAreaInsets(), focused = useIsFocused(), { colors, dark, reducedMotion } = useZippyTheme();
-  const [clean, setClean] = useState(false), [following, setFollowing] = useState(params.modo === 'rota'), [view3D, set3D] = useState(true), [recenter, setRecenter] = useState(0), [error, setError] = useState(''), [menu, setMenu] = useState(false), [expanded, setExpanded] = useState(false), [selectedId, setSelectedId] = useState(Number(params.pedidoId) || 0), [store, setStore] = useState<StoreDestination | null>(null), [storeError, setStoreError] = useState(''), [retry, setRetry] = useState(0);
+  const router = useRouter(), params = useLocalSearchParams<{ modo?: string; pedidoId?: string; destino?: string }>(), turn = useOperationalSession(), insets = useSafeAreaInsets(), focused = useIsFocused(), theme = useZippyTheme(), { colors, dark, reducedMotion } = theme;
+  const [clean, setClean] = useState(false), [following, setFollowing] = useState(params.modo === 'rota'), [view3D, set3D] = useState(true), [recenter, setRecenter] = useState(0), [error, setError] = useState(''), [menu, setMenu] = useState(false), [expanded, setExpanded] = useState(false), [selectedId, setSelectedId] = useState(Number(params.pedidoId) || 0), [store, setStore] = useState<StoreDestination | null>(null), [storeError, setStoreError] = useState(''), [retry, setRetry] = useState(0), [chooser, setChooser] = useState(false);
   const [navigation, setNavigation] = useState<Parameters<NonNullable<MapaProps['onNavigationState']>>[0]>({ status: 'loading' });
+  const [cameraFollowing, setCameraFollowing] = useState(true), [navigationMuted, setNavigationMuted] = useState(false), [footerInset, setFooterInset] = useState(154);
+  const observeNavigation = (state: NavigationState) => setNavigation(previous => ({ ...previous, ...state, message: state.message }));
   const offset = useRef(new Animated.Value(0)).current;
   const pan = useMemo(() => PanResponder.create({ onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx), onPanResponderMove: (_, gesture) => offset.setValue(Math.max(-60, Math.min(60, gesture.dy))), onPanResponderRelease: (_, gesture) => { if (gesture.dy < -20) setExpanded(true); else if (gesture.dy > 20) setExpanded(false); Animated.timing(offset, { toValue: 0, duration: reducedMotion ? 0 : 180, useNativeDriver: true }).start(); } }), [offset, reducedMotion]);
   const queue = turn.queue, current = queue?.current, stops = activeStops(queue), pedidos = useMemo(() => queueToPedidos(queue), [queue]);
@@ -35,26 +44,79 @@ export default function MapScreen() {
   }, [focused, collecting, turn.session?.sessionId, retry]);
   const latitude = store?.latitude == null ? NaN : Number(store.latitude), longitude = store?.longitude == null ? NaN : Number(store.longitude);
   const collection = Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { lat: latitude, lng: longitude } : undefined;
-  const canRoute = nativeNavigationAvailable && (collecting ? !!collection : !!current);
-  const handleMapPress = () => { setMenu(false); setClean(value => !value); };
-  const openNavigation = () => {
+  const canRoute = navigationSdkEnabled && nativeNavigationAvailable && (collecting ? !!collection : !!current);
+  const retryLog = useRef(new NavigationDiagnostics(__DEV__));
+  const retryNavigation = () => {
+    retryLog.current.event('retry.request', { nextRetry: retry + 1, foregroundGranted: !!turn.permissions?.foreground.granted, nativeNavigationAvailable, canRoute, collecting, hasDestination: collecting ? !!collection : !!current });
+    if (!turn.permissions?.foreground.granted) { retryLog.current.event('retry.blocked', { reason: 'foreground_permission' }, true); router.push('/permissoes'); return; }
+    if (!nativeNavigationAvailable) { retryLog.current.event('retry.blocked', { reason: 'native_sdk_unavailable' }, true); return; }
+    if (!collecting && !current) { retryLog.current.event('retry.blocked', { reason: 'no_active_destination' }, true); return; }
+    setRetry(value => value + 1); setError(''); setNavigation({ status: 'loading', message: collecting && !collection ? 'Carregando o endereço da coleta…' : 'Preparando uma nova tentativa…' });
+  };
+  const handleMapPress = () => { if (following) return; setMenu(false); setClean(value => !value); };
+  const openNavigation = () => { setMenu(false); setChooser(true); };
+  const startInApp = () => {
+    setChooser(false);
     if (!nativeNavigationAvailable) { setError('A navegação dentro do app exige o novo build. Expo Go mostra o mapa, mas não contém o navegador.'); return; }
     if (collecting && !collection) { setError('Confira as coordenadas do estabelecimento antes de iniciar a rota da coleta.'); return; }
-    setFollowing(true); setClean(false); setMenu(false); setExpanded(false); setRecenter(value => value + 1); setError('');
+    setFollowing(true); setCameraFollowing(true); setNavigation({ status: 'loading', message: 'Preparando o GPS e a navegação…' }); setClean(false); setMenu(false); setExpanded(false); setRecenter(value => value + 1); setError('');
   };
+  // Depois de mandar a rota ao Maps/Waze, ao voltar perto da parada o app já abre na tela de encerrar.
+  const sentOut = useRef(false), onReturn = useRef<() => Promise<void>>(async () => {});
+  onReturn.current = async () => {
+    const lat = Number(current?.pedido?.latitude), lng = Number(current?.pedido?.longitude);
+    const target = collecting ? collection : Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined;
+    if (!target) return;
+    try { const here = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); if (distanceMeters({ lat: here.coords.latitude, lng: here.coords.longitude }, target) > ARRIVAL_RADIUS_M) return; } catch { return; }
+    sentOut.current = false;
+    if (collecting) router.push(queue?.routeState === 'returning' ? '/retornoLoja' : '/retirada');
+    else if (current) router.push({ pathname: '/pedido/[id]', params: { id: String(current.pedidoId) } });
+  };
+  useEffect(() => {
+    if (!focused) return;
+    const subscription = AppState.addEventListener('change', state => { if (state === 'active' && sentOut.current) void onReturn.current(); });
+    return () => subscription.remove();
+  }, [focused]);
   const externalNavigation = async () => {
     const destination = collecting ? { latitude: collection?.lat, longitude: collection?.lng, address: [store?.rua, store?.numero, store?.bairro, store?.cidade, store?.uf].filter(Boolean).join(', ') } : { latitude: current?.pedido?.latitude, longitude: current?.pedido?.longitude, address: current?.pedido?.enderecoEntrega };
-    try { await openPreferredNavigation(destination); setMenu(false); } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível abrir o navegador.'); }
+    try { await openPreferredNavigation(destination); sentOut.current = true; setMenu(false); } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível abrir o navegador.'); }
+  };
+  const allowReorder = turn.queue?.politicas?.allowMotoboyReorder !== false;
+  const routeStops: ExternalStop[] = collecting ? [{ latitude: collection?.lat, longitude: collection?.lng, address: [store?.rua, store?.numero, store?.bairro, store?.cidade, store?.uf].filter(Boolean).join(', ') }] : stops.map(stop => ({ latitude: stop.pedido?.latitude, longitude: stop.pedido?.longitude, address: stop.pedido?.enderecoEntrega }));
+  const sendToGoogleMaps = async () => {
+    setChooser(false); void theme.setPreference('navigationApp', 'Google Maps');
+    try {
+      const route = await openGoogleMapsRoute(routeStops); sentOut.current = true;
+      if (route.remaining || route.skipped) setError(route.remaining ? 'O Google Maps recebeu as primeiras ' + route.sent + ' paradas. Envie a rota de novo depois para continuar.' : route.skipped + (route.skipped === 1 ? ' parada sem endereço ficou de fora.' : ' paradas sem endereço ficaram de fora.'));
+    } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível abrir o Google Maps.'); }
+  };
+  const sendToWaze = async () => {
+    setChooser(false); void theme.setPreference('navigationApp', 'Waze');
+    const next = routeStops[0];
+    try { await openPreferredNavigation(next, 'Waze'); sentOut.current = true; } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível abrir o Waze.'); }
   };
   const arrived = navigation.status === 'arrived';
   const destinationName = collecting ? store?.nome || 'Coleta no estabelecimento' : selected?.pedido?.nomeCliente || 'Aqui é seu ponto de partida.';
   const address = collecting ? [store?.rua, store?.numero, store?.bairro].filter(Boolean).join(', ') : selected?.pedido?.enderecoEntrega || [selected?.pedido?.rua, selected?.pedido?.numero, selected?.pedido?.bairro].filter(Boolean).join(', ');
+  const navigationAddress = collecting ? address : current?.pedido?.enderecoEntrega || [current?.pedido?.rua, current?.pedido?.numero, current?.pedido?.bairro].filter(Boolean).join(', ');
+  const routeState: NavigationState = !turn.permissions?.foreground.granted
+    ? { status: 'error', message: 'Permita a localização do aparelho para iniciar a navegação.' }
+    : !nativeNavigationAvailable
+    ? { status: 'error', message: 'A navegação exige um build nativo com o Google Navigation SDK. Expo Go e navegador exibem apenas o mapa.' }
+    : !current && !collecting ? { status: 'error', message: 'Não há um endereço ativo para navegar. Confira sua rota.' }
+    : error || storeError ? { status: 'error', message: error || storeError } : navigation;
   const control = (label: string, Icon: typeof Map, action: () => void) => <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={action} style={({ pressed }) => [styles.control, { opacity: pressed ? .7 : 1 }]}><Icon size={20} color="#e5f0ff" /></Pressable>;
   const openOrder = () => selected && router.push({ pathname: '/pedido/[id]', params: { id: String(selected.pedidoId) } });
   return <View style={{ flex: 1, backgroundColor: colors.paper }}>
     <Stack.Screen options={{ headerShown: false }} /><StatusBar style={dark ? 'light' : 'dark'} />
-    {turn.permissions?.foreground.granted ? <Mapa pedidos={pedidos} emEntrega={!!current} recenterToken={recenter} retryToken={retry} sessionKey={turn.session?.sessionId} routeMode={following && canRoute} navigationEnabled={canRoute} collectionDestination={collecting ? collection : undefined} selectedPedidoId={selected?.pedidoId} mapClean={clean} view3D={view3D} onNavigationState={setNavigation} onMapPress={handleMapPress} onOrderPress={id => { setSelectedId(id); setClean(false); setExpanded(false); }} /> : <View style={styles.permission}><LocateFixed size={38} color={colors.accent} /><Text style={[type.body, { color: colors.muted, textAlign: 'center', marginVertical: 16 }]}>Permita a localização para ver sua posição no mapa.</Text><Button onPress={() => router.push('/permissoes')}>Preparar localização</Button></View>}
-    {!clean && <>
+    {turn.permissions?.foreground.granted ? <Mapa pedidos={pedidos} emEntrega={!!current} recenterToken={recenter} retryToken={retry} sessionKey={turn.session?.sessionId} routeMode={following && canRoute} navigationEnabled={canRoute} collectionDestination={collecting ? collection : undefined} selectedPedidoId={selected?.pedidoId} mapClean={following ? false : clean} view3D={view3D} cameraFollowing={cameraFollowing} navigationMuted={navigationMuted} navigationBottomInset={following ? footerInset : 0} onCameraExplore={() => setCameraFollowing(false)} onNavigationState={observeNavigation} onMapPress={handleMapPress} onOrderPress={id => { if (!following) { setSelectedId(id); setClean(false); setExpanded(false); } }} /> : <View style={styles.permission}><LocateFixed size={38} color={colors.accent} /><Text style={[type.body, { color: colors.muted, textAlign: 'center', marginVertical: 16 }]}>Permita a localização para ver sua posição no mapa.</Text><Button onPress={() => router.push('/permissoes')}>Preparar localização</Button></View>}
+    {following && <NavigationChrome state={routeState} address={navigationAddress} following={cameraFollowing} muted={navigationMuted} top={insets.top} bottom={Math.max(insets.bottom, 8)} footerInset={footerInset}
+      onCenter={() => { setCameraFollowing(true); setRecenter(value => value + 1); }}
+      onMute={() => setNavigationMuted(value => !value)}
+      onExit={() => { setFollowing(false); setClean(false); setCameraFollowing(true); setMenu(false); setNavigation({ status: 'loading' }); }}
+      onRetry={retryNavigation}
+      onHeight={height => setFooterInset(previous => Math.abs(previous - height) < 1 ? previous : height)} />}
+    {!clean && !following && <>
       {!following && <View style={{ position: 'absolute', top: insets.top + 14, left: 16, right: 16, flexDirection: 'row', gap: 8 }}>
         {control('Voltar', ArrowLeft, () => router.canGoBack() ? router.back() : router.replace('/'))}
         <Pressable accessibilityRole="button" accessibilityLabel="Abrir lista de paradas" onPress={() => setExpanded(v => !v)} style={[styles.search, { flex: 1 }]}><Route size={17} color="#a9cdff" /><Text numberOfLines={1} style={[type.small, { color: '#edf5ff', flex: 1 }]}>{collecting ? 'A caminho da coleta' : 'Sua rota · ' + stops.length + ' paradas'}</Text></Pressable>
@@ -80,7 +142,23 @@ export default function MapScreen() {
       </Animated.View>
       {!following && <View style={{ position: 'absolute', bottom: Math.max(insets.bottom, 12), left: 16, right: 16 }}><AppNav active="map" /></View>}
     </>}
-    {clean && <Pressable accessibilityLabel="Mostrar controles do mapa" accessibilityRole="button" onPress={handleMapPress} style={{ position: 'absolute', right: 16, bottom: Math.max(insets.bottom, 20), minHeight: 44, minWidth: 44, borderRadius: 22, backgroundColor: '#132742dd', alignItems: 'center', justifyContent: 'center' }}><ChevronUp color="#e5f0ff" size={22} /></Pressable>}
+    <Modal transparent visible={chooser} animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={() => setChooser(false)}><View style={{ flex: 1, backgroundColor: '#081426bb', justifyContent: 'center', padding: 22 }}><Surface>
+      <Text style={[type.title, { color: colors.ink, marginBottom: 6 }]}>Como você quer navegar?</Text>
+      <Text style={[type.small, { color: colors.muted, marginBottom: 14 }]}>{collecting ? 'Destino: coleta no estabelecimento.' : stops.length + (stops.length === 1 ? ' parada na sua rota.' : ' paradas na sua rota.')}</Text>
+      {!collecting && stops.length > 1 && <View style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 12, marginBottom: 14 }}>
+        <Text style={[type.small, { color: colors.ink, fontWeight: '800' }]}>{allowReorder ? 'Confira a ordem antes de navegar' : 'A ordem das paradas foi definida pela loja'}</Text>
+        <Text style={[type.small, { color: colors.muted, marginTop: 4 }]}>{allowReorder ? 'O Google Maps segue exatamente a ordem que está no ZippyGo. Para mudar a sequência, reordene as paradas aqui antes de enviar.' : 'O Google Maps vai seguir essa ordem. Você não pode reordenar as paradas.'}</Text>
+        {allowReorder && <Pressable accessibilityRole="button" onPress={() => { setChooser(false); router.push('/rota'); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={[type.small, { color: colors.accent, fontWeight: '800' }]}>Reordenar paradas</Text></Pressable>}
+      </View>}
+      <View style={{ gap: 12 }}>
+        {navigationSdkEnabled && nativeNavigationAvailable && <Button icon={Navigation} onPress={startInApp}>Navegar no ZippyGo</Button>}
+        <Button secondary={navigationSdkEnabled && nativeNavigationAvailable} icon={Map} onPress={() => void sendToGoogleMaps()}>{collecting || stops.length < 2 ? 'Google Maps' : 'Google Maps · rota completa'}</Button>
+        <Button secondary icon={Navigation} onPress={() => void sendToWaze()}>{collecting || stops.length < 2 ? 'Waze' : 'Waze · próxima parada'}</Button>
+        <Button secondary icon={X} onPress={() => setChooser(false)}>Cancelar</Button>
+      </View>
+      {!collecting && stops.length > 1 && <Text style={[type.small, { color: colors.muted, marginTop: 12 }]}>O Waze aceita um destino por vez. Ao concluir a entrega, volte aqui para seguir à próxima parada.</Text>}
+    </Surface></View></Modal>
+    {clean && !following && <Pressable accessibilityLabel="Mostrar controles do mapa" accessibilityRole="button" onPress={handleMapPress} style={{ position: 'absolute', right: 16, bottom: Math.max(insets.bottom, 20), minHeight: 44, minWidth: 44, borderRadius: 22, backgroundColor: '#132742dd', alignItems: 'center', justifyContent: 'center' }}><ChevronUp color="#e5f0ff" size={22} /></Pressable>}
   </View>;
 }
 const styles = StyleSheet.create({

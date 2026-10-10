@@ -290,7 +290,7 @@ test('falhas aplicam espera progressiva; desconectar/desmontar limpa timers', as
 
 async function withAdapter(fetchMock, work) {
   const originalFetch = global.fetch, originalWarn = console.warn, originalError = console.error;
-  const logs = [], failures = [];
+  const logs = [], failures = [], accountFailures = [];
   try {
     global.fetch = fetchMock; console.warn = (...args) => logs.push(args); console.error = (...args) => logs.push(args);
     const config = { BASE_URL: 'https://api.exemplo.invalid/api', TIMEOUT: 25, DEFAULT_HEADERS: {}, ENDPOINTS: { LOGIN: '/auth/login', REFRESH_TOKEN: '/auth/refresh' } };
@@ -298,9 +298,9 @@ async function withAdapter(fetchMock, work) {
     const api = load('services/apiService.ts', {
       '../config/apiConfig': { API_CONFIG: config, getApiUrl: path => config.BASE_URL + path, validateApiConfig: () => true },
       '../utils/secureStorage': { getSecureItem: async key => secure.get(key) ?? null, setSecureItem: async (key, value) => secure.set(key, value), deleteSecureItem: async key => secure.delete(key) },
-      './sessionEvents': { reportOperationalFailure: failure => failures.push(failure) },
+      './sessionEvents': { reportOperationalFailure: failure => failures.push(failure), reportAccountAuthenticationFailure: failure => accountFailures.push(failure) },
     });
-    await work(api.apiClient, logs, failures, secure);
+    await work(api.apiClient, logs, failures, secure, accountFailures);
   } finally { global.fetch = originalFetch; console.warn = originalWarn; console.error = originalError; }
 }
 const stalledFetch = (_url, options) => new Promise((_resolve, reject) => options.signal.addEventListener('abort', () => reject(new Error('Aborted')), { once: true }));
@@ -444,5 +444,41 @@ test('401 persistente após renovar repete a consulta somente uma vez', async ()
   }, async api => {
     assert.equal((await api.get('/motoboys/me/vinculos')).status, 401);
     assert.equal(reads, 2); assert.equal(refreshes, 1);
+  });
+});
+
+test('iniciar turno usa acesso principal e repete a mesma tentativa após renovar', async () => {
+  const calls = [];
+  await withAdapter(async (url, options) => {
+    calls.push({ url, token: options.headers.Authorization, body: options.body });
+    if (url.endsWith('/auth/refresh')) return new Response(JSON.stringify({ accessToken: 'principal-renovado', refreshToken: 'refresh-renovado' }));
+    return new Response('{}', { status: options.headers.Authorization === 'Bearer principal-renovado' ? 200 : 401 });
+  }, async (api, logs, failures, secure, accountFailures) => {
+    secure.set('authToken', 'principal-expirado'); secure.set('operationalAccessToken', 'outro-turno');
+    assert.equal((await api.post('/v2/motoboys/me/session/start', { attemptId: 'tentativa-qa', clientInstanceId: 'aparelho-qa' })).status, 200);
+    assert.equal(calls.length, 3);
+    assert.equal(calls[0].token, 'Bearer principal-expirado');
+    assert.equal(calls[2].token, 'Bearer principal-renovado');
+    assert.equal(calls[0].body, calls[2].body);
+    assert.deepEqual(failures, []); assert.deepEqual(accountFailures, []);
+  });
+});
+
+test('renovação recusada ao conectar restaurante solicita login somente da conta da chamada', async () => {
+  await withAdapter(async () => new Response('{}', { status: 401 }), async (api, logs, failures, secure, accountFailures) => {
+    secure.set('authToken', 'principal-expirado');
+    assert.equal((await api.post('/v2/motoboys/me/session/start', { attemptId: 'qa' })).status, 401);
+    assert.deepEqual(accountFailures, [{ token: 'principal-expirado' }]);
+    assert.deepEqual(failures, []);
+    assert.equal(secure.get('operationalAccessToken'), 'credencial-ficticia');
+  });
+});
+
+test('recusa operacional e indisponibilidade da renovação não solicitam logout da conta', async () => {
+  await withAdapter(async url => new Response('{}', { status: url.endsWith('/auth/refresh') ? 503 : 401 }), async (api, logs, failures, secure, accountFailures) => {
+    await api.get('/v2/motoboys/me/session/queue');
+    assert.equal(failures.length, 1); assert.deepEqual(accountFailures, []);
+    await assert.rejects(api.post('/v2/motoboys/me/session/start', {}), error => error.response?.status === 503);
+    assert.deepEqual(accountFailures, []); assert.equal(secure.get('authToken'), 'credencial-ficticia');
   });
 });

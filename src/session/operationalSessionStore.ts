@@ -22,6 +22,7 @@ export type OperationalPorts = {
   permissions: () => Promise<OperationalPermissions>;
   monitor: (mode: 'online_idle' | 'active_route') => Promise<boolean>;
   stopMonitor: () => Promise<void>;
+  locationOptional?: boolean;
 };
 export function operationalError(error: unknown): { message: string; status?: number; code?: string } {
   const value = error as { message?: string; status?: number; code?: string; response?: { status?: number; data?: { code?: string; error?: string } } };
@@ -110,6 +111,10 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     update({ permissions });
     if (!permissions.ready) {
       await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
+      if (ports.locationOptional) {
+        update({ phase: 'online', error: 'GPS indisponível. Sua entrega continua; a loja vê a última posição confirmada. Revise a permissão de localização.' });
+        return true;
+      }
       update({ phase: 'permission-required', error: 'Permita a localização e confira o GPS para acompanhar seu turno.' });
       return false;
     }
@@ -168,7 +173,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     start: () => run(async (version, owner) => {
       update({ phase: 'starting', error: null });
       const permissions = await ports.permissions(); assertCurrent(version); update({ permissions });
-      if (!permissions.ready) { update({ phase: 'permission-required', error: 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
+      if (!permissions.ready) { update({ phase: 'permission-required', error: ports.locationOptional ? 'Permita a localização com o app aberto para iniciar o turno.' : 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
       if (await ports.stored()) { assertCurrent(version); return restore(version, owner); }
       assertCurrent(version);
       const attemptId = await ports.attempt(owner); assertCurrent(version);

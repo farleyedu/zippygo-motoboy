@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { API_CONFIG } from '../../config/apiConfig';
-import { requestOperationalLogout } from '../../services/sessionEvents';
+import { requestOperationalLogout, subscribeAccountAuthenticationFailures } from '../../services/sessionEvents';
 import {
   EstablishmentLink,
   listMotoboyLinks,
@@ -74,6 +74,21 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setRestoreError(null);
     setDidSignOut(signedOut);
   };
+
+  useEffect(() => subscribeAccountAuthenticationFailures(failure => {
+    const epoch = authEpoch.current;
+    void (async () => {
+      const currentToken = await getSecureItem('authToken');
+      if (!failure.token || currentToken !== failure.token || epoch !== authEpoch.current) return;
+      const invalidatedEpoch = ++authEpoch.current;
+      // Preservar usuario, estabelecimento, sessao operacional e GPS para que
+      // o mesmo usuario possa recuperar o turno depois de autenticar novamente.
+      await Promise.all(['authToken', 'zippygo.token', 'refreshToken'].map(deleteSecureItem));
+      if (invalidatedEpoch !== authEpoch.current) return;
+      clearIdentityState(true);
+      setIsLoading(false);
+    })().catch(() => { /* A restauracao tambem trata a recusa se o armazenamento falhar. */ });
+  }), []);
 
   const loadUserFromStorage = (): Promise<void> => {
     if (restoreRequest.current?.epoch === authEpoch.current) return restoreRequest.current.promise;

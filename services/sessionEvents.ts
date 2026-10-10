@@ -1,5 +1,15 @@
 type SessionFailure = { status: number; code?: string; message: string; token?: string };
 const listeners = new Set<(failure: SessionFailure) => void>();
+type AccountAuthenticationFailure = { token: string };
+const accountListeners = new Set<(failure: AccountAuthenticationFailure) => void>();
+
+export function subscribeAccountAuthenticationFailures(listener: (failure: AccountAuthenticationFailure) => void) {
+  accountListeners.add(listener);
+  return () => { accountListeners.delete(listener); };
+}
+export function reportAccountAuthenticationFailure(failure: AccountAuthenticationFailure) {
+  accountListeners.forEach(listener => listener(failure));
+}
 let logoutGuard: (() => Promise<void>) | undefined;
 const logoutPreconditions = new Set<() => void>();
 export function registerLogoutPrecondition(check: () => void) { logoutPreconditions.add(check); return () => { logoutPreconditions.delete(check); }; }

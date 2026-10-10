@@ -15,7 +15,8 @@ async function configureChatChannels() {
     for (const sound of [false, true]) for (const vibration of [false, true])
       await Notifications.setNotificationChannelAsync('delivery-offers-' + (sound ? 'sound' : 'silent') + '-' + (vibration ? 'vibrate' : 'quiet') + '-v1', {
         name: 'Novas ofertas de entrega', importance: Notifications.AndroidImportance.HIGH,
-        sound: sound ? 'default' : null, enableVibrate: vibration,
+        // Ausencia de sound usa o som do sistema; uma string significa arquivo nativo.
+        ...(sound ? {} : { sound: null }), enableVibrate: vibration,
         vibrationPattern: vibration ? [0, 120, 80, 120] : undefined, lightColor: '#2872e3', bypassDnd: false,
       });
   if (Platform.OS === 'android')

@@ -10,7 +10,15 @@ function fixture(options = {}) {
   let permission = options.permission || { granted: false, canAskAgain: true, status: 'undetermined' };
   const notifications = {
     AndroidImportance: { HIGH: 4, DEFAULT: 3 },
-    setNotificationChannelAsync: async (id, value) => { calls.push('channel'); channels.push({ id, ...value }); },
+    setNotificationChannelAsync: async (id, value) => {
+      // O SDK Android exige arquivo raw para todo sound explicito nao nulo.
+      // Campo ausente usa o som do sistema; null configura um canal silencioso.
+      if (Object.hasOwn(value, 'sound') && value.sound !== null) {
+        assert.equal(typeof value.sound, 'string');
+        assert.ok(fs.existsSync(path.join(root, 'android/app/src/main/res/raw', value.sound)), `Som de canal inexistente: ${value.sound}`);
+      }
+      calls.push('channel'); channels.push({ id, ...value });
+    },
     getPermissionsAsync: async () => { calls.push('get'); return permission; },
     requestPermissionsAsync: async () => { calls.push('request'); permission = options.answer || { granted: true, canAskAgain: true, status: 'granted' }; return permission; },
     getExpoPushTokenAsync: async () => { calls.push('token'); return { data: 'ExpoPushToken[test]' }; },
@@ -23,8 +31,11 @@ function fixture(options = {}) {
     '../../services/browserNativeTest': { browserNativeTest: !!options.browserMock, reportBrowserMock: () => calls.push('mock') },
     '../../services/expoGo': { expoGo: false },
     '../../utils/secureStorage': { getSecureItem: async key => key === 'operationalSession' ? JSON.stringify({ sessionId: options.session || 'current' }) : 'access' },
+    'expo-location': {},
+    './browserNativeTest': { browserNativeTest: !!options.browserMock, reportBrowserMock: () => calls.push('mock') },
+    './expoGo': { expoGo: false },
   };
-  const source = fs.readFileSync(path.join(root, 'src/chat/push.ts'), 'utf8');
+  const source = fs.readFileSync(path.join(root, options.operational ? 'services/operationalPermissions.ts' : 'src/chat/push.ts'), 'utf8');
   const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   const module = { exports: {} };
   new Function('module', 'exports', 'require', js)(module, module.exports, name => {
@@ -67,7 +78,8 @@ async function test(name, work) { await work(); results.push(name); console.log(
       assert.match(channel.id, /^delivery-offers-(sound|silent)-(vibrate|quiet)-v1$/);
       assert.equal(channel.importance, 4);
       assert.equal(channel.enableVibrate, channel.id.includes('-vibrate-'));
-      assert.equal(channel.sound, channel.id.includes('-silent-') ? null : 'default');
+      if (channel.id.includes('-silent-')) assert.equal(channel.sound, null);
+      else assert.equal(Object.hasOwn(channel, 'sound'), false);
     }
   });
   await test('Negativa nao repete prompt em atualizacoes automaticas nem busca token', async () => {
@@ -100,6 +112,18 @@ async function test(name, work) { await work(); results.push(name); console.log(
   await test('iOS solicita alertas e som sem criar canais Android', async () => {
     const f = fixture({ platform: 'ios' });
     assert.equal(await f.ensureChatNotificationPermission(), 'granted'); assert.equal(f.channels.length, 0);
+  });
+  await test('Preparacao Android usa som do sistema e cria canal antes de pedir permissao', async () => {
+    const f = fixture({ operational: true });
+    await f.askOperationalPermission('notifications');
+    assert.equal(f.channels.length, 1); assert.equal(f.channels[0].id, 'default');
+    assert.equal(Object.hasOwn(f.channels[0], 'sound'), false);
+    assert.deepEqual(f.calls, ['channel', 'request']);
+  });
+  await test('Preparacao iOS solicita notificacoes sem criar canal Android', async () => {
+    const f = fixture({ operational: true, platform: 'ios' });
+    await f.askOperationalPermission('notifications');
+    assert.deepEqual(f.calls, ['request']);
   });
   await test('WAV nativo corresponde ao asset e contratos usam nomes validos', () => {
     const config = fs.readFileSync(path.join(root, 'app.config.ts'), 'utf8');

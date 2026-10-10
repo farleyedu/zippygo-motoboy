@@ -1,7 +1,7 @@
 // Serviço para comunicação com a API do ZippyGo
 import axios, { AxiosInstance, AxiosResponse, AxiosAdapter, AxiosError, AxiosHeaders, CanceledError } from 'axios';
 import { logApiFailure } from './apiErrors';
-import { reportOperationalFailure } from './sessionEvents';
+import { reportAccountAuthenticationFailure, reportOperationalFailure } from './sessionEvents';
 import { API_CONFIG, getApiUrl, validateApiConfig } from '../config/apiConfig';
 import { Pedido, PedidosResponse, BuscarPedidosParams } from '../types/pedido';
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../utils/secureStorage';
@@ -262,6 +262,12 @@ apiClient.interceptors.response.use(
         }
         return apiClient.request(requestConfig);
       }
+    }
+
+    // Uma recusa definitiva do acesso principal exige login, sem apagar o turno.
+    // O token da chamada permite ignorar uma resposta antiga depois de outro login.
+    if (response.status === 401 && !isAuthEndpoint(endpoint) && !isOperationalEndpoint(endpoint)) {
+      reportAccountAuthenticationFailure({ token: String(response.config.headers?.Authorization || '').replace(/^Bearer\s+/i, '') });
     }
 
     // Log da resposta apenas em desenvolvimento

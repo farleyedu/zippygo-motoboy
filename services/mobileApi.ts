@@ -54,6 +54,7 @@ export type OperationalSession = {
   sessionId: string;
   epoch: number;
   origin: string;
+  clientPlatform?: 'web' | 'native';
   startedAtUtc: string;
   presenceExpiresAtUtc: string;
   heartbeatIntervalSeconds: number;
@@ -311,10 +312,11 @@ export async function selectEstablishment(estabelecimentoId: string): Promise<{
   return unwrap(response);
 }
 
-export async function startOperationalSession(options: { attemptId?: string; persist?: boolean } = {}): Promise<OperationalTokenResponse> {
+export async function startOperationalSession(options: { attemptId?: string; persist?: boolean; clientPlatform?: 'web' | 'native' } = {}): Promise<OperationalTokenResponse> {
   const response = await apiClient.post(API_CONFIG.ENDPOINTS.OPERATIONAL_START, {
     attemptId: options.attemptId ?? createIdentifier(),
     clientInstanceId: await getClientInstanceId(),
+    clientPlatform: options.clientPlatform ?? 'native',
   });
   const data = unwrap<OperationalTokenResponse>(response);
   if (options.persist !== false) await saveOperationalSession(data);

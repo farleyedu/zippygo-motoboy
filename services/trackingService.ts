@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import { stopBackgroundLocation } from './backgroundLocationLifecycle';
 import { browserNativeTest } from './browserNativeTest';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import { createIdentifier, heartbeatOperationalSession, OperationalLocationPayload, sendOperationalLocations } from './mobileApi';
@@ -66,7 +67,7 @@ export async function maintainOperationalPresence(): Promise<boolean> {
       const response = await heartbeatOperationalSession({ persist: false, token: context.token });
       if (!(await stillCurrent(context))) return false;
       if (`${response.session.sessionId}.${response.session.epoch}` !== context.id || response.session.isEnded) {
-        if (await Location.hasStartedLocationUpdatesAsync('background-location-task')) await Location.stopLocationUpdatesAsync('background-location-task');
+        await stopBackgroundLocation();
         return false;
       }
       const raw = await getSecureItem('operationalSession');
@@ -82,7 +83,7 @@ export async function maintainOperationalPresence(): Promise<boolean> {
       const failure = error as { status?: number; code?: string; response?: { status?: number } };
       if ((failure.status === 401 || failure.response?.status === 401 || ['SESSION_CHANGED', 'LINK_FORBIDDEN'].includes(failure.code || '')) && (await scope())?.token === context.token) {
         // Sem provider React no headless: parar GPS e reconciliar a sessão ao reabrir.
-        if (await Location.hasStartedLocationUpdatesAsync('background-location-task')) await Location.stopLocationUpdatesAsync('background-location-task');
+        await stopBackgroundLocation();
         return false;
       }
       // Falha de rede mantém a amostra na fila; não equivale a turno encerrado.
@@ -119,11 +120,11 @@ export async function sendCurrentLocation(mode?: TrackingMode): Promise<void> {
 export async function sendLocation(
   location: Location.LocationObject,
   mode?: TrackingMode,
-  options: { force?: boolean } = {},
+  options: { force?: boolean; expectedScopeId?: string } = {},
 ): Promise<void> {
   if (browserNativeTest) return;
   const context = await scope();
-  if (!context) return;
+  if (!context || options.expectedScopeId && options.expectedScopeId !== context.id) return;
   return serialize(async () => {
     if (!(await stillCurrent(context))) return;
     const trackingMode = mode ?? (await getTrackingMode());
