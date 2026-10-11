@@ -77,7 +77,7 @@ export default function OrderDetails() {
     if (order.isOffer) { router.push('/oferta'); return; }
     if (!order.isCurrent) { router.push('/rota'); return; }
     if (!order.pickedUpAtUtc) { router.push('/retirada'); return; }
-    if (order.arrivedAtUtc) { router.push('/chegadaEntrega'); return; }
+    if (order.arrivedAtUtc) { router.push({ pathname: '/confirmacaoEntrega', params: { id: String(id) } }); return; }
     const session = turn.store.getSnapshot().session;
     if (!session) { setError('Recupere seu turno antes de registrar a chegada.'); return; }
     const sameSession = () => {
@@ -95,7 +95,7 @@ export default function OrderDetails() {
       if (generation.current !== currentGeneration || !sameSession()) return;
       setOrder(updated);
       if (!updated.isCurrent || !updated.arrivedAtUtc || turn.store.getSnapshot().queue?.current?.pedidoId !== id) { setError('A rota mudou. Confira o pedido atual antes de finalizar.'); return; }
-      router.push('/chegadaEntrega');
+      router.push({ pathname: '/confirmacaoEntrega', params: { id: String(id) } });
     }
     catch (caught) { if (generation.current === currentGeneration) setError(caught instanceof Error ? caught.message : 'Não foi possível registrar a chegada.'); }
     finally { setBusy(false); }

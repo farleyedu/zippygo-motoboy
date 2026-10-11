@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Keyboard, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Check, KeyRound, ShieldCheck } from 'lucide-react-native';
 import { useAuth } from '../../src/contexts/AuthContext';
@@ -9,6 +9,7 @@ import { useZippyTheme } from '../../src/ui/theme';
 import { getSecureItem } from '../../utils/secureStorage';
 import { AccountNotice } from '../../src/ui/AccountKit';
 import { AccessKey } from '../../src/ui/AccessKey';
+import { SessionReplacementDialog } from '../../src/ui/SessionReplacementDialog';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -20,13 +21,14 @@ export default function LoginScreen() {
   const [errors, setErrors] = useState<{ email?: string; senha?: string }>({});
   const [failure, setFailure] = useState('');
   const [remember, setRemember] = useState(true);
+  const [confirmation, setConfirmation] = useState<{ email: string; senha: string; remember: boolean; sessionId: string } | null>(null);
   useEffect(() => { let alive = true; getSecureItem('zippygo.rememberLogin').then(value => { if (alive) setRemember(value !== 'false'); }); return () => { alive = false; }; }, []);
   const submitting = useRef(false);
   const alive = useRef(true);
   useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
-  const blocked = loading || authLoading;
+  const blocked = loading || authLoading || !!confirmation;
 
-  const handleLogin = async () => {
+  const handleLogin = async (confirmed = false) => {
     if (submitting.current || authLoading) return;
     const nextErrors = {
       email: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) ? undefined : 'Informe um e-mail válido.',
@@ -36,11 +38,18 @@ export default function LoginScreen() {
     if (nextErrors.email || nextErrors.senha) return;
     submitting.current = true; setLoading(true);
     try {
-      const result = await signIn(email.trim(), senha, remember);
+      const pending = confirmed ? confirmation : null;
+      if (confirmed && !pending) return;
+      const result = await signIn(pending?.email ?? email.trim(), pending?.senha ?? senha, pending?.remember ?? remember, pending?.sessionId);
       if (!alive.current) return;
-      if (result.success) {
+      if (result.requiresSessionConfirmation && result.activeSessionId) {
+        Keyboard.dismiss();
+        setConfirmation({ email: pending?.email ?? email.trim(), senha: pending?.senha ?? senha, remember: pending?.remember ?? remember, sessionId: result.activeSessionId });
+        if (confirmed) setFailure('A sessão ativa mudou. Confira o aviso e confirme novamente.');
+      } else if (result.success) {
+        setConfirmation(null);
         if (result.requiresLinkRequest) router.replace('/solicitarRestaurante');
-        else router.replace(result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/permissoes');
+        else router.replace(result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/');
       } else setFailure(result.error || 'Não foi possível entrar. Tente novamente.');
     } catch {
       if (alive.current) setFailure('Não foi possível entrar. Confira sua conexão e tente novamente.');
@@ -64,5 +73,6 @@ export default function LoginScreen() {
     <Button onPress={() => void handleLogin()} loading={loading} disabled={blocked}>Entrar</Button>
     <View style={{ marginTop: 17, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}><Text style={{ fontFamily: 'Manrope', fontSize: 9, color: colors.muted }}>Ainda não tem conta?</Text><Pressable accessibilityRole="button" disabled={blocked} onPress={() => router.push('/(auth)/register')} hitSlop={9} style={{ minHeight: 26, justifyContent: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 11, color: colors.accent }}>Criar agora</Text></Pressable></View>
     <AccountNotice icon={ShieldCheck}>Seu acesso fica protegido. Nunca envie sua senha no chat.</AccountNotice>
+    <SessionReplacementDialog visible={!!confirmation} busy={loading || authLoading} error={failure} onCancel={() => { setConfirmation(null); setFailure(''); }} onContinue={() => void handleLogin(true)} />
   </AuthScreen>;
 }

@@ -41,9 +41,76 @@ function fixture(savedInitially = true, overrides = {}) {
     stopMonitor: async () => { log.push(['stopMonitor']); },
     ...overrides,
   };
-  const store = createOperationalSessionStore(ports); store.bind(owner);
+const store = createOperationalSessionStore(ports); store.bind(owner);
   return { store, ports, log, saved: () => saved, count: name => log.filter(item => item[0] === name).length };
 }
+
+test('GPS revogado mantém consulta de ofertas e renovação do turno, sem ligar monitoramento', async () => {
+  const f = fixture(true, { permissions: async () => ({ ...permissions, ready: false, foreground: { granted: false } }) });
+  assert.equal(await f.store.restore(), false);
+  const offered = { ...blankQueue, version: 2, offer: { offerId: 'nova-oferta', expiresAtUtc: new Date(Date.now() + 60000).toISOString(), stops: [] } };
+  f.ports.queue = async () => offered;
+  assert.equal(await f.store.refreshQueue(), true);
+  assert.equal(f.store.getSnapshot().queue.offer.offerId, 'nova-oferta');
+  assert.equal(f.store.getSnapshot().phase, 'permission-required');
+  await f.store.tick();
+  assert.equal(f.count('heartbeat'), 2); assert.equal(f.count('monitor'), 0); assert.equal(f.count('clear'), 0);
+  assert.equal(f.store.getSnapshot().session.sessionId, session.sessionId);
+});
+test('voltar ao app mantém a fila e a fase online durante a atualização', async () => {
+  const f = fixture(); await f.store.restore();
+  const wait = deferred(), phases = [];
+  f.ports.current = () => wait.promise;
+  const unsubscribe = f.store.subscribe(() => phases.push(f.store.getSnapshot().phase));
+  const pending = f.store.restore(); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.store.getSnapshot().phase, 'online'); assert.ok(f.store.getSnapshot().queue);
+  wait.resolve(session); assert.equal(await pending, true);
+  assert.ok(!phases.includes('restoring')); unsubscribe();
+});
+
+test('heartbeat vencido recupera o turno sem apagar os pedidos antes da retomada', async () => {
+  const recovered = { ...token, session: { ...session, sessionId: 'turno-recuperado' } };
+  const f = fixture(true, { recover: async () => recovered });
+  await f.store.restore();
+  f.ports.heartbeat = async () => { throw { status: 401, code: 'SESSION_EXPIRED' }; };
+  await f.store.tick();
+  assert.equal(f.store.getSnapshot().phase, 'online');
+  assert.equal(f.store.getSnapshot().session.sessionId, 'turno-recuperado');
+  assert.equal(f.count('clear'), 0);
+});
+
+test('falha de rede na recuperação de heartbeat preserva a sessão para tentar novamente', async () => {
+  const f = fixture(true, { recover: async () => { throw { status: 503, message: 'Sem rede' }; } });
+  await f.store.restore();
+  f.ports.heartbeat = async () => { throw { status: 401, code: 'SESSION_EXPIRED' }; };
+  await f.store.tick();
+  assert.equal(f.store.getSnapshot().phase, 'reconnecting');
+  assert.equal(f.store.getSnapshot().session.sessionId, session.sessionId);
+  assert.equal(f.count('clear'), 0);
+});
+test('expiração por heartbeat recupera automaticamente e lê a fila do servidor', async () => {
+  const recovered = { ...session, sessionId: 'turno-recuperado', epoch: 5 };
+  const f = fixture(true, {
+    current: async () => ({ ...session, isEnded: true, endReason: 'heartbeat_timeout' }),
+    recover: async (attempt, previous) => { assert.equal(previous, session.sessionId); assert.equal(attempt, 'attempt-qa'); return { ...token, session: recovered }; },
+  });
+  assert.equal(await f.store.restore(), true); assert.equal(f.store.getSnapshot().session.sessionId, recovered.sessionId);
+  assert.equal(f.count('clear'), 0); assert.equal(f.count('queue'), 1);
+});
+test('encerramento explícito não recria turno automaticamente', async () => {
+  let recovered = false;
+  const f = fixture(true, { current: async () => ({ ...session, isEnded: true, endReason: 'motoboy_offline' }), recover: async () => { recovered = true; return token; } });
+  assert.equal(await f.store.restore(), false); assert.equal(recovered, false); assert.equal(f.store.getSnapshot().phase, 'expired');
+});
+test('token operacional expirado usa o acesso da conta; falha de rede preserva o turno', async () => {
+  const f = fixture(true, { current: async () => { throw { status: 401, code: 'SESSION_EXPIRED' }; }, recover: async () => { throw { status: 503, message: 'Sem conexão' }; } });
+  assert.equal(await f.store.restore(), false); assert.equal(f.count('clear'), 0); assert.equal(f.store.getSnapshot().session.sessionId, session.sessionId);
+  assert.equal(f.store.getSnapshot().phase, 'reconnecting');
+});
+test('retomada recusada por troca de aparelho não substitui a sessão atual', async () => {
+  const f = fixture(true, { current: async () => ({ ...session, isEnded: true, endReason: 'heartbeat_timeout' }), recover: async () => { throw { status: 409, code: 'SESSION_CHANGED', message: 'A sessão mudou.' }; } });
+  assert.equal(await f.store.restore(), false); assert.equal(f.store.getSnapshot().phase, 'expired'); assert.equal(f.count('clear'), 1);
+});
 test('permissões incompletas não enviam início; notificações negadas são opcionais', async () => {
   const denied = fixture(false, { permissions: async () => ({ ...permissions, ready: false }) });
   assert.equal(await denied.store.start(), false); assert.equal(denied.count('start'), 0);
@@ -234,3 +301,19 @@ test('fallback sem crypto.randomUUID gera Guid válido para início e amostras',
 });
 
 module.exports = { load, fixture, trackingFixture, deferred, session, blankQueue, location };
+
+test('Renovação do acesso depois do segundo plano conserva sessão, epoch e pedidos', async () => {
+  const f = fixture(true, { current: async () => { throw { status: 401, code: 'SESSION_EXPIRED' }; }, recover: async (_, id) => { assert.equal(id, session.sessionId); return { ...token, accessToken: 'jwt-novo' }; }, queue: async () => ({ ...blankQueue, current: { pedidoId: 23, pickedUpAtUtc: '2026-10-11T12:00:00Z' } }) });
+  await f.store.restore();
+  assert.equal(f.store.getSnapshot().session.sessionId, session.sessionId);
+  assert.equal(f.store.getSnapshot().session.epoch, session.epoch);
+  assert.equal(f.store.getSnapshot().queue.current.pedidoId, 23);
+  assert.equal(f.log.some(row => ['end', 'clear', 'start'].includes(row[0])), false);
+});
+
+test('Receber oferta mantém os destinos já aceitos do mapa', () => {
+  const api = load('services/mobileApi.ts', { './apiService': { apiClient: {} }, '../config/apiConfig': { API_CONFIG: {} }, '../utils/secureStorage': {} });
+  const queue = { current: { pedidoId: 23, status: 'en_route', pedido: { id: 23, latitude: -18.9, longitude: -48.2 } }, next: [], offer: { stops: [{ pedidoId: 31, status: 'assigned', pedido: { id: 31, latitude: -18.8, longitude: -48.3 } }] } };
+  assert.deepEqual(api.queueToPedidos(queue).map(p => p.id), [23]);
+  assert.deepEqual(api.queueToPedidos({ ...queue, current: null }).map(p => p.id), [31]);
+});

@@ -17,7 +17,6 @@ export function RouteScreen({ children, footer }: { children: React.ReactNode; f
   const router = useRouter(), turn = useOperationalSession(), focused = useIsFocused(), auth = useAuth(), navigation = useRootNavigationState();
   useEffect(() => { if (navigation?.key && !auth.isLoading && focused && turn.permissions && turn.phase === 'offline') router.replace('/'); }, [navigation?.key, auth.isLoading, turn.permissions, turn.phase, focused, router]);
   return <AccountScreen active="map" footer={footer}>
-    {turn.routeNotice && <Feedback title={turn.routeNotice.kind === 'cancelled' ? 'A loja cancelou um pedido' : 'Sua rota foi atualizada'} message="Confira a sequência atual antes de continuar." onRetry={() => { const notice = turn.routeNotice!; turn.clearRouteNotice(); router.push({ pathname: '/estadoRota', params: { tipo: notice.kind, pedidoId: String(notice.pedidoId || '') } }); }} />}
     {turn.busy && !turn.queue ? <Feedback title="Conferindo sua rota" loading /> : null}
     {turn.error && <Feedback title="Aguardando atualização do turno" message={turn.error} onRetry={() => void turn.store.refreshQueue()} />}
     {children}

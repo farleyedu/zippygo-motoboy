@@ -1,0 +1,155 @@
+{
+  "engine": "webkit",
+  "cases": [
+    {
+      "dark": false,
+      "case": "Primeiro acesso com permissões prontas espera restauração e entra direto na tarefa, sem travar ou duplicar turno"
+    },
+    {
+      "dark": false,
+      "case": "Pedidos já aceitos são recuperados automaticamente; falha não permite saída e retry destrava a mesma fila"
+    },
+    {
+      "dark": false,
+      "case": "Retirada sem segunda interação",
+      "stableCheckboxes": true
+    },
+    {
+      "dark": false,
+      "case": "Retirada com resumo por pedido, cancelamento e confirmação única",
+      "stableCheckboxes": true
+    },
+    {
+      "dark": false,
+      "case": "Seleção alterada na loja rejeita versão antiga e permite atualizar sem avanço local"
+    },
+    {
+      "dark": false,
+      "case": "Entrega sem itens destacados, sem etapas dispensáveis, exige arraste"
+    },
+    {
+      "dark": false,
+      "case": "Entrega destacada mantém bloqueio por código, cobrança e foto obrigatórios"
+    },
+    {
+      "dark": false,
+      "case": "Código validado permanece visível; cobrança dividida inline exige recebimento e edição invalida confirmação; arraste único avança após servidor"
+    },
+    {
+      "dark": false,
+      "case": "Falha mantém conclusão e fila; mapa permanece consultável; sincronização única reutiliza operação"
+    },
+    {
+      "dark": false,
+      "case": "Revisão de permissões já concedidas fecha direto, sem iniciar turno; som e vibração ficam nas configurações"
+    },
+    {
+      "dark": false,
+      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura e restaura navegação"
+    },
+    {
+      "dark": false,
+      "case": "Chat de cliente com 25 mensagens mantém última mensagem e caixa de texto acima do teclado"
+    },
+    {
+      "dark": false,
+      "case": "Permissão negada informa ajuste, verifica GPS real e permite retornar ao turno"
+    },
+    {
+      "dark": false,
+      "case": "Reabertura retoma mapa; rota completa e detalhes inline preservam a instância do mapa"
+    },
+    {
+      "dark": false,
+      "case": "Pins com numeração legível e próxima parada destacada cabem inteiros no mapa do início"
+    },
+    {
+      "dark": false,
+      "case": "Oferta aparece no chat, exige aceite e preserva tela e rascunho"
+    },
+    {
+      "dark": false,
+      "case": "Recusa pede confirmação inline, envia identidade da oferta e preserva chat"
+    },
+    {
+      "dark": false,
+      "case": "Oferta na rota mostra ganhos/mapa, recolhe sem responder, reabre com seleção e exige confirmação do aceite parcial"
+    },
+    {
+      "dark": true,
+      "case": "Primeiro acesso com permissões prontas espera restauração e entra direto na tarefa, sem travar ou duplicar turno"
+    },
+    {
+      "dark": true,
+      "case": "Pedidos já aceitos são recuperados automaticamente; falha não permite saída e retry destrava a mesma fila"
+    },
+    {
+      "dark": true,
+      "case": "Retirada sem segunda interação",
+      "stableCheckboxes": true
+    },
+    {
+      "dark": true,
+      "case": "Retirada com resumo por pedido, cancelamento e confirmação única",
+      "stableCheckboxes": true
+    },
+    {
+      "dark": true,
+      "case": "Seleção alterada na loja rejeita versão antiga e permite atualizar sem avanço local"
+    },
+    {
+      "dark": true,
+      "case": "Entrega sem itens destacados, sem etapas dispensáveis, exige arraste"
+    },
+    {
+      "dark": true,
+      "case": "Entrega destacada mantém bloqueio por código, cobrança e foto obrigatórios"
+    },
+    {
+      "dark": true,
+      "case": "Código validado permanece visível; cobrança dividida inline exige recebimento e edição invalida confirmação; arraste único avança após servidor"
+    },
+    {
+      "dark": true,
+      "case": "Falha mantém conclusão e fila; mapa permanece consultável; sincronização única reutiliza operação"
+    },
+    {
+      "dark": true,
+      "case": "Revisão de permissões já concedidas fecha direto, sem iniciar turno; som e vibração ficam nas configurações"
+    },
+    {
+      "dark": true,
+      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura e restaura navegação"
+    },
+    {
+      "dark": true,
+      "case": "Chat de cliente com 25 mensagens mantém última mensagem e caixa de texto acima do teclado"
+    },
+    {
+      "dark": true,
+      "case": "Permissão negada informa ajuste, verifica GPS real e permite retornar ao turno"
+    },
+    {
+      "dark": true,
+      "case": "Reabertura retoma mapa; rota completa e detalhes inline preservam a instância do mapa"
+    },
+    {
+      "dark": true,
+      "case": "Pins com numeração legível e próxima parada destacada cabem inteiros no mapa do início"
+    },
+    {
+      "dark": true,
+      "case": "Oferta aparece no chat, exige aceite e preserva tela e rascunho"
+    },
+    {
+      "dark": true,
+      "case": "Recusa pede confirmação inline, envia identidade da oferta e preserva chat"
+    },
+    {
+      "dark": true,
+      "case": "Oferta na rota mostra ganhos/mapa, recolhe sem responder, reabre com seleção e exige confirmação do aceite parcial"
+    }
+  ],
+  "errors": [],
+  "ok": true
+}

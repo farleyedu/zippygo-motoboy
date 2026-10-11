@@ -79,6 +79,7 @@
 - Transpor composição, medidas, tipografia, cores, luz, profundidade e interação da referência. Não improvisar um layout diferente nem usar a implementação atual como modelo aprovado.
 - Conferir capturas do HTML original e do app no mesmo tema e largura. Mudanças em componentes compartilhados exigem revisão das telas afetadas. Para efeitos nativos, conferir também o Android; revisão Web não comprova renderização nativa.
 - Registrar validação funcional e visual separadamente. Capturas geradas do próprio app são evidência da implementação, nunca uma nova referência aprovada. Não declarar fidelidade concluída com divergências abertas; documentar diferenças e limitações na continuidade.
+- Capturas de tela feitas para validação são temporárias: apagar os arquivos após concluir a inspeção visual. Preservar relatórios dos testes, assets do projeto e imagens de referência fornecidas pelo usuário.
 
 ### 4.1 Frontend (este repo — React Native/Expo)
 - **Hooks funcionais**, evitar classes e `any`.

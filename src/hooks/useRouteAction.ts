@@ -3,7 +3,7 @@ import { MobileApiError, MotoboyQueue } from '../../services/mobileApi';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
 import { useDeliveryCompletion } from '../contexts/DeliveryCompletionContext';
 
-export function useRouteAction() {
+export function useRouteAction(options: { allowWithoutLocation?: boolean } = {}) {
   const turn = useOperationalSession(), running = useRef(false), alive = useRef(true);
   const completion = useDeliveryCompletion();
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [code, setCode] = useState('');
@@ -13,7 +13,7 @@ export function useRouteAction() {
     try { completion.assertRouteMutationAllowed(); }
     catch (failure) { setError(failure instanceof Error ? failure.message : 'Confira a conclusão salva antes de alterar a rota.'); return; }
     const current = turn.store.getSnapshot(), session = current.session;
-    if (!session || !['online', 'reconnecting'].includes(current.phase)) { setError('Recupere seu turno antes de continuar.'); return; }
+    if (!session || !['online', 'reconnecting', ...(options.allowWithoutLocation ? ['permission-required'] : [])].includes(current.phase)) { setError('Recupere seu turno antes de continuar.'); return; }
     running.current = true; setBusy(true); setError(''); setCode('');
     try {
       const queue = await action(), now = turn.store.getSnapshot();

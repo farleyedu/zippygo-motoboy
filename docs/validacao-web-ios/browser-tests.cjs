@@ -26,6 +26,11 @@ const server = http.createServer((req, res) => {
   browser = await chromium.launch({ headless: true, executablePath: process.env.QA_CHROME || 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, permissions: ['geolocation'], geolocation: { latitude: -18.9, longitude: -48.2 }, reducedMotion: 'reduce' });
   await context.addInitScript(({ shop, user }) => {
+    const fetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      if (typeof input === 'string') { const url = new URL(input, location.href); if (url.pathname.startsWith('/api/')) return fetch(url.pathname + url.search, init); }
+      return fetch(input, init);
+    };
     for (const [key, value] of Object.entries({ 'zippygo.user': JSON.stringify(user), authToken: 'principal-qa', 'zippygo.token': 'principal-qa',
       'zippygo.estabelecimentoAtual': JSON.stringify(shop), 'zippygo.design.preferences.v1': JSON.stringify({ dark: false, reducedMotion: true }) })) localStorage.setItem(key, value);
     window.__qaVisible = true;
@@ -45,6 +50,9 @@ const server = http.createServer((req, res) => {
     if (p.endsWith('/session')) return ok(session);
     if (p.endsWith('/heartbeat')) return ok({ accessToken: 'operacional-qa', session });
     if (p.endsWith('/queue')) return ok(queue);
+    if (p.endsWith('/orders/23')) return ok({ ...queue.current.pedido, total: 30, pago: true, itens: [{ nome: 'Pizza QA', quantidade: 1 }],
+      checklist: { version: 'qa-23', detailsUnavailable: false, requiresExtraRecheck: false, items: [{ key: 'pizza-23', name: 'Pizza QA', quantity: 1, extra: false }] } });
+    if (p.endsWith('/transfers')) return ok([]);
     if (p.endsWith('/location/batch')) {
       if (failGps) return route.abort('failed');
       return ok({ samples: body.samples.map(sample => ({ sampleId: sample.sampleId, sequence: sample.sequence, outcome: 'accepted', updatedCurrent: true, sessionVersion: 2, receivedAtUtc: new Date().toISOString() })) });
@@ -60,11 +68,14 @@ const server = http.createServer((req, res) => {
     while (gpsCalls().length <= count && Date.now() < deadline) await page.waitForTimeout(100);
     assert.ok(gpsCalls().length > count, 'O retorno deve enviar uma posição nova.');
   };
-  await page.goto(base + '/permissoes', { waitUntil: 'domcontentloaded', timeout: 120000 });
-  await page.getByRole('button', { name: 'Ficar online', exact: true }).click();
+  await page.goto(base + '/permissoes?intent=start', { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await page.waitForURL('**/retirada');
+  // A posição controlada anterior à hidratação pode ter ficado velha; gerar um fix
+  // após iniciar o acompanhamento, assim como faria o GPS do aparelho.
   await context.setGeolocation({ latitude: -18.90001, longitude: -48.20001 });
   await page.waitForFunction(() => !!localStorage.getItem('tracking.sent.v3.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.1'));
   assert.equal(calls.find(call => call.p.endsWith('/session/start')).body.clientPlatform, 'web');
+  assert.equal(calls.filter(call => call.p.endsWith('/session/start')).length, 1);
   assert.ok(gpsCalls().length > 0);
   await page.goto(base + '/conexao', { waitUntil: 'domcontentloaded' });
   await page.getByText('Última localização agora', { exact: true }).waitFor();
@@ -80,17 +91,18 @@ const server = http.createServer((req, res) => {
   failGps = true; await context.setGeolocation({ latitude: -18.902, longitude: -48.202 }); await hide(true);
   await page.getByText('Última localização há 3 min', { exact: true }).waitFor();
   assert.equal(await page.evaluate(key => JSON.parse(localStorage.getItem(key)).capturedAtUtc, key), staleAt);
-  await page.screenshot({ path: path.join(__dirname, 'conexao-web.png'), fullPage: true });
   failGps = false; await hide(false); await hide(true);
   await page.waitForTimeout(16000); // janela de retry da fila após a falha controlada
   // O override do Chromium mantém o timestamp do último setGeolocation;
   // produzir um fix novo para exercitar a consulta periódica real do app.
   await context.setGeolocation({ latitude: -18.9021, longitude: -48.2021 });
   await page.getByText('Última localização agora', { exact: true }).waitFor();
-  await page.goto(base + '/permissoes', { waitUntil: 'domcontentloaded' });
-  await page.getByText('Localização com o ZippyGo aberto', { exact: true }).waitFor();
+  const startsBeforeReview = calls.filter(call => call.p.endsWith('/session/start')).length;
+  await page.goto(base + '/permissoes?intent=review&returnTo=%2Fprivacidade', { waitUntil: 'domcontentloaded' });
+  await page.waitForURL('**/privacidade');
+  assert.equal(calls.filter(call => call.p.endsWith('/session/start')).length, startsBeforeReview);
+  assert.equal(await page.getByText('PERMITIDO', { exact: true }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Permitir em segundo plano' }).count(), 0);
-  await page.screenshot({ path: path.join(__dirname, 'permissoes-web.png'), fullPage: true });
   assert.equal(await page.locator('html').getAttribute('lang'), 'pt-BR');
   assert.equal(await page.locator('meta[name="apple-mobile-web-app-capable"]').getAttribute('content'), 'yes');
   const manifest = await (await context.request.get(base + '/manifest.json')).json(); assert.equal(manifest.display, 'standalone');
@@ -101,7 +113,6 @@ const server = http.createServer((req, res) => {
 })().catch(async error => {
   process.stderr.write(error.stack + '\n'); process.exitCode = 1;
   if (currentPage) {
-    await currentPage.screenshot({ path: path.join(__dirname, 'browser-failure.png'), fullPage: true }).catch(() => {});
     const state = await currentPage.evaluate(() => ({ text: document.body.innerText, secure: window.isSecureContext,
       keys: Object.fromEntries(Object.entries(localStorage).filter(([key]) => key.startsWith('tracking.') || key.startsWith('operational'))) })).catch(() => null);
     fs.writeFileSync(path.join(__dirname, 'browser-failure.json'), JSON.stringify({ error: error.message, errors, calls, state }, null, 2));

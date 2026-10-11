@@ -83,7 +83,9 @@ import { ChatMessageActions } from './ChatMessageActions';
 import { ChatForwardSheet } from './ChatForwardSheet';
 import * as Haptics from 'expo-haptics';
 import { useZippyTheme } from '../ui/theme';
+import { useKeyboardVisible } from '../hooks/useKeyboardVisible';
 import { AudioComposer, ChatMedia } from './ChatMedia';
+import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } from './MessageBubble';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
 import { decodeChatDraft, encodeChatDraft, mentionedIds } from './draft';
@@ -156,6 +158,7 @@ function MentionMark({ children }: { children: React.ReactNode }) {
 }
 
 export default function CommunicationScreen() {
+  const keyboardVisible = useKeyboardVisible();
   const params = useLocalSearchParams<{
     channel?: string;
     target?: string;
@@ -203,7 +206,7 @@ export default function CommunicationScreen() {
   const [loading, setLoading] = useState(true),
     [error, setError] = useState(''),
     [draft, setDraft] = useState(''),
-    [restored, setRestored] = useState(false),
+    [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null),
     [search, setSearch] = useState(''),
     [searching, setSearching] = useState(false),
     [filter, setFilter] = useState('Todas');
@@ -227,6 +230,7 @@ export default function CommunicationScreen() {
   const loadedQuery = useRef('');
   const paginationQuery = useRef('');
   const draftKey = `zippygo.chat.draft.v2:${identity.replace(`:${turn.session?.sessionId}:`, ':')}`;
+  const restored = !!owner && restoredDraftKey === draftKey;
   const {
     outbox,
     entries,
@@ -243,7 +247,7 @@ export default function CommunicationScreen() {
   });
   useEffect(() => {
     let alive = true;
-    setRestored(false);
+    setRestoredDraftKey(null);
     setDraft('');
     setReply(null);
     setMentions([]);
@@ -253,7 +257,7 @@ export default function CommunicationScreen() {
           const saved = decodeChatDraft(raw);
           setDraft(saved.body);
           setMentions(saved.mentions);
-          setRestored(true);
+          setRestoredDraftKey(draftKey);
         }
       },
       () => {
@@ -275,6 +279,7 @@ export default function CommunicationScreen() {
     return () => clearTimeout(timer);
   }, [draft, mentions, restored, draftKey, target]);
   useEffect(() => {
+    follow.current = true;
     setMessages([]);
     setContacts([]);
     setSelected(null); setForwarding(null);
@@ -286,6 +291,13 @@ export default function CommunicationScreen() {
     loadedQuery.current = '';
     paginationQuery.current = '';
   }, [identity]);
+  useEffect(() => {
+    if (!keyboardVisible) return;
+    follow.current = true;
+    const frame = requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
+    const timer = setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 180);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [keyboardVisible]);
   useEffect(() => {
     let alive = true;
     void AsyncStorage.getItem(`zippygo.chat.settings:${owner}`)
@@ -931,8 +943,8 @@ export default function CommunicationScreen() {
       : [];
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: dark ? '#111c30' : colors.paper }}
+      behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      style={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#111c30' : colors.paper }}
     >
       <Stack.Screen options={{ headerShown: false }} />
       <View
@@ -940,6 +952,7 @@ export default function CommunicationScreen() {
           width: '100%',
           maxWidth: 480,
           flex: 1,
+          minHeight: 0,
           alignSelf: 'center',
           paddingTop: insets.top,
         }}
@@ -1040,7 +1053,10 @@ export default function CommunicationScreen() {
         )}
         <ScrollView
           ref={scroll}
-          contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
+          style={{ flex: 1, minHeight: 0 }}
+          keyboardShouldPersistTaps="handled"
+          onLayout={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16, flexGrow: 1 }}
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } =
               event.nativeEvent;
@@ -1080,97 +1096,27 @@ export default function CommunicationScreen() {
               Nenhuma mensagem nesta conversa.
             </Text>
           )}
-          {messages.map((message) => {
+          {messages.map((message, index) => {
             const foreground = message.mine && dark ? '#fff' : colors.ink;
+            const continuation = continuesMessage(messages[index - 1], message);
+            const audioOnly = !!message.attachment?.contentType.startsWith('audio/') && !message.body;
+            const metadata = <MessageMeta createdAtUtc={message.createdAtUtc} mine={message.mine} read={message.readCount > 0} />;
             const content = (
               <>
-                <Text
-                  style={[
-                    styles.small,
-                    {
-                      fontWeight: '800',
-                      color: message.mine && dark ? '#d6e8ff' : colors.accent,
-                      marginBottom: 4,
-                    },
-                  ]}
-                >
-                  {message.senderName}
-                </Text>
-                {message.replyTo && (
-                  <Pressable
-                    accessibilityLabel="Ver mensagem citada"
-                    onPress={() => {
-                      if (message.replyTo) void locate(message.replyTo);
-                    }}
-                    style={{
-                      borderLeftWidth: 2,
-                      borderLeftColor: colors.accent,
-                      padding: 7,
-                      backgroundColor: message.mine ? '#ffffff14' : colors.soft,
-                      marginBottom: 6,
-                    }}
-                  >
-                    <Text
-                      style={[
-                        styles.small,
-                        { color: foreground, fontWeight: '700' },
-                      ]}
-                    >
-                      {message.replySender}
-                    </Text>
-                    <Text
-                      numberOfLines={2}
-                      style={[styles.small, { color: foreground }]}
-                    >
-                      {message.replyBody || 'Anexo'}
-                    </Text>
-                  </Pressable>
-                )}
+                {!message.mine && !continuation && channel !== 'private' && <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, lineHeight: 18, color: colors.accent, marginBottom: 3 }}>{message.senderName}</Text>}
+                {message.replyTo && <ReplyQuote mine={message.mine} sender={message.replySender || 'Mensagem'} body={message.replyBody || 'Anexo'} onPress={() => { if (message.replyTo) void locate(message.replyTo); }} />}
                 {message.forwarded && <Text style={[styles.small, { color: colors.muted, marginBottom: 6 }]}>↪ Encaminhada</Text>}
                 {message.attachment && (
                   <ChatMedia
                     attachment={message.attachment}
                     foreground={foreground}
+                    metadata={audioOnly ? metadata : undefined}
                     senderName={message.senderName}
                     avatarUri={contacts.find(c => c.motoboyId === message.motoboyId)?.avatar}
                   />
                 )}
-                {!!message.body && (
-                  <Text style={[styles.body, { color: foreground }]}>
-                    {message.body}
-                  </Text>
-                )}
-                <View
-                  style={[
-                    styles.row,
-                    { justifyContent: 'flex-end', gap: 4, marginTop: 7 },
-                  ]}
-                >
-                  <Text
-                    style={{
-                      fontFamily: 'Manrope',
-                      fontSize: 8,
-                      color: message.mine && dark ? '#d6e8ff' : colors.muted,
-                    }}
-                  >
-                    {new Date(message.createdAtUtc).toLocaleTimeString(
-                      'pt-BR',
-                      { hour: '2-digit', minute: '2-digit' },
-                    )}
-                  </Text>
-                  {message.mine &&
-                    (message.readCount > 0 ? (
-                      <CheckCheck
-                        color={message.mine && dark ? '#d6e8ff' : colors.accent}
-                        size={12}
-                      />
-                    ) : (
-                      <Check
-                        color={message.mine && dark ? '#d6e8ff' : colors.muted}
-                        size={12}
-                      />
-                    ))}
-                </View>
+                {!!message.body && <BubbleText body={message.body} foreground={foreground} metadata={metadata} />}
+                {!message.body && !audioOnly && <View style={{ marginTop: 4 }}>{metadata}</View>}
                 {message.reactions.length > 0 && (
                   <View
                     style={[styles.row, { marginTop: 8, flexWrap: 'wrap' }]}
@@ -1207,8 +1153,12 @@ export default function CommunicationScreen() {
               </>
             );
             return (
-              <Pressable
+              <MessageBubble
                 key={message.id}
+                testID={`chat-bubble-${message.id}`}
+                mine={message.mine}
+                continuation={continuation}
+                highlightColor={message.mentioned || highlighted === message.id ? colors.warning : undefined}
                 onLayout={(event) => {
                   if (highlighted === message.id)
                     scroll.current?.scrollTo({
@@ -1217,37 +1167,14 @@ export default function CommunicationScreen() {
                     });
                 }}
                 accessibilityLabel={`Mensagem de ${message.senderName}${message.mentioned ? ', mencionou voce' : ''}: ${message.body || 'anexo'}`}
-                delayLongPress={350}
                 onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
-                style={[
-                  styles.bubble,
-                  {
-                    alignSelf: message.mine ? 'flex-end' : 'flex-start',
-                    backgroundColor: message.mine
-                      ? dark
-                        ? '#2872e3'
-                        : '#c7d8ee'
-                      : dark
-                        ? '#22334c'
-                        : '#fff',
-                    borderWidth: highlighted === message.id ? 3 : 1,
-                    borderColor:
-                      message.mentioned || highlighted === message.id
-                        ? colors.warning
-                        : message.mine
-                          ? dark
-                            ? '#65a1ff'
-                            : '#b9cde7'
-                          : colors.line,
-                  },
-                ]}
               >
                 {message.mentioned ? (
                   <MentionMark>{content}</MentionMark>
                 ) : (
                   content
                 )}
-              </Pressable>
+              </MessageBubble>
             );
           })}
           {pending.map((entry) => (
@@ -1257,6 +1184,7 @@ export default function CommunicationScreen() {
                 styles.bubble,
                 {
                   alignSelf: 'flex-end',
+                  marginTop: 8,
                   backgroundColor: colors.accentSoft,
                   borderColor:
                     entry.state === 'failed' ? colors.danger : colors.line,
@@ -1411,9 +1339,10 @@ export default function CommunicationScreen() {
             styles.row,
             {
               paddingHorizontal: 12,
-              paddingBottom: 10,
               alignItems: 'flex-end',
               gap: 6,
+              flexShrink: 0,
+              paddingBottom: keyboardVisible ? 8 : 10,
             },
           ]}
         >
@@ -1449,13 +1378,16 @@ export default function CommunicationScreen() {
               value={draft}
               onChangeText={setDraft}
               maxLength={500}
-              editable={ready && !busy}
+              editable={ready && restored && !busy}
+              onFocus={() => { follow.current = true; scroll.current?.scrollToEnd({ animated: false }); }}
               style={[
                 styles.body,
                 {
                   flex: 1,
                   color: colors.ink,
                   maxHeight: 120,
+                  fontSize: 16,
+                  lineHeight: 22,
                   paddingVertical: 10,
                   paddingRight: 6,
                 },
@@ -1487,7 +1419,7 @@ export default function CommunicationScreen() {
             )}
           </Pressable>
         </View>
-        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>
+        {!keyboardVisible && <View style={{ flexShrink: 0, paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>}
       </View>
     </KeyboardAvoidingView>
   );
@@ -1522,7 +1454,7 @@ const styles = StyleSheet.create({
   },
   input: {
     fontFamily: 'Manrope',
-    fontSize: 11,
+    fontSize: Platform.OS === 'web' ? 16 : 11,
     minHeight: 45,
     borderWidth: 1,
     borderRadius: 13,

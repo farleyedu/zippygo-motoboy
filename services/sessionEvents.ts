@@ -1,6 +1,6 @@
 type SessionFailure = { status: number; code?: string; message: string; token?: string };
 const listeners = new Set<(failure: SessionFailure) => void>();
-type AccountAuthenticationFailure = { token: string };
+type AccountAuthenticationFailure = { token: string; code?: string };
 const accountListeners = new Set<(failure: AccountAuthenticationFailure) => void>();
 
 export function subscribeAccountAuthenticationFailures(listener: (failure: AccountAuthenticationFailure) => void) {

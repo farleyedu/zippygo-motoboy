@@ -22,6 +22,6 @@ export default function PrivacyScreen() {
     <Surface style={{ marginTop: 13, paddingVertical: 0 }}><MenuRow icon={ShieldCheck} title="Mostrar localização ao cliente" subtitle="Pelo canal autorizado da loja, durante a entrega." last right={<Switch accessibilityLabel="Mostrar localização ao cliente" disabled={sharing === null || busy || !turn.session} value={sharing === true} onValueChange={v => void change(v)} />} /></Surface>
     {!turn.session && <AccountNotice icon={ShieldCheck}>Essa preferência é consultada e alterada durante um turno ativo. A localização operacional da loja é necessária para trabalhar online.</AccountNotice>}
     {!!error && <Feedback title="A preferência foi mantida" message={error} />}
-    <View style={{ marginTop: 17 }}><Button secondary icon={LocateFixed} onPress={() => router.push('/permissoes')}>Revisar permissões do aparelho</Button></View>
+    <View style={{ marginTop: 17 }}><Button secondary icon={LocateFixed} onPress={() => router.push({ pathname: '/permissoes', params: { intent: 'review', returnTo: '/privacidade' } })}>Revisar permissões do aparelho</Button></View>
   </AccountScreen>;
 }

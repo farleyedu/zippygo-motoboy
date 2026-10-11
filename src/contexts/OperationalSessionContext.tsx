@@ -11,6 +11,8 @@ import { iniciarMonitoramentoLocalizacao, pararMonitoramentoLocalizacao } from '
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { startOperationalRealtime } from '../../services/operationalRealtime';
 import { subscribeWebForeground } from '../../services/webForegroundLocation';
+import { getTransfers, type Transfer } from '../../services/routeApi';
+import { clearWebOfferPushContext } from '../../services/webOfferPush';
 
 const ATTEMPT_KEY = 'operationalStartAttempt';
 async function stored() {
@@ -39,6 +41,7 @@ function createPorts(): OperationalPorts {
     },
     clearAttempt: () => deleteSecureItem(ATTEMPT_KEY),
     start: attemptId => startOperationalSession({ attemptId, persist: false, clientPlatform: Platform.OS === 'web' ? 'web' : 'native' }),
+    recover: (attemptId, resumeSessionId) => startOperationalSession({ attemptId, resumeSessionId, persist: false, clientPlatform: Platform.OS === 'web' ? 'web' : 'native' }),
     current: getOperationalSession,
     heartbeat: force => heartbeatOperationalSession({ persist: false, force }),
     queue: getOperationalQueue,
@@ -51,7 +54,7 @@ function createPorts(): OperationalPorts {
       await saveOperationalSession(data);
       await setSecureItem('operationalUserId', identity.userId);
     },
-    clear: async () => { await clearCurrentTrackingData(); await clearOperationalSession(); await clearTrackingMode(); },
+    clear: async () => { if (Platform.OS === 'web') await clearWebOfferPushContext(); await clearCurrentTrackingData(); await clearOperationalSession(); await clearTrackingMode(); },
     end: reason => endOperationalSession(reason, { clear: false }),
     permissions: readOperationalPermissions,
     monitor: iniciarMonitoramentoLocalizacao,
@@ -61,7 +64,7 @@ function createPorts(): OperationalPorts {
 }
 type Store = ReturnType<typeof createOperationalSessionStore>;
 type RouteNotice = { kind: 'cancelled' | 'changed'; pedidoId?: number; version: number };
-type Value = ReturnType<Store['getSnapshot']> & { store: Store; online: boolean; busy: boolean; routeNotice: RouteNotice | null; clearRouteNotice: () => void };
+type Value = ReturnType<Store['getSnapshot']> & { store: Store; online: boolean; busy: boolean; routeNotice: RouteNotice | null; setRouteNotice: (notice: RouteNotice | null) => void; clearRouteNotice: () => void; transferNotice: Transfer | null; setTransferNotice: (notice: Transfer | null) => void; deferredOfferId: string | null; deferOffer: () => void; showOffer: () => void };
 const OperationalContext = createContext<Value | null>(null);
 
 export function OperationalSessionProvider({ children }: { children: React.ReactNode }) {
@@ -70,10 +73,38 @@ export function OperationalSessionProvider({ children }: { children: React.React
   const state = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const [appState, setAppState] = useState(AppState.currentState);
   const [routeNotice, setRouteNotice] = useState<RouteNotice | null>(null);
+  const [transferNotice, setTransferNotice] = useState<Transfer | null>(null);
+  const [deferredOfferId, setDeferredOfferId] = useState<string | null>(null);
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !('serviceWorker' in navigator)) return;
+    const listener = async (event: MessageEvent) => {
+      const data = event.data;
+      if (data?.type !== 'offer-notification' || data.recipientSessionId !== store.getSnapshot().session?.sessionId || Date.parse(data.expiresAtUtc) <= Date.now()) return;
+      await store.whenIdle(); await store.refreshQueue();
+      if (store.getSnapshot().session?.sessionId === data.recipientSessionId && store.getSnapshot().queue?.offer?.offerId === data.offerId) setDeferredOfferId(null);
+    };
+    const receive = (event: MessageEvent) => { void listener(event).catch(() => {}); };
+    navigator.serviceWorker.addEventListener('message', receive);
+    return () => navigator.serviceWorker.removeEventListener('message', receive);
+  }, [store]);
+  useEffect(() => setDeferredOfferId(null), [state.session?.sessionId, state.queue?.offer?.offerId]);
   useEffect(() => setRouteNotice(null), [state.session?.sessionId]);
+  useEffect(() => setTransferNotice(null), [state.session?.sessionId]);
+  useEffect(() => {
+    if (!state.session || !state.queue?.motoboyId || appState !== 'active') return;
+    const controller = new AbortController(), rider = state.queue.motoboyId;
+    const load = async () => {
+      try {
+        const transfers = await getTransfers(controller.signal);
+        if (!controller.signal.aborted) setTransferNotice(old => transfers.find(t => t.fromMotoboyId === rider && t.status === 'pending_approval') || (old ? transfers.find(t => t.id === old.id && t.fromMotoboyId === rider) || null : null));
+      } catch { /* A consulta não interrompe o trabalho nem muda a responsabilidade. */ }
+    };
+    void load(); const timer = setInterval(() => void load(), transferNotice?.status === 'pending_approval' ? 15000 : 60000);
+    return () => { controller.abort(); clearInterval(timer); };
+  }, [state.session?.sessionId, state.queue?.motoboyId, appState, transferNotice?.status === 'pending_approval']);
   const establishmentId = auth.estabelecimentoAtual && ('estabelecimentoId' in auth.estabelecimentoAtual ? auth.estabelecimentoAtual.estabelecimentoId : auth.estabelecimentoAtual.id);
   const userId = auth.user?.id;
-  const queueSyncEnabled = !!state.session && ['online', 'reconnecting'].includes(state.phase);
+  const queueSyncEnabled = !!state.session && ['online', 'reconnecting', 'permission-required'].includes(state.phase);
   useEffect(() => {
     if (auth.isLoading) return;
     store.bind(userId && establishmentId ? { userId, establishmentId } : null);
@@ -95,7 +126,7 @@ export function OperationalSessionProvider({ children }: { children: React.React
     }
     const listener = AppState.addEventListener('change', next => {
       setAppState(next);
-      if (next === 'active') void store.restore();
+      if (next === 'active') void store.whenIdle().then(() => { if (AppState.currentState === 'active') return store.restore(); });
     });
     return () => listener.remove();
   }, [store]);
@@ -129,7 +160,12 @@ export function OperationalSessionProvider({ children }: { children: React.React
   }, [store, state.session?.sessionId, state.session?.epoch, appState, queueSyncEnabled, userId, establishmentId]);
   useEffect(() => subscribeOperationalFailures(failure => {
     void (async () => {
-      if (failure.token && failure.token === await getSecureItem('operationalAccessToken')) await store.invalidate(failure.message);
+      if (failure.token && failure.token === await getSecureItem('operationalAccessToken')) {
+        if (failure.status === 401 && (!failure.code || failure.code === 'SESSION_EXPIRED')) {
+          await store.whenIdle();
+          if (failure.token === await getSecureItem('operationalAccessToken')) await store.restore();
+        } else await store.invalidate(failure.message);
+      }
     })().catch(() => { /* A tela mantém o estado de recuperação. */ });
   }), [store]);
   useEffect(() => registerOperationalLogoutGuard(async () => {
@@ -145,7 +181,7 @@ export function OperationalSessionProvider({ children }: { children: React.React
     }
     if (!(await store.end('logout'))) throw new Error(store.getSnapshot().error || 'Não foi possível encerrar o turno. Seu acesso foi mantido.');
   }), [store]);
-  const value: Value = { ...state, store, routeNotice, clearRouteNotice: () => setRouteNotice(null), online: !!state.session && ['online', 'reconnecting'].includes(state.phase), busy: ['restoring', 'starting', 'ending'].includes(state.phase) };
+  const value: Value = { ...state, store, routeNotice, setRouteNotice, clearRouteNotice: () => setRouteNotice(null), transferNotice, setTransferNotice, deferredOfferId, deferOffer: () => setDeferredOfferId(state.queue?.offer?.offerId || null), showOffer: () => setDeferredOfferId(null), online: !!state.session && !['offline', 'expired', 'ending'].includes(state.phase), busy: ['restoring', 'starting', 'ending'].includes(state.phase) };
   return <OperationalContext.Provider value={value}>{children}</OperationalContext.Provider>;
 }
 export function useOperationalSession() {

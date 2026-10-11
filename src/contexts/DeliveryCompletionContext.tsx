@@ -11,16 +11,20 @@ import { assertRealProof } from '../../services/browserNativeTest';
 import { checklistReady, type ChecklistConfirmation } from '../delivery/checklistRules';
 
 export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt};
-type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<void>;preparePayment:(parts:PaymentPart[])=>Promise<void>;confirmItems:(confirmation:ChecklistConfirmation)=>Promise<boolean>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
+type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;notice:DeliveryReceipt|null;clearNotice:()=>void;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<boolean>;preparePayment:(parts:PaymentPart[])=>Promise<void>;confirmItems:(confirmation:ChecklistConfirmation)=>Promise<boolean>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
 const Context=createContext<Value|null>(null);
 export function DeliveryCompletionProvider({children}:{children:React.ReactNode}) {
   const auth=useAuth(),turn=useOperationalSession(),[draft,setDraft]=useState<CompletionDraft|null>(null),[busy,setBusy]=useState(false),[loading,setLoading]=useState(true),[error,setError]=useState('');
+  const [notice,setNotice]=useState<DeliveryReceipt|null>(null);
+  useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(null),6500);return()=>clearTimeout(timer);},[notice?.operationId]);
   const current=useRef<CompletionDraft|null>(null),owner=useRef(''),restoredOwner=useRef<string|null>(null),running=useRef(false),writes=useRef(Promise.resolve()),generation=useRef(0);
   owner.current=String(auth.user?.id||'');
   const key=(user:string)=>`zippygo.completion.${user}`;
-  const persist=async(next:CompletionDraft)=>{
-    if(owner.current!==next.userId) throw new Error('Seu acesso mudou. Recupere a conta desta entrega.');
+  const persist=async(update:CompletionDraft|((latest:CompletionDraft|null)=>CompletionDraft))=>{
+    const expectedOwner=owner.current;
     const write=writes.current.catch(()=>{}).then(async()=>{
+      const next=typeof update==='function'?update(current.current):update;
+      if(owner.current!==expectedOwner || owner.current!==next.userId) throw new Error('Seu acesso mudou. Recupere a conta desta entrega.');
       // Web conserva rascunhos na sessão do navegador; Android usa SecureStore.
       if(Platform.OS==='web') sessionStorage.setItem(key(next.userId),JSON.stringify(next));
       else await secureStorage.setItemAsync(key(next.userId),JSON.stringify(next));
@@ -30,7 +34,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     writes.current=write;await write;
   };
   useEffect(()=>{
-    const user=owner.current,epoch=++generation.current;restoredOwner.current=null;current.current=null;setDraft(null);setError('');setLoading(true);
+    const user=owner.current,epoch=++generation.current;restoredOwner.current=null;current.current=null;setDraft(null);setNotice(null);setError('');setLoading(true);
     if(!user){restoredOwner.current=user;setLoading(false);return;}
     (async()=>{
       try{
@@ -45,6 +49,10 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     })();
   },[auth.user?.id]);
   const scope=(d:CompletionDraft)=>{const state=turn.store.getSnapshot(),s=state.session;return owner.current===d.userId && s?.sessionId===d.sessionId && s.epoch===d.epoch && state.queue?.estabelecimentoId===d.storeId;};
+  const patchDraft=(original:CompletionDraft,request:Partial<CompletionRequest>,codeChecked?:boolean)=>persist(latest=>{
+    if(!latest || latest.phase!=='draft' || latest.request.operationId!==original.request.operationId || !scope(latest)) throw new Error('Sua conferência mudou. Confira o pedido atual.');
+    return {...latest,request:{...latest.request,...request},...(codeChecked===undefined?{}:{codeChecked})};
+  });
   const assertRouteMutationAllowed=()=>{
     if(restoredOwner.current!==owner.current)throw new Error('A conferência salva ainda não pôde ser verificada. Consulte a loja antes de alterar a rota ou encerrar o turno.');
     if(current.current && ['pending','sending'].includes(current.current.phase))throw new Error('Consulte a conclusão pendente antes de alterar a rota ou encerrar o turno.');
@@ -64,26 +72,27 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     const preserve=old?.phase==='draft' && scope(old) && old.context.pedidoId===id && old.context.version===context.version;
     const storeId=turn.store.getSnapshot().queue?.estabelecimentoId;if(!storeId)throw new Error('Atualize a fila antes de conferir a entrega.');
     const next:CompletionDraft=preserve?{...old!,context}:{userId:user,storeId,sessionId:s.sessionId,epoch:s.epoch,phase:'draft',context,request:{operationId:createIdentifier(),expectedPedidoId:id,expectedVersion:context.version,payments:[]},codeChecked:false};
-    await persist(next);
+    await persist(latest=>preserve && latest?.request.operationId===old?.request.operationId && latest.phase==='draft' && scope(latest)?{...latest,context}:next);
   });};
-  const validateCode=async(code:string)=>{await run(async()=>{
+  const validateCode=async(code:string)=>!!await run(async()=>{
     const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
     if(!await checkDeliveryCode(d.context.pedidoId,code))throw new Error('O código não foi confirmado.');
     if(!scope(d))throw new Error('O turno mudou durante a conferência.');
-    await persist({...d,codeChecked:true,request:{...d.request,codigo:code}});
-  });};
-  const preparePayment=async(parts:PaymentPart[])=>{const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');await persist({...d,request:{...d.request,payments:parts}});};
+    await patchDraft(d,{codigo:code},true);
+    return true;
+  });
+  const preparePayment=async(parts:PaymentPart[])=>{const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');await patchDraft(d,{payments:parts});};
   const uploadProof=async(base64:string)=>!!await run(async()=>{
     const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
     const proofId=await uploadDeliveryProof(d.context.pedidoId,base64);if(!scope(d))throw new Error('O turno mudou durante o envio.');
-    await persist({...d,request:{...d.request,proofId}});
+    await patchDraft(d,{proofId});
     return true;
   });
   const confirmItems=async(confirmation:ChecklistConfirmation)=>!!await run(async()=>{
     const d=current.current;
     if(!d || d.phase!=='draft' || !scope(d) || confirmation.pedidoId!==d.context.pedidoId || !d.context.checklist || !checklistReady(d.context.checklist,confirmation))
       throw new Error('Os itens mudaram. Volte e confira a entrega atual.');
-    await persist({...d,request:{...d.request,checklist:confirmation}});
+    await patchDraft(d,{checklist:confirmation});
     return true;
   });
   const discardUnsent=async()=>!!await run(async()=>{
@@ -99,7 +108,9 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
   });
   const acknowledge=async(d:CompletionDraft,receipt:DeliveryReceipt)=>{
     if(receipt.operationId!==d.request.operationId || receipt.pedidoId!==d.context.pedidoId)throw new Error('Resposta de conclusão incompatível. Consulte a loja.');
-    await persist({...d,phase:'completed',receipt,request:{...d.request,codigo:undefined}});return receipt;
+    await persist({...d,phase:'completed',receipt,request:{...d.request,codigo:undefined}});
+    if(owner.current===d.userId && current.current?.request.operationId===d.request.operationId)setNotice(receipt);
+    return receipt;
   };
   const send=async(d:CompletionDraft)=>{
     assertRealProof(d.request.proofId);
@@ -147,6 +158,6 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     if(owner.current && restoredOwner.current!==owner.current)throw new Error('A conferência salva ainda não pôde ser verificada. Aguarde a recuperação antes de sair da conta.');
     if(current.current && ['pending','sending'].includes(current.current.phase))throw new Error('Consulte a conclusão pendente antes de sair da conta. Seu acesso foi mantido.');
   }),[]);
-  return <Context.Provider value={{draft,busy,loading,error,assertRouteMutationAllowed,prepare,discardUnsent,validateCode,preparePayment,confirmItems,uploadProof,submit,recover,clearError:()=>setError('')}}>{children}</Context.Provider>;
+  return <Context.Provider value={{draft,busy,loading,error,notice,clearNotice:()=>setNotice(null),assertRouteMutationAllowed,prepare,discardUnsent,validateCode,preparePayment,confirmItems,uploadProof,submit,recover,clearError:()=>setError('')}}>{children}</Context.Provider>;
 }
 export function useDeliveryCompletion(){const value=useContext(Context);if(!value)throw new Error('Use DeliveryCompletionProvider.');return value;}

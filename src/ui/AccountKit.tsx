@@ -6,11 +6,18 @@ import { ChevronRight, Home, Route, MessageCircle, UserRound, Wallet, LucideIcon
 import { useAuth } from '../contexts/AuthContext';
 import { Entrance, Feedback, Screen, type } from './Kit';
 import { useZippyTheme } from './theme';
+import { useKeyboardVisible } from '../hooks/useKeyboardVisible';
+import { useOperationalSession } from '../contexts/OperationalSessionContext';
+import { operationalDestination } from '../delivery/operationalDestination';
+import { OperationalNotice } from './OperationalNotice';
 
 export function AppNav({ active = 'profile' }: { active?: 'home' | 'map' | 'chats' | 'profile' | 'earnings' }) {
   const router = useRouter(), { reducedMotion, dark } = useZippyTheme();
+  const turn = useOperationalSession();
+  const keyboardVisible = useKeyboardVisible();
+  if (keyboardVisible) return null;
   const tabs: { id: typeof active; title: string; icon: LucideIcon; path: Href }[] = [
-    { id: 'home', title: 'Início', icon: Home, path: '/' }, { id: 'map', title: 'Rota', icon: Route, path: '/rota' },
+    { id: 'home', title: 'Início', icon: Home, path: '/' }, { id: 'map', title: 'Rota', icon: Route, path: operationalDestination(turn.queue, Platform.OS) },
     { id: 'chats', title: 'Chat', icon: MessageCircle, path: '/conversas' },
     { id: 'profile', title: 'Perfil', icon: UserRound, path: '/perfil' },
   ];
@@ -26,7 +33,7 @@ export function AccountScreen({ children, active = 'profile', footer }: { childr
   React.useEffect(() => { if (navigation?.key && focused && !auth.isLoading && !auth.user && !auth.restoreError) router.replace('/(auth)/login'); }, [navigation?.key, focused, auth.user, auth.isLoading, auth.restoreError, router]);
   if (!auth.user && auth.restoreError) return <Screen><Feedback title="Vamos reconectar seu acesso" message={auth.restoreError} onRetry={()=>void auth.loadUserFromStorage()}/></Screen>;
   if (auth.isLoading || !auth.user) return <Screen><Feedback title="Conferindo seu acesso" loading /></Screen>;
-  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><Screen footer={<View style={{ gap: 12 }}>{footer}<AppNav active={active} /></View>}><Entrance>{children}</Entrance></Screen></KeyboardAvoidingView>;
+  return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}><Screen footer={<View style={{ gap: 12 }}>{footer}<AppNav active={active} /></View>}><Entrance><OperationalNotice />{children}</Entrance></Screen></KeyboardAvoidingView>;
 }
 
 export function AccountAvatar({ name, uri }: { name: string; uri?: string | null }) {

@@ -1,25 +1,31 @@
 import React, { useEffect, useRef } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { Bell, Check, ChevronRight, LocateFixed, Map, Package, Pause, Route, Store } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
-import { useDeliveryCompletion } from '../contexts/DeliveryCompletionContext';
 import { AccountNotice, AccountScreen } from './AccountKit';
 import { Button, Feedback, IconButton, Pill, Screen, SectionTitle, Surface, type } from './Kit';
 import { Helmet, MiniRouteMap, activeStops } from './RouteKit';
 import { useZippyTheme } from './theme';
 import { LogoutAction } from './LogoutAction';
+import { operationalDestination } from '../delivery/operationalDestination';
+import { setTurnPaused } from '../../services/routeApi';
+import { useRouteAction } from '../hooks/useRouteAction';
 
 export default function HomeScreen() {
   const auth = useAuth(), turn = useOperationalSession(), router = useRouter(), { colors } = useZippyTheme(), focused = useIsFocused();
   const hasSession = !!turn.session, queue = turn.queue, count = activeStops(queue).length;
-  const completion = useDeliveryCompletion();
+  const turnAction = useRouteAction();
+  const goOnline = async () => {
+    if (hasSession) { void turnAction.run(() => setTurnPaused(!queue?.paused)); return; }
+    if (!await turn.store.start() && turn.store.getSnapshot().phase === 'permission-required') router.push({ pathname: '/permissoes', params: { intent: 'start' } });
+  };
   useEffect(() => { if (!focused || auth.isLoading || auth.restoreError) return; if (!auth.user) router.replace(auth.didSignOut ? '/(auth)/login' : '/(auth)/welcome'); else if (auth.needsLinkRequest) router.replace('/solicitarRestaurante'); else if (auth.needsEstablishmentSelection || !auth.estabelecimentoAtual) router.replace('/selecionarRestaurante'); }, [focused, auth.isLoading, auth.restoreError, auth.user, auth.didSignOut, auth.needsLinkRequest, auth.needsEstablishmentSelection, auth.estabelecimentoAtual, router]);
   if (auth.restoreError) return <Screen><Feedback title="Vamos reconectar seu acesso" message={auth.restoreError} onRetry={() => void auth.loadUserFromStorage()} /><LogoutAction /></Screen>;
-  const target = queue?.routeState === 'returning' ? '/retornoLoja' : queue?.current?.pickedUpAtUtc ? '/mapa' : '/rota';
-  return <AccountScreen active="home" footer={<View style={{ gap: 8 }}><Button icon={hasSession ? Pause : LocateFixed} disabled={turn.busy} onPress={() => router.push(hasSession ? '/turno' : '/permissoes')}>{hasSession ? 'Gerenciar meu turno' : 'Ficar online'}</Button><Text style={{ fontFamily: 'Manrope', fontSize: 10, textAlign: 'center', color: colors.muted }}>{hasSession ? 'Localização compartilhada com a loja desde o online.' : 'Ao ficar online, a loja acompanha sua localização.'}</Text></View>}>
+  const target = operationalDestination(queue, Platform.OS);
+  return <AccountScreen active="home" footer={<View style={{ gap: 8 }}><Button icon={hasSession ? Pause : LocateFixed} disabled={turn.busy || turnAction.busy} loading={turn.busy || turnAction.busy} onPress={() => void goOnline()}>{hasSession ? queue?.paused ? 'Retomar chamados' : 'Pausar chamados' : 'Ficar online'}</Button><Text style={{ fontFamily: 'Manrope', fontSize: 10, textAlign: 'center', color: colors.muted }}>{hasSession ? 'Localização compartilhada com a loja desde o online.' : 'Ao ficar online, a loja acompanha sua localização.'}</Text></View>}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 20 }}><View style={{ flex: 1 }}><Text style={[type.eyebrow, { color: colors.muted }]}>{`${new Date().getHours() < 12 ? 'BOM DIA' : new Date().getHours() < 18 ? 'BOA TARDE' : 'BOA NOITE'}, ${auth.user?.nome.split(' ')[0] || ''}`.toUpperCase()}</Text><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 25, letterSpacing: -.7, color: colors.ink, marginTop: 6 }}>Pronto pro próximo?</Text></View><IconButton icon={Bell} label="Avisos do turno" onPress={() => router.push('/avisosTurno')} /></View>
     <Surface hero style={{ padding: 20, minHeight: 250 }}>
       <Pill inverse>{hasSession ? queue?.paused ? 'ONLINE · CHAMADOS PAUSADOS' : 'ONLINE · LOCALIZAÇÃO ATIVA' : 'SEU TURNO COMEÇA AQUI'}</Pill>
@@ -27,10 +33,9 @@ export default function HomeScreen() {
       <View pointerEvents="none" style={{ position: 'absolute', right: -26, top: 68 }}><Helmet size={178} /></View>
       <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderColor: '#ffffff20', marginTop: 24, paddingTop: 12, zIndex: 2 }}><View style={{ flex: 1, flexDirection: 'row', gap: 6 }}><Store size={14} color={colors.heroMuted} /><Text numberOfLines={1} style={{ fontFamily: 'Manrope', fontSize: 10, color: colors.heroMuted, flex: 1 }}>{auth.estabelecimentoAtual?.nome}</Text></View><Pressable accessibilityRole="button" accessibilityLabel="Trocar estabelecimento" onPress={() => router.push('/selecionarRestaurante')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 10, color: '#93bcf2' }}>Trocar ↗</Text></Pressable></View>
     </Surface>
-    <View style={{ flexDirection: 'row', marginTop: 16, padding: 15, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line }}>{[[String(count), 'na sua rota'], [String(auth.estabelecimentos.length), 'vínculos ativos'], [hasSession ? queue?.paused ? 'Pausa' : 'Online' : 'Offline', 'seu turno']].map(([value, label]) => <View key={label} style={{ flex: 1, alignItems: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 17, color: colors.ink }}>{value}</Text><Text style={{ fontFamily: 'Manrope', fontSize: 8, color: colors.muted, marginTop: 4 }}>{label}</Text></View>)}</View>
-    {['pending','sending'].includes(completion.draft?.phase || '') && <View style={{marginTop:16}}><Button icon={Package} onPress={()=>router.push('/entregaPendente')}>Conferir conclusão pendente</Button></View>}
+    <View style={{ flexDirection: 'row', marginTop: 16, padding: 15, borderRadius: 18, backgroundColor: colors.card, borderWidth: 1, borderColor: colors.line }}>{[[String(count), 'na sua rota'], [String(auth.estabelecimentos.length), 'vínculos ativos'], [hasSession ? queue?.paused ? 'Pausa' : 'Online' : 'Offline', 'seu turno']].map(([value, label]) => <Pressable key={label} accessibilityRole={label === 'seu turno' && hasSession ? 'button' : undefined} accessibilityLabel={label === 'seu turno' && hasSession ? 'Resumo e encerramento do turno' : label} disabled={label !== 'seu turno' || !hasSession} onPress={() => router.push('/turno')} style={{ flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 17, color: colors.ink }}>{value}</Text><Text style={{ fontFamily: 'Manrope', fontSize: 8, color: colors.muted, marginTop: 4 }}>{label === 'seu turno' && hasSession ? 'Ver turno ↗' : label}</Text></Pressable>)}</View>
     <SectionTitle right={<Pressable accessibilityRole="button" onPress={() => router.push('/mapa')} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 10, color: colors.accent }}>Ver mapa ↗</Text></Pressable>}>{hasSession ? 'Seu radar' : 'Tudo pronto?'}</SectionTitle>
     {hasSession ? <><MiniRouteMap queue={queue} caption={queue?.paused ? 'Chamados pausados · localização continua ativa' : count ? 'Sua sequência de entregas' : 'Online · aguardando um novo caminho'} />{queue?.offer && <Pressable accessibilityRole="button" onPress={() => router.push('/oferta')} style={{ marginTop: 13 }}><Surface style={{ backgroundColor: colors.accentSoft }}><View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}><Package size={24} color={colors.accent} /><View style={{ flex: 1 }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.ink }}>Uma nova rota pra você</Text><Text style={[type.small, { color: colors.muted }]}>{queue.offer.stops.length} pedidos · confira a oferta</Text></View><ChevronRight size={17} color={colors.accent} /></View></Surface></Pressable>}{(count > 0 || queue?.routeState === 'returning') && <View style={{ marginTop: 13 }}><Button secondary icon={Route} onPress={() => router.push(target)}>{queue?.routeState === 'returning' ? 'Retornar ao estabelecimento' : queue?.current?.pickedUpAtUtc ? 'Continuar minha rota' : 'Conferir rota e retirada'}</Button></View>}</> : <View style={{ gap: 13 }}><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><View style={{ flexDirection: 'row', gap: 7 }}><LocateFixed size={16} color={colors.muted} /><Text style={[type.small, { color: colors.ink }]}>Localização operacional</Text></View><Pill icon={turn.permissions?.ready ? Check : LocateFixed} tone={turn.permissions?.ready ? 'accent' : 'warning'}>{turn.permissions?.ready ? 'Pronta' : 'Verificar'}</Pill></View><View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}><View style={{ flexDirection: 'row', gap: 7 }}><Store size={16} color={colors.muted} /><Text style={[type.small, { color: colors.ink }]}>Vínculo com a loja</Text></View><Pill icon={Check}>Aprovado</Pill></View></View>}
-    {turn.error && <Feedback title="Confira seu turno" message={turn.error} onRetry={() => void turn.store.restore()} />}
+    {(turn.error || turnAction.error) && <Feedback title="Confira seu turno" message={turnAction.error || turn.error || ''} onRetry={() => void turn.store.restore()} />}
   </AccountScreen>;
 }

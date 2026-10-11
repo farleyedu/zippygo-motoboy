@@ -56,7 +56,9 @@ import { ChatForwardSheet } from './ChatForwardSheet';
 import * as Haptics from 'expo-haptics';
 import { Avatar } from '../ui/Kit';
 import { useZippyTheme } from '../ui/theme';
+import { useKeyboardVisible } from '../hooks/useKeyboardVisible';
 import { AudioComposer, ChatMedia } from './ChatMedia';
+import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } from './MessageBubble';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
 import { browserNativeTest } from '../../services/browserNativeTest';
@@ -68,6 +70,7 @@ const reasons: Record<string, string> = {
   janela_fechada: 'A janela do WhatsApp encerrou. Fale com a loja.',
 };
 export default function ClientConversation() {
+  const keyboardVisible = useKeyboardVisible();
   const params = useLocalSearchParams<{ pedidoId?: string }>(),
     pedidoId = Number(params.pedidoId),
     router = useRouter(),
@@ -88,7 +91,7 @@ export default function ClientConversation() {
   const [data, setData] = useState<ClientRichChat | null>(null),
     [messages, setMessages] = useState<ClientRichChat['messages']>([]),
     [draft, setDraft] = useState(''),
-    [draftReady, setDraftReady] = useState(false),
+    [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null),
     [error, setError] = useState(''),
     [loading, setLoading] = useState(true),
     [refresh, setRefresh] = useState(0),
@@ -112,6 +115,7 @@ export default function ClientConversation() {
     follow = useRef(true),
     sending = useRef(false);
   const draftKey = `zippygo.chat.draft.v2:${owner}:client:${pedidoId}`;
+  const draftReady = !!owner && restoredDraftKey === draftKey;
   const {
     outbox,
     entries,
@@ -123,20 +127,13 @@ export default function ClientConversation() {
   useEffect(() => {
     let alive = true;
     setDraft('');
-    setDraftReady(false);
+    setRestoredDraftKey(null);
     setReply(null);
-    setMessages([]);
-    setSelected(null); setForwarding(null);
-    setData(null);
-    setSearch('');
-    setSearching(false);
-    setLoading(true);
-    loadedQuery.current = '';
     void AsyncStorage.getItem(draftKey).then(
       (raw) => {
         if (alive) {
           setDraft(raw || '');
-          setDraftReady(true);
+          setRestoredDraftKey(draftKey);
         }
       },
       () => {
@@ -146,7 +143,20 @@ export default function ClientConversation() {
     return () => {
       alive = false;
     };
-  }, [draftKey, scope]);
+  }, [draftKey]);
+  useEffect(() => {
+    follow.current = true;
+    setMessages([]); setSelected(null); setForwarding(null); setReply(null);
+    setData(null); setSearch(''); setSearching(false); setLoading(true);
+    loadedQuery.current = '';
+  }, [scope]);
+  useEffect(() => {
+    if (!keyboardVisible) return;
+    follow.current = true;
+    const frame = requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
+    const timer = setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 180);
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [keyboardVisible]);
   useEffect(() => {
     if (!draftReady) return;
     const timer = setTimeout(() => {
@@ -305,13 +315,14 @@ export default function ClientConversation() {
     name = data?.channel.clienteNome || `Cliente · #${pedidoId}`;
   return (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      style={{ flex: 1, backgroundColor: dark ? '#111c30' : colors.paper }}
+      behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
+      style={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#111c30' : colors.paper }}
     >
       <Stack.Screen options={{ headerShown: false }} />
       <View
         style={{
           flex: 1,
+          minHeight: 0,
           width: '100%',
           maxWidth: 480,
           alignSelf: 'center',
@@ -372,7 +383,7 @@ export default function ClientConversation() {
             onChangeText={setSearch}
             placeholder="Buscar mensagens…"
             placeholderTextColor={colors.muted}
-            style={{ padding: 12, color: colors.ink }}
+            style={{ padding: 12, color: colors.ink, fontSize: Platform.OS === 'web' ? 16 : undefined }}
           />
         )}
         {!!(error || queueError) && (
@@ -431,7 +442,9 @@ export default function ClientConversation() {
         )}
         <ScrollView
           ref={scroll}
-          contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
+          style={{ flex: 1, minHeight: 0 }}
+          onLayout={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
+          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16, flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } =
@@ -458,76 +471,25 @@ export default function ClientConversation() {
               </Text>
             </Pressable>
           )}
-          {messages.map((message) => {
+          {messages.map((message, index) => {
             const fg = message.mine && dark ? '#fff' : colors.ink;
+            const continuation = continuesMessage(messages[index - 1], message);
+            const quoted = messages.find(original => original.id === message.replyTo);
+            const audioOnly = !!message.attachment?.contentType.startsWith('audio/') && !message.body;
+            const metadata = <MessageMeta createdAtUtc={message.createdAtUtc} mine={message.mine} read={['read', 'lida'].includes(message.status)} delivered={['delivered', 'entregue'].includes(message.status)} />;
             return (
-              <Pressable
+              <MessageBubble
                 key={message.id}
-                delayLongPress={350}
+                testID={`chat-bubble-${message.id}`}
+                mine={message.mine}
+                continuation={continuation}
                 onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
-                accessibilityLabel={`Mensagem do cliente: ${message.body || 'anexo'}`}
-                style={{
-                  maxWidth: '85%',
-                  alignSelf: message.mine ? 'flex-end' : 'flex-start',
-                  padding: 13,
-                  borderRadius: 16,
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  backgroundColor: message.mine
-                    ? dark
-                      ? '#2872e3'
-                      : '#c7d8ee'
-                    : colors.card,
-                }}
+                accessibilityLabel={`Mensagem de ${message.mine ? 'você' : name}: ${message.body || 'anexo'}`}
               >
-                {message.replyTo && (
-                  <Text
-                    style={{
-                      fontSize: 9,
-                      color: fg,
-                      borderLeftWidth: 2,
-                      borderLeftColor: colors.accent,
-                      paddingLeft: 7,
-                      marginBottom: 8,
-                    }}
-                  >
-                    Resposta a uma mensagem
-                  </Text>
-                )}
-                {message.attachment && (
-                  <ChatMedia attachment={message.attachment} foreground={fg} senderName={message.mine ? auth.user?.nome || 'Você' : name} />
-                )}
-                <Text
-                  style={{
-                    fontFamily: 'Manrope',
-                    fontSize: 11,
-                    lineHeight: 18,
-                    color: fg,
-                  }}
-                >
-                  {message.body}
-                </Text>
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    justifyContent: 'flex-end',
-                    gap: 4,
-                    marginTop: 6,
-                  }}
-                >
-                  <Text style={{ fontSize: 8, color: fg }}>
-                    {new Date(message.createdAtUtc).toLocaleTimeString(
-                      'pt-BR',
-                      { hour: '2-digit', minute: '2-digit' },
-                    )}
-                  </Text>
-                  {message.mine &&
-                    (['read', 'lida'].includes(message.status) ? (
-                      <CheckCheck size={12} color={fg} />
-                    ) : (
-                      <Check size={12} color={fg} />
-                    ))}
-                </View>
+                {message.replyTo && <ReplyQuote mine={message.mine} sender={quoted ? quoted.mine ? 'Você' : name : 'Mensagem anterior'} body={quoted?.body || (quoted?.attachment ? 'Anexo' : 'Mensagem fora deste histórico')} />}
+                {message.attachment && <ChatMedia attachment={message.attachment} foreground={fg} senderName={message.mine ? auth.user?.nome || 'Você' : name} metadata={audioOnly ? metadata : undefined} />}
+                {!!message.body && <BubbleText body={message.body} foreground={fg} metadata={metadata} />}
+                {!message.body && !audioOnly && <View style={{ marginTop: 4 }}>{metadata}</View>}
                 {!!message.reactions?.length && (
                   <View
                     style={{
@@ -565,7 +527,7 @@ export default function ClientConversation() {
                     })}
                   </View>
                 )}
-              </Pressable>
+              </MessageBubble>
             );
           })}
           {pending.map((entry) => (
@@ -573,7 +535,8 @@ export default function ClientConversation() {
               key={entry.request.clientId}
               style={{
                 alignSelf: 'flex-end',
-                maxWidth: '85%',
+                marginTop: 8,
+                maxWidth: '90%',
                 padding: 12,
                 borderRadius: 12,
                 backgroundColor: colors.accentSoft,
@@ -697,6 +660,7 @@ export default function ClientConversation() {
                 paddingHorizontal: 12,
                 paddingBottom: 10,
                 alignItems: 'flex-end',
+                flexShrink: 0,
               }}
             >
               <View
@@ -725,12 +689,13 @@ export default function ClientConversation() {
                   value={draft}
                   onChangeText={setDraft}
                   maxLength={500}
-                  editable={ready && !busy}
+                  editable={ready && draftReady && !busy}
+                  onFocus={() => { follow.current = true; scroll.current?.scrollToEnd({ animated: false }); }}
                   multiline
                   style={{
                     fontFamily: 'Manrope',
-                    fontSize: 11,
-                    lineHeight: 18,
+                    fontSize: 16,
+                    lineHeight: 22,
                     flex: 1,
                     minHeight: 45,
                     maxHeight: 120,
@@ -766,7 +731,7 @@ export default function ClientConversation() {
             </View>
           </>
         )}
-        <View style={{ paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>
+        {!keyboardVisible && <View style={{ flexShrink: 0, paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>}
       </View>
     </KeyboardAvoidingView>
   );

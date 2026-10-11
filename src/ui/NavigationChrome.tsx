@@ -5,6 +5,7 @@ import type { NavigationState } from '../../components/mapTypes';
 import { journeySummary } from '../delivery/navigationJourney';
 import { NavigationDiagnostics } from '../delivery/navigationDiagnostics';
 import { useZippyTheme } from './theme';
+import { OperationalNotice } from './OperationalNotice';
 
 type Props = {
   state: NavigationState;
@@ -18,7 +19,10 @@ type Props = {
   onMute(): void;
   onExit(): void;
   onRetry(): void;
+  onChooseNavigation(): void;
   onHeight(height: number): void;
+  stops: number;
+  onRoute(): void;
 };
 
 // Only travel information here. Pickup/delivery checks stay in their own flow.
@@ -38,6 +42,7 @@ export function NavigationChrome(props: Props) {
       <Text numberOfLines={2} style={[styles.address, { color: colors.heroMuted }]}>{props.address || 'Aguardando o endereço de destino'}</Text>
       {!!state.message && <Text style={[styles.small, { color: colors.heroMuted }]}>{state.message}</Text>}
       {error && <Pressable accessibilityRole="button" onPressIn={() => retryLog.current.event('retry.touch')} onPress={() => { retryLog.current.event('retry.press'); props.onRetry(); }} style={styles.retry}><Text style={[styles.small, { color: colors.heroInk, fontFamily: 'ManropeExtraBold' }]}>Tentar novamente</Text></Pressable>}
+      {(!active && !arrived) && <Pressable accessibilityRole="button" onPress={props.onChooseNavigation} style={styles.retry}><Text style={[styles.small, { color: colors.heroInk, fontFamily: 'ManropeExtraBold' }]}>Escolher outro navegador</Text></Pressable>}
     </View>}
     <View pointerEvents="box-none" style={[styles.actions, { bottom: props.footerInset + 12 }]}>
       <Pressable accessibilityRole="button" accessibilityLabel="Centralizar e acompanhar minha posição" onPress={props.onCenter} style={({ pressed }) => [styles.center, { backgroundColor: colors.hero, opacity: pressed ? .75 : 1 }]}>
@@ -46,11 +51,13 @@ export function NavigationChrome(props: Props) {
       <Pressable accessibilityRole="button" accessibilityLabel={props.muted ? 'Ativar instruções faladas' : 'Silenciar instruções faladas'} accessibilityState={{ selected: props.muted }} onPress={props.onMute} style={({ pressed }) => [styles.sound, { backgroundColor: colors.hero, opacity: pressed ? .75 : 1 }]}><SoundIcon color={colors.heroInk} size={22} /></Pressable>
     </View>
     <View onLayout={event => props.onHeight(event.nativeEvent.layout.height + props.bottom + 12)} style={[styles.footer, { bottom: props.bottom + 8, backgroundColor: colors.card, borderColor: colors.line }]}>
+      <OperationalNotice onInspectRoute={props.onRoute} />
       <View style={styles.row}><View style={{ flex: 1 }}>
         <Text accessibilityLiveRegion="polite" style={[styles.duration, { color: colors.accent }]}>{arrived ? 'Chegou' : active ? summary.duration : error ? 'Sem orientação' : 'Aguardando rota'}</Text>
         <Text style={[styles.metrics, { color: colors.ink }]}>{active ? summary.distance + ' · chegada ' + summary.arrival : arrived ? 'Navegação concluída neste destino' : 'Tempo e distância aparecem após o cálculo'}</Text>
       </View><Pressable accessibilityRole="button" accessibilityLabel="Sair da navegação sem finalizar a entrega" onPress={props.onExit} style={({ pressed }) => [styles.exit, { backgroundColor: colors.dangerSoft, opacity: pressed ? .75 : 1 }]}><Text style={[styles.small, { color: colors.danger, fontFamily: 'ManropeExtraBold' }]}>Sair</Text></Pressable></View>
       <View style={[styles.destination, { borderTopColor: colors.line }]}><Navigation size={14} color={colors.muted} /><Text numberOfLines={1} style={[styles.small, { flex: 1, color: colors.muted }]}>{props.address || 'Endereço ainda não disponível'}</Text></View>
+      <Pressable accessibilityRole="button" accessibilityLabel="Ver rota completa e detalhes dos pedidos" onPress={props.onRoute} style={{ minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8, paddingHorizontal: 12, borderRadius: 14, backgroundColor: colors.accentSoft }}><Navigation color={colors.accent} size={18} /><Text style={[styles.small, { color: colors.accent, flex: 1 }]}>{`Sua rota · ${props.stops} pedidos`}</Text><Text style={[styles.small, { color: colors.accent }]}>Abrir ↑</Text></Pressable>
       {state.status === 'rerouting' && <Text accessibilityLiveRegion="polite" style={[styles.small, { color: colors.accent, marginTop: 4 }]}>Recalculando o caminho…</Text>}
     </View>
   </View>;

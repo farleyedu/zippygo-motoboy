@@ -26,7 +26,7 @@ export default function SelecionarRestauranteScreen() {
     if (!selected) throw new Error('Selecione um vínculo ativo para continuar.');
     const result = await data.selectEstablishment(selected);
     if (!result.success) throw new Error(result.error || 'Não foi possível selecionar.');
-  }, () => router.replace(turn.session ? '/' : '/permissoes'));
+  }, () => router.replace('/'));
 
   return <Screen footer={data.user && !data.loading ? <View style={{ gap: 10 }}>
     <Button loading={data.busy} disabled={blocked || (!!data.links.length && !selected)} onPress={data.links.length ? enter : () => router.push('/solicitarRestaurante')}>{data.links.length ? 'Trabalhar nesta loja' : 'Solicitar meu primeiro vínculo'}</Button>

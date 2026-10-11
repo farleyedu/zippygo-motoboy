@@ -1,0 +1,76 @@
+{
+  "error": "page.waitForFunction: Timeout 30000ms exceeded.",
+  "errors": [],
+  "calls": [
+    {
+      "p": "/api/motoboys/me/vinculos",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/start",
+      "method": "POST",
+      "body": {
+        "attemptId": "8f899d62-13c7-45c8-98fb-efa5d237c788",
+        "clientInstanceId": "babdea06-d69e-47dc-8194-7a078a0537ee",
+        "clientPlatform": "web"
+      }
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/queue",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/orders/23",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/queue",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET",
+      "body": null
+    },
+    {
+      "p": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST",
+      "body": null
+    }
+  ],
+  "state": {
+    "text": "Tudo certo na sua bag?\nConfira um pedido de cada vez\nCOLETA NO ESTABELECIMENTO\nLoja QA\n1 pedido para conferir\nConfira antes de sair\nO número identifica a sacola. Confira os produtos, adicionais e quantidades de cada pedido.\nA retirada precisa de atenção\nCannot read properties of null (reading 'checklist')\nTentar novamente\nFalar com o estabelecimento\nEstou saindo do estabelecimento\nConfira a sacola e os destaques de cada pedido.\nInício\nRota\nChat\nGanhos\nPerfil",
+    "secure": true,
+    "keys": {
+      "operationalAccessToken": "operacional-qa",
+      "operationalSession": "{\"sessionId\":\"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa\",\"epoch\":1,\"origin\":\"mobile\",\"clientPlatform\":\"web\",\"isEnded\":false,\"version\":1,\"heartbeatIntervalSeconds\":25,\"presenceExpiresAtUtc\":\"2026-10-12T04:10:23.961Z\"}",
+      "tracking.heartbeat.v3.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.1": "1791735058815",
+      "operationalEstablishmentId": "11111111-1111-4111-8111-111111111111",
+      "operationalUserId": "7"
+    }
+  }
+}

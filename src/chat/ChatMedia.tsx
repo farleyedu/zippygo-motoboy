@@ -11,14 +11,16 @@ import { BrowserAudioComposer } from './BrowserAudioComposer';
 
 const clock = (seconds: number) => Math.floor(Math.max(0, seconds) / 60) + ':' + String(Math.floor(Math.max(0, seconds) % 60)).padStart(2, '0');
 const audioStops = new Set<() => void>();
-export function ChatMedia({ attachment, foreground, senderName = 'Áudio', avatarUri }: {
-  attachment: ChatAttachment; foreground: string; senderName?: string; avatarUri?: string;
+export function ChatMedia({ attachment, foreground, senderName = 'Áudio', avatarUri, metadata }: {
+  attachment: ChatAttachment; foreground: string; senderName?: string; avatarUri?: string; metadata?: React.ReactNode;
 }) {
-  const { colors } = useZippyTheme(), focused = useIsFocused();
+  const { colors, dark } = useZippyTheme(), focused = useIsFocused();
   const [uri, setUri] = useState<string | null>(null), [loading, setLoading] = useState(false), [error, setError] = useState(''), [expanded, setExpanded] = useState(false), [speed, setSpeed] = useState(1);
   const player = useAudioPlayer(null, { updateInterval: 250 }), status = useAudioPlayerStatus(player);
   const image = attachment.contentType.startsWith('image/');
   const pending = useRef(false), active = useRef(true), request = useRef(0), timer = useRef<ReturnType<typeof setTimeout> | null>(null), width = useRef(1);
+  const sourceRequest = useRef<Promise<string> | null>(null);
+  const loadSource = () => sourceRequest.current ||= openChatFile(attachment.id, attachment.clientPedidoId).catch(error => { sourceRequest.current = null; throw error; });
   const loaded = useRef(false); loaded.current = status.isLoaded;
   useEffect(() => {
     active.current = true;
@@ -35,14 +37,17 @@ export function ChatMedia({ attachment, foreground, senderName = 'Áudio', avata
     player.setPlaybackRate(speed); player.play(); setLoading(false);
   }, [status.isLoaded, focused, player, speed]);
   useEffect(() => {
-    let alive = true; setUri(null); setError('');
-    if (image) {
-      setLoading(true);
-      void openChatFile(attachment.id, attachment.clientPedidoId).then(value => { if (alive) setUri(value); })
-        .catch(() => { if (alive) setError('Não foi possível abrir a foto.'); }).finally(() => { if (alive) setLoading(false); });
-    }
+    let alive = true; setUri(null); setError(''); sourceRequest.current = null;
+    if (image) setLoading(true);
+    // Carrega a duração real sem reproduzir nem tomar o foco do áudio do aparelho.
+    void loadSource().then(value => {
+      if (!alive) return;
+      setUri(value);
+      if (!image) player.replace(value);
+    }).catch(() => { if (alive && image) setError('Não foi possível abrir a foto.'); })
+      .finally(() => { if (alive && image) setLoading(false); });
     return () => { alive = false; };
-  }, [attachment.id, attachment.clientPedidoId, image]);
+  }, [attachment.id, attachment.clientPedidoId, image, player]);
   const play = async () => {
     if (loading) return;
     if (status.playing) { player.pause(); return; }
@@ -54,7 +59,7 @@ export function ChatMedia({ attachment, foreground, senderName = 'Áudio', avata
       request.current = run;
       setLoading(true);
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true, shouldPlayInBackground: false, interruptionMode: 'doNotMix' });
-      const source = uri || await openChatFile(attachment.id, attachment.clientPedidoId);
+      const source = uri || await loadSource();
       if (!active.current || !focused || request.current !== run) return;
       if (!uri) { setUri(source); pending.current = true; player.replace(source); }
       else if (loaded.current) {
@@ -67,29 +72,41 @@ export function ChatMedia({ attachment, foreground, senderName = 'Áudio', avata
     }
   };
   const progress = status.duration > 0 ? Math.min(1, status.currentTime / status.duration) : 0;
-  const percent = `${progress * 100}%` as `${number}%`;
-  return <View style={{ minWidth: image ? 180 : 224, maxWidth: '100%' }}>
+  const accent = dark ? '#77d1f0' : '#269dc5';
+  return <View style={{ width: image ? 240 : 300, minWidth: image ? 180 : 224, maxWidth: '100%' }}>
     {image ? <Pressable accessibilityRole="button" accessibilityLabel="Ampliar foto" disabled={!uri} onPress={() => setExpanded(true)}>
       {uri ? <Image source={{ uri }} style={{ width: 240, maxWidth: '100%', aspectRatio: 4 / 3, borderRadius: 12 }} resizeMode="cover" /> : <ActivityIndicator color={foreground} />}
-    </Pressable> : <View style={styles.row}>
-      <View style={{ width: 32, height: 32, borderRadius: 16, overflow: 'hidden', backgroundColor: colors.accentSoft, justifyContent: 'center', alignItems: 'center' }}>
-        {avatarUri ? <Image source={{ uri: avatarUri }} style={StyleSheet.absoluteFill} /> : <Text style={{ color: colors.accent, fontFamily: 'ManropeExtraBold', fontSize: 10 }}>{senderName.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase()}</Text>}
-      </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={status.playing ? 'Pausar áudio' : 'Reproduzir áudio'} onPress={() => void play()} style={{ width: 36, height: 44, justifyContent: 'center', alignItems: 'center' }}>
-        {loading ? <ActivityIndicator color={foreground} /> : status.playing ? <Pause color={foreground} size={21} /> : <Play color={foreground} size={21} />}
+    </Pressable> : <View testID="voice-message" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 64 }}>
+      <Pressable accessibilityRole="button" accessibilityLabel={status.playing ? 'Pausar áudio' : 'Reproduzir áudio'} onPress={() => void play()} style={{ width: 40, height: 52, justifyContent: 'center', alignItems: 'center' }}>
+        {loading ? <ActivityIndicator color={foreground} /> : status.playing ? <Pause color={foreground} fill={foreground} size={24} /> : <Play color={foreground} fill={foreground} size={24} />}
       </Pressable>
       <View style={{ flex: 1, minWidth: 70 }}>
         <Pressable accessibilityRole="adjustable" accessibilityLabel="Posição do áudio" accessibilityValue={{ min: 0, max: Math.round(status.duration), now: Math.round(status.currentTime), text: clock(status.currentTime) }} accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]} onAccessibilityAction={e => { if (status.isLoaded) void player.seekTo(Math.max(0, Math.min(status.duration, status.currentTime + (e.nativeEvent.actionName === 'increment' ? 5 : -5)))).catch(() => setError('Não foi possível mudar a posição.')); }} onLayout={e => { width.current = e.nativeEvent.layout.width; }} onPress={e => { if (status.isLoaded && status.duration > 0) void player.seekTo(Math.max(0, Math.min(1, e.nativeEvent.locationX / width.current)) * status.duration).catch(() => setError('Não foi possível mudar a posição.')); }} style={{ height: 34, justifyContent: 'center' }}>
-          <View style={{ height: 4, borderRadius: 3, backgroundColor: foreground + '40' }}><View style={{ height: 4, borderRadius: 3, backgroundColor: foreground, width: percent }} /><View style={{ position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: foreground, top: -3, left: percent }} /></View>
+          <View testID="voice-waveform" pointerEvents="none" style={{ height: 30, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            {/* Envelope visual neutro; progresso e tempo usam o arquivo real. */}
+            {waveHeights.map((height, i) => <View key={i} style={{ width: 2, flexShrink: 1, height, borderRadius: 2, backgroundColor: i / waveHeights.length < progress ? accent : foreground, opacity: i / waveHeights.length < progress ? 0.95 : 0.4 }} />)}
+            <View style={{ position: 'absolute', left: `${progress * 100}%`, marginLeft: -5, width: 10, height: 10, borderRadius: 5, backgroundColor: accent, borderWidth: 1, borderColor: '#ffffff35' }} />
+          </View>
         </Pressable>
-        <Text style={{ color: foreground, fontFamily: 'Manrope', fontSize: 9 }}>{clock(status.currentTime)} / {status.duration ? clock(status.duration) : '—:—'}</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 4, marginTop: 2 }}>
+          <Text testID="voice-duration" style={{ color: foreground, opacity: 0.75, fontFamily: 'Manrope', fontSize: 11, lineHeight: 16 }}>{status.duration ? clock(status.playing ? status.currentTime : status.duration) : '—:—'}</Text>
+          {metadata}
+        </View>
       </View>
-      <Pressable accessibilityRole="button" accessibilityLabel={'Velocidade ' + speed + ' vezes'} onPress={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); player.setPlaybackRate(next); }} style={{ minWidth: 38, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: foreground, fontFamily: 'ManropeExtraBold', fontSize: 10 }}>{speed}×</Text></Pressable>
+      <View testID="voice-avatar" style={{ width: 54, height: 54, marginLeft: 2 }}>
+        <View style={{ flex: 1, borderRadius: 27, overflow: 'hidden', backgroundColor: colors.accentSoft, borderWidth: 1, borderColor: '#ffffff30', justifyContent: 'center', alignItems: 'center' }}>
+          {avatarUri ? <Image source={{ uri: avatarUri }} style={StyleSheet.absoluteFill} /> : <Text style={{ color: colors.accent, fontFamily: 'ManropeExtraBold', fontSize: 17 }}>{senderName.split(' ').filter(Boolean).slice(0, 2).map(s => s[0]).join('').toUpperCase()}</Text>}
+        </View>
+        {status.playing ? <Pressable accessibilityRole="button" accessibilityLabel={'Velocidade ' + speed + ' vezes'} onPress={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); player.setPlaybackRate(next); }} style={{ position: 'absolute', inset: 0, borderRadius: 27, backgroundColor: dark ? '#173759ed' : '#dbe8faed', justifyContent: 'center', alignItems: 'center' }}><Text style={{ color: foreground, fontFamily: 'ManropeExtraBold', fontSize: 14 }}>{speed}×</Text></Pressable> : null}
+        <View pointerEvents="none" testID="voice-microphone" style={{ position: 'absolute', bottom: -3, left: -5, padding: 2, borderRadius: 10, backgroundColor: dark ? '#22334c' : '#ffffff' }}><Mic color={accent} size={21} strokeWidth={2} /></View>
+      </View>
     </View>}
     {!!error && <Text accessibilityRole="alert" style={{ color: foreground, fontSize: 10, marginTop: 6 }}>{error}</Text>}
     <Modal visible={expanded} transparent onRequestClose={() => setExpanded(false)}><View style={{ flex: 1, backgroundColor: '#101820ee', justifyContent: 'center', padding: 16 }}><Pressable accessibilityLabel="Fechar foto" onPress={() => setExpanded(false)} style={{ alignSelf: 'flex-end', padding: 12 }}><X color="#fff" /></Pressable>{uri && <Image source={{ uri }} style={{ width: '100%', height: '70%' }} resizeMode="contain" />}</View></Modal>
   </View>;
 }
+
+const waveHeights = [8, 15, 23, 18, 13, 25, 29, 21, 16, 24, 18, 12, 20, 28, 24, 16, 10, 22, 27, 19, 13, 23, 17, 26, 30, 21, 14, 25, 18, 11, 20, 28, 22, 15, 25, 19, 12, 21, 16, 9];
 
 export function AudioComposer(props: { disabled: boolean; send: (file: LocalChatFile) => Promise<void>; onError: (error: string) => void }) {
   return browserNativeTest ? <BrowserAudioComposer disabled={props.disabled} /> : <NativeAudioComposer {...props} />;

@@ -3,8 +3,10 @@ import MapView, { Marker, Polyline, PROVIDER_GOOGLE, type UserLocationChangeEven
 import { useIsFocused } from 'expo-router/react-navigation';
 import { Platform, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
+import { SvgXml } from 'react-native-svg';
 import { Pedido } from '../types/pedido';
 import { useZippyTheme } from '../src/ui/theme';
+import { mapPinSvg } from '../src/delivery/mapPin';
 
 import { MapaProps } from './mapTypes';
 
@@ -31,7 +33,7 @@ const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: num
   return null;
 };
 
-export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress, view3D = false, onMapPress, pathSegments, path, historical }: Props) {
+export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress, view3D = false, onMapPress, pathSegments, path, historical, selectedPedidoId }: Props) {
   const { dark, reducedMotion } = useZippyTheme();
   const focused = useIsFocused();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
@@ -177,83 +179,24 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
 
   // Memoize os marcadores para evitar re-renders desnecessários
   const markers = useMemo(() => {
-    if (!emEntrega) {
-      return pedidos.map((p, i) => {
-        const coordinate = getPedidoCoordinate(p);
-        if (!coordinate) return null;
-
-        return (
-          <React.Fragment key={`${p.id}-${i}`}>
-            <Marker
-              coordinate={coordinate}
-              onPress={() => onOrderPress?.(p.id)}
-              anchor={{ x: 0.5, y: 1 }}
-              image={require('../assets/images/alfinete_85x85.png')}
-              tracksViewChanges={false}
-            />
-            <Marker
-              coordinate={coordinate}
-              anchor={{ x: 0, y: 0.5 }}
-              centerOffset={{ x: 8, y: 6 }}
-              tracksViewChanges={trackMarkers}
-            >
-              <View style={[styles.floatingNumber, { backgroundColor: '#2C79FF' }]} pointerEvents="none">
-                <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
-              </View>
-            </Marker>
-          </React.Fragment>
-        );
-      });
-    }
-
     return pedidos.map((p, i) => {
       const coordinate = getPedidoCoordinate(p);
       if (!coordinate) return null;
-
-      const isAtual = i === 0;
-      const isFuturo = i > 0;
-
-      if (isAtual) {
-        return (
-          <Marker
-            key={`${p.id}-atual`}
-            coordinate={coordinate}
-            anchor={{ x: 0.5, y: 1 }}
-            pinColor="#2872e3"
-            onPress={() => onOrderPress?.(p.id)}
-            tracksViewChanges={false}
-            zIndex={999}
-          />
-        );
-      }
-
-      if (isFuturo) {
-        return (
-          <React.Fragment key={`${p.id}-${i}`}>
-            <Marker
-              coordinate={coordinate}
-              anchor={{ x: 0.5, y: 1 }}
-              onPress={() => onOrderPress?.(p.id)}
-              image={require('../assets/images/alfinete_32x23.png')}
-              tracksViewChanges={false}
-            />
-            <Marker
-              coordinate={coordinate}
-              anchor={{ x: 0, y: 0.5 }}
-              centerOffset={{ x: 8, y: 6 }}
-              tracksViewChanges={trackMarkers}
-            >
-              <View style={[styles.floatingNumber, { backgroundColor: '#777' }]} pointerEvents="none">
-                <Text style={styles.floatingNumberText} allowFontScaling={false}>{i + 1}</Text>
-              </View>
-            </Marker>
-          </React.Fragment>
-        );
-      }
-
-      return null;
+      const highlighted = i === 0 || p.id === selectedPedidoId;
+      return (
+        <Marker
+          key={`pin-${p.id}-${i}`}
+          coordinate={coordinate}
+          anchor={{ x: 0.5, y: 50 / 54 }}
+          onPress={() => onOrderPress?.(p.id)}
+          tracksViewChanges={trackMarkers}
+          zIndex={highlighted ? 999 : 100 - i}
+        >
+          <SvgXml xml={mapPinSvg(i + 1, highlighted)} width={highlighted ? 44 : 35.2} height={highlighted ? 54 : 43.2} />
+        </Marker>
+      );
     });
-  }, [pedidos, emEntrega, trackMarkers, mapClean, onOrderPress]);
+  }, [pedidos, emEntrega, trackMarkers, mapClean, onOrderPress, selectedPedidoId]);
 
   return (
     <MapView

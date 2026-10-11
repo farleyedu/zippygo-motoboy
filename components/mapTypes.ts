@@ -14,6 +14,8 @@ export type MapaProps = {
   cameraFollowing?: boolean;
   onCameraExplore?: () => void;
   navigationBottomInset?: number;
+  routePreview?: boolean;
+  overviewToken?: number;
   onOrderPress?: (pedidoId: number) => void;
   onMapPress?: () => void;
   view3D?: boolean;

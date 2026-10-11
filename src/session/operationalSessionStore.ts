@@ -13,6 +13,7 @@ export type OperationalPorts = {
   attempt: (identity: Identity) => Promise<string>;
   clearAttempt: () => Promise<void>;
   start: (attemptId: string) => Promise<OperationalTokenResponse>;
+  recover?: (attemptId: string, sessionId: string) => Promise<OperationalTokenResponse>;
   current: () => Promise<OperationalSession | null>;
   heartbeat: (force?: boolean) => Promise<OperationalHeartbeatResponse>;
   queue: () => Promise<MotoboyQueue>;
@@ -59,9 +60,14 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     await ports.clear();
     if (matches(nextVersion)) await ports.clearAttempt();
   }
-  async function handleError(error: unknown, version: number) {
+  async function handleError(error: unknown, version: number, allowRecovery = true) {
     if (!matches(version)) return;
     const failure = operationalError(error);
+    if (allowRecovery && ports.recover && identity && state.session && failure.status === 401 && (!failure.code || failure.code === 'SESSION_EXPIRED')) {
+      try { await recoverSaved(state.session.sessionId, version, identity); }
+      catch (recoveryError) { await handleError(recoveryError, version, false); }
+      return;
+    }
     if (failure.status === 401 || failure.code === 'SESSION_CHANGED' || failure.code === 'LINK_FORBIDDEN') {
       await invalidate(failure.message, version);
       return;
@@ -87,17 +93,17 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
   }
   function refreshQueue(): Promise<boolean> {
     if (queueOperation) return queueOperation;
-    if (!identity || !state.session || !['online', 'reconnecting'].includes(state.phase)) return Promise.resolve(false);
+    if (!identity || !state.session || !['online', 'reconnecting', 'permission-required'].includes(state.phase)) return Promise.resolve(false);
     const version = epoch;
     const pending = (async () => {
       try {
         const queue = await ports.queue();
-        if (!matches(version) || !['online', 'reconnecting'].includes(state.phase)) return false;
+        if (!matches(version) || !['online', 'reconnecting', 'permission-required'].includes(state.phase)) return false;
         if (!state.queue || queue.version >= state.queue.version) update({ queue });
         if (queueTrackingMode(state.queue!) !== monitorMode) await run(current => enableMonitoring(state.queue!, current));
         return true;
       } catch (error) {
-        if (['online', 'reconnecting'].includes(state.phase)) await handleError(error, version);
+        if (['online', 'reconnecting', 'permission-required'].includes(state.phase)) await handleError(error, version);
         return false;
       }
     })();
@@ -121,7 +127,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     const mode = queueTrackingMode(queue);
     if (monitorMode !== mode) {
       const started = await ports.monitor(mode); assertCurrent(version);
-      if (!started) { update({ phase: 'permission-required', error: 'O acompanhamento não iniciou. Confira as permissões e tente novamente.' }); return false; }
+      if (!started) { update({ phase: 'reconnecting', error: 'O GPS ainda não iniciou. Tentaremos novamente; sua rota foi preservada.' }); return false; }
       monitorMode = mode;
     }
     update({ phase: 'online', error: null });
@@ -130,6 +136,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
   async function restore(version: number, owner: Identity): Promise<boolean> {
     const saved = await ports.stored(); assertCurrent(version);
     if (!saved) {
+      await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
       const permissions = await ports.permissions(); assertCurrent(version);
       update({ ...initial(), permissions }); return false;
     }
@@ -138,8 +145,19 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       update({ phase: 'error', error: 'O turno salvo pertence a outro acesso ou estabelecimento. Entre com o acesso desse turno para recuperá-lo.', session: null, queue: null });
       return false;
     }
-    update({ session: saved.session, phase: 'restoring', error: null });
-    const session = await ports.current(); assertCurrent(version);
+    const warm = state.session?.sessionId === saved.session?.sessionId && !!state.queue;
+    update({ session: saved.session, phase: warm ? state.phase : 'restoring', error: null });
+    let session: OperationalSession | null;
+    try { session = await ports.current(); }
+    catch (error) {
+      const failure = operationalError(error);
+      if (ports.recover && saved.session && failure.status === 401 && (!failure.code || failure.code === 'SESSION_EXPIRED'))
+        return recoverSaved(saved.session.sessionId, version, owner);
+      throw error;
+    }
+    assertCurrent(version);
+    if (session?.isEnded && session.endReason === 'heartbeat_timeout' && ports.recover)
+      return recoverSaved(session.sessionId, version, owner);
     if (!session || session.isEnded) { await invalidate('Seu turno foi encerrado. Confira a operação antes de retomar.', version); return false; }
     if (saved.session && (session.sessionId !== saved.session.sessionId || session.epoch !== saved.session.epoch)) {
       await invalidate('Seu turno mudou. Confira a sessão atual antes de continuar.', version); return false;
@@ -150,6 +168,19 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     }
     await ports.save({ ...heartbeat, establishmentId: owner.establishmentId, motoboy: {} }, owner); assertCurrent(version);
     update({ session: heartbeat.session });
+    const queue = await ports.queue(); assertCurrent(version); update({ queue });
+    return enableMonitoring(queue, version);
+  }
+  async function recoverSaved(sessionId: string, version: number, owner: Identity): Promise<boolean> {
+    assertCurrent(version);
+    const attemptId = await ports.attempt(owner); assertCurrent(version);
+    // Renova o acesso do mesmo turno. Encerramento explícito não pode ser recuperado.
+    const data = await ports.recover!(attemptId, sessionId); assertCurrent(version);
+    if (!data.accessToken || data.establishmentId !== owner.establishmentId || data.session?.isEnded || !data.session?.sessionId)
+      throw new Error('O servidor não confirmou a recuperação deste turno.');
+    await ports.save(data, owner); assertCurrent(version);
+    await ports.clearAttempt(); assertCurrent(version);
+    monitorMode = null; update({ session: data.session });
     const queue = await ports.queue(); assertCurrent(version); update({ queue });
     return enableMonitoring(queue, version);
   }

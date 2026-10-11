@@ -1,0 +1,56 @@
+{
+  "engine": "webkit",
+  "cases": [
+    {
+      "dark": false,
+      "width": 320,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": false,
+      "width": 320,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": false,
+      "width": 390,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": false,
+      "width": 390,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 320,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 320,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 390,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 390,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    }
+  ],
+  "errors": [],
+  "ok": true,
+  "audioLimitation": "WAV PCM não decodificado no WebKit/Windows (MediaError 4); áudio real validado em Chromium, Safari/iPhone pendente."
+}

@@ -1,13 +1,18 @@
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
+import { AppState } from 'react-native';
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secureStorage';
 import { API_CONFIG } from '../../config/apiConfig';
 import { requestOperationalLogout, subscribeAccountAuthenticationFailures } from '../../services/sessionEvents';
+import { requestAccountLogin } from '../../services/accountLogin';
+import apiClient from '../../services/apiService';
+import { pararMonitoramentoLocalizacao } from '../../components/locationSetup';
 import {
   EstablishmentLink,
   listMotoboyLinks,
   MobileApiError,
   selectEstablishment as selectEstablishmentApi,
   SelectedEstablishment,
+  unwrap,
 } from '../../services/mobileApi';
 
 export interface User {
@@ -28,7 +33,7 @@ interface AuthContextData {
   isLoading: boolean;
   restoreError: string | null;
   didSignOut: boolean;
-  signIn: (email: string, senha: string, remember?: boolean) => Promise<{ success: boolean; error?: string; requiresEstablishmentSelection?: boolean; requiresLinkRequest?: boolean }>;
+  signIn: (email: string, senha: string, remember?: boolean, expectedSessionId?: string) => Promise<{ success: boolean; error?: string; requiresSessionConfirmation?: boolean; activeSessionId?: string; requiresEstablishmentSelection?: boolean; requiresLinkRequest?: boolean }>;
   updateOwnIdentity: (data: { nome: string; email: string; telefone?: string }) => Promise<void>;
   selectEstablishment: (estabelecimento: EstablishmentLink) => Promise<{ success: boolean; error?: string }>;
   refreshEstabelecimentos: () => Promise<EstablishmentLink[]>;
@@ -84,11 +89,32 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Preservar usuario, estabelecimento, sessao operacional e GPS para que
       // o mesmo usuario possa recuperar o turno depois de autenticar novamente.
       await Promise.all(['authToken', 'zippygo.token', 'refreshToken'].map(deleteSecureItem));
+      if (failure.code === 'SESSION_REPLACED') {
+        await Promise.all(['operationalAccessToken', 'operationalSession', 'operationalUserId', 'operationalStartAttempt', 'trackingMode', 'zippygo.loginSessionId'].map(deleteSecureItem));
+      }
       if (invalidatedEpoch !== authEpoch.current) return;
       clearIdentityState(true);
       setIsLoading(false);
     })().catch(() => { /* A restauracao tambem trata a recusa se o armazenamento falhar. */ });
   }), []);
+
+  // O aparelho sem turno online também percebe a substituição do login.
+  useEffect(() => {
+    if (!user || isLoading) return;
+    let checking = false, active = true;
+    const check = async () => {
+      if (checking || !active || AppState.currentState !== 'active') return;
+      checking = true;
+      try {
+        if (await getSecureItem('zippygo.loginSessionId')) await apiClient.get('/auth/session');
+      } catch { /* Falha de rede preserva o acesso. O interceptor trata a recusa definitiva. */ }
+      finally { checking = false; }
+    };
+    const timer = setInterval(() => void check(), 30000);
+    const listener = AppState.addEventListener('change', next => { if (next === 'active') void check(); });
+    void check();
+    return () => { active = false; clearInterval(timer); listener.remove(); };
+  }, [user?.id, isLoading]);
 
   const loadUserFromStorage = (): Promise<void> => {
     if (restoreRequest.current?.epoch === authEpoch.current) return restoreRequest.current.promise;
@@ -176,22 +202,26 @@ export function AuthProvider({ children }: AuthProviderProps) {
     return motoboyLinks;
   };
 
-  const signIn = async (email: string, senha: string, remember = true) => {
-    authEpoch.current += 1;
+  const signIn = async (email: string, senha: string, remember = true, expectedSessionId?: string) => {
+    const epoch = ++authEpoch.current;
     try {
       setIsLoading(true);
-      const response = await fetch(`${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.LOGIN}`, {
-        method: 'POST',
-        headers: API_CONFIG.DEFAULT_HEADERS,
-        body: JSON.stringify({ email, senha }),
-      });
-      const body = await response.json();
-      if (!response.ok || !body?.success || !body?.data?.accessToken) {
+      const body = await requestAccountLogin(email, senha, expectedSessionId);
+      if (epoch !== authEpoch.current) return { success: false, error: 'O acesso mudou. Tente novamente.' };
+      if (body.requiresSessionConfirmation) return body;
+      if (!body.success || !body.data?.accessToken) {
         return { success: false, error: body?.error || 'Email ou senha invalidos' };
+      }
+      if (expectedSessionId) {
+        await pararMonitoramentoLocalizacao();
+        await Promise.all(['operationalAccessToken', 'operationalSession', 'operationalUserId', 'operationalEstablishmentId', 'operationalStartAttempt', 'trackingMode'].map(deleteSecureItem));
+        if (epoch !== authEpoch.current) return { success: false, error: 'O acesso mudou. Tente novamente.' };
       }
       await setSecureItem('zippygo.rememberLogin', String(remember));
 
       const tokenData = body.data;
+      if (tokenData.motoboyLoginSessionId) await setSecureItem('zippygo.loginSessionId', tokenData.motoboyLoginSessionId);
+      else await deleteSecureItem('zippygo.loginSessionId');
       const apiUser = tokenData.user ?? {};
       const userData: User = {
         id: String(apiUser.id ?? ''),
@@ -241,7 +271,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log('Erro no login:', error);
       return { success: false, error: 'Não foi possível carregar os restaurantes vinculados.' };
     } finally {
-      setIsLoading(false);
+      if (epoch === authEpoch.current) setIsLoading(false);
     }
   };
 
@@ -296,12 +326,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       // A guarda encerra o turno no servidor antes de apagar qualquer credencial.
       if (!(await requestOperationalLogout())) throw new Error('O turno ainda está sendo preparado. Tente sair novamente.');
+      if (await getSecureItem('zippygo.loginSessionId')) {
+        const refreshToken = await getSecureItem('refreshToken');
+        unwrap(await apiClient.post('/auth/logout', { refreshToken }));
+      }
       authEpoch.current += 1;
       setIsLoading(true);
       await deleteSecureItem('zippygo.user');
       await deleteSecureItem('zippygo.token');
       await deleteSecureItem('authToken');
       await deleteSecureItem('refreshToken');
+      await deleteSecureItem('zippygo.loginSessionId');
       await deleteSecureItem(ACTIVE_ESTABLISHMENT_KEY);
       setUser(null);
       setAccessToken(null);

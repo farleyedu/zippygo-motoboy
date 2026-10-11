@@ -1,14 +1,16 @@
 diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java b/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java
-index 3438313..2f576a1 100644
+index 3438313..abae582 100644
 --- a/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java
 +++ b/node_modules/@googlemaps/react-native-navigation-sdk/android/src/main/java/com/google/android/react/navsdk/MapViewController.java
-@@ -16,6 +16,14 @@ package com.google.android.react.navsdk;
+@@ -16,6 +16,16 @@ package com.google.android.react.navsdk;
  import android.annotation.SuppressLint;
  import android.app.Activity;
  import android.util.Log;
 +import android.graphics.Bitmap;
 +import android.graphics.Canvas;
 +import android.graphics.Color;
++import android.graphics.LinearGradient;
++import android.graphics.Shader;
 +import android.graphics.Paint;
 +import android.graphics.Path;
 +import android.graphics.RectF;
@@ -17,7 +19,7 @@ index 3438313..2f576a1 100644
  import androidx.core.util.Supplier;
  import com.facebook.react.bridge.UiThreadUtil;
  import com.google.android.gms.maps.CameraUpdateFactory;
-@@ -230,6 +238,43 @@ public class MapViewController implements INavigationViewControllerProperties {
+@@ -230,6 +240,47 @@ public class MapViewController implements INavigationViewControllerProperties {
      }
    }
  
@@ -35,23 +37,27 @@ index 3438313..2f576a1 100644
 +    String key = imagePath + ":" + scale;
 +    Bitmap bitmap = zippyPinCache.get(key);
 +    if (bitmap == null) {
-+      float w = minor ? 28 : 36, h = minor ? 32 : 41, r = minor ? 12 : 16;
-+      bitmap = Bitmap.createBitmap((int) Math.ceil((w + 4) * scale), (int) Math.ceil((h + 9) * scale), Bitmap.Config.ARGB_8888);
-+      Canvas canvas = new Canvas(bitmap); canvas.scale(scale, scale); canvas.translate(2, 2);
++      float pinScale = scale * (minor ? .8f : 1f);
++      bitmap = Bitmap.createBitmap((int) Math.ceil(44 * pinScale), (int) Math.ceil(54 * pinScale), Bitmap.Config.ARGB_8888);
++      Canvas canvas = new Canvas(bitmap); canvas.scale(pinScale, pinScale);
 +      Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
-+      Path shape = new Path(); shape.addRoundRect(new RectF(0, 0, w, h), new float[]{r,r,r,r,r,r,5,5}, Path.Direction.CW);
-+      canvas.save(); canvas.translate(0, minor ? 4 : 5);
-+      paint.setColor(Color.parseColor(store ? "#775940" : minor ? "#273548" : "#476a98")); canvas.drawPath(shape, paint); canvas.restore();
-+      paint.setColor(Color.parseColor(store ? "#b48a60" : minor ? "#44566e" : "#8cb9f5")); canvas.drawPath(shape, paint);
-+      paint.setStyle(Paint.Style.STROKE); paint.setStrokeWidth(2); paint.setColor(Color.parseColor(store ? "#e3c89d" : minor ? "#6e86a6" : "#d5e7fe")); canvas.drawPath(shape, paint);
-+      paint.setColor(Color.parseColor(store ? "#fff8e8" : minor ? "#d6dee9" : "#202b39"));
++      paint.setColor(Color.parseColor("#3010294e")); canvas.drawOval(new RectF(13, 49, 31, 53), paint);
++      Path shape = new Path(); shape.moveTo(15, 3); shape.lineTo(29, 3); shape.quadTo(41, 3, 41, 15);
++      shape.lineTo(41, 29); shape.quadTo(41, 39, 30, 39); shape.lineTo(29, 39); shape.lineTo(22, 50);
++      shape.lineTo(15, 39); shape.lineTo(14, 39); shape.quadTo(3, 39, 3, 29); shape.lineTo(3, 15); shape.quadTo(3, 3, 15, 3); shape.close();
++      canvas.save(); canvas.translate(0, 2); paint.setColor(Color.parseColor(store ? "#77512e" : minor ? "#2e3d51" : "#0f3779")); canvas.drawPath(shape, paint); canvas.restore();
++      paint.setShader(new LinearGradient(0, 0, 26, 54, Color.parseColor(store ? "#d5a76c" : minor ? "#8191a4" : "#438cf4"), Color.parseColor(store ? "#9c6937" : minor ? "#495b72" : "#1855bd"), Shader.TileMode.CLAMP));
++      canvas.drawPath(shape, paint); paint.setShader(null);
++      paint.setStyle(Paint.Style.STROKE); paint.setStrokeJoin(Paint.Join.ROUND); paint.setStrokeWidth(2.2f); paint.setColor(Color.WHITE); canvas.drawPath(shape, paint);
++      paint.setStrokeCap(Paint.Cap.ROUND); paint.setStrokeWidth(2); paint.setColor(Color.parseColor("#55ffffff")); canvas.drawLine(12, 7, 31, 7, paint);
++      paint.setColor(Color.WHITE);
 +      if (store) {
-+        paint.setStrokeWidth(1.8f); Path roof = new Path(); roof.moveTo(9, 18); roof.lineTo(18, 11); roof.lineTo(27, 18); canvas.drawPath(roof, paint);
-+        canvas.drawRect(11, 18, 25, 29, paint); canvas.drawRect(16, 22, 20, 29, paint);
++        paint.setStrokeWidth(2); Path roof = new Path(); roof.moveTo(12, 20); roof.lineTo(22, 12); roof.lineTo(32, 20); canvas.drawPath(roof, paint);
++        canvas.drawRect(14, 20, 30, 31, paint); canvas.drawRect(20, 24, 24, 31, paint);
 +      } else {
 +        paint.setStyle(Paint.Style.FILL); paint.setTextAlign(Paint.Align.CENTER); paint.setTypeface(Typeface.create("sans-serif", Typeface.BOLD));
-+        paint.setTextSize(label.length() > 3 ? 10 : minor ? 12 : 13);
-+        canvas.drawText(label, w / 2, h / 2 - (paint.ascent() + paint.descent()) / 2, paint);
++        paint.setTextSize(label.length() > 3 ? 11 : label.length() > 2 ? 16 : 22);
++        canvas.drawText(label, 22, 21 - (paint.ascent() + paint.descent()) / 2, paint);
 +      }
 +      zippyPinCache.put(key, bitmap);
 +    }
@@ -61,7 +67,7 @@ index 3438313..2f576a1 100644
    public Marker addMarker(Map<String, Object> optionsMap) {
      if (mGoogleMap == null) {
        return null;
-@@ -272,7 +317,7 @@ public class MapViewController implements INavigationViewControllerProperties {
+@@ -272,7 +323,7 @@ public class MapViewController implements INavigationViewControllerProperties {
      MarkerOptions options = new MarkerOptions();
      if (imagePath != null && !imagePath.isEmpty()) {
        try {
@@ -70,7 +76,7 @@ index 3438313..2f576a1 100644
          options.icon(icon);
        } catch (Exception e) {
          throw new IllegalArgumentException(JsErrors.INVALID_IMAGE_ERROR_MESSAGE);
-@@ -329,7 +374,7 @@ public class MapViewController implements INavigationViewControllerProperties {
+@@ -329,7 +380,7 @@ public class MapViewController implements INavigationViewControllerProperties {
  
      if (imagePath != null && !imagePath.isEmpty()) {
        try {
@@ -137,10 +143,10 @@ index e7556f0..f90b7c7 100644
  + (NSDictionary *)transformCoordinateToDictionary:(CLLocationCoordinate2D)coordinate;
  + (NSDictionary *)transformCLLocationToDictionary:(CLLocation *)location;
 diff --git a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm
-index 4232c8b..43d5d67 100644
+index 4232c8b..d51ea97 100644
 --- a/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm
 +++ b/node_modules/@googlemaps/react-native-navigation-sdk/ios/react-native-navigation-sdk/ObjectTranslationUtil.mm
-@@ -18,6 +18,44 @@
+@@ -18,6 +18,50 @@
  
  @implementation ObjectTranslationUtil
  
@@ -155,27 +161,33 @@ index 4232c8b..43d5d67 100644
 +  BOOL store = [imagePath isEqualToString:@"zippy-pin:store"];
 +  NSString *label = [[imagePath componentsSeparatedByString:@":"] lastObject];
 +  if (!store && ([label rangeOfString:@"^[1-9][0-9]{0,4}$" options:NSRegularExpressionSearch].location == NSNotFound)) return nil;
-+  CGFloat w = minor ? 28 : 36, h = minor ? 32 : 41, r = minor ? 12 : 16;
-+  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(w + 4, h + 9)];
++  CGFloat scale = minor ? .8 : 1;
++  UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithSize:CGSizeMake(44 * scale, 54 * scale)];
 +  UIImage *image = [renderer imageWithActions:^(UIGraphicsImageRendererContext *context) {
-+    CGContextTranslateCTM(context.CGContext, 2, 2);
++    CGContextScaleCTM(context.CGContext, scale, scale);
 +    UIBezierPath *shape = [UIBezierPath bezierPath];
-+    [shape moveToPoint:CGPointMake(r, 0)]; [shape addLineToPoint:CGPointMake(w-r, 0)];
-+    [shape addQuadCurveToPoint:CGPointMake(w, r) controlPoint:CGPointMake(w, 0)]; [shape addLineToPoint:CGPointMake(w, h-r)];
-+    [shape addQuadCurveToPoint:CGPointMake(w-r, h) controlPoint:CGPointMake(w, h)]; [shape addLineToPoint:CGPointMake(5, h)];
-+    [shape addQuadCurveToPoint:CGPointMake(0, h-5) controlPoint:CGPointMake(0, h)]; [shape addLineToPoint:CGPointMake(0, r)];
-+    [shape addQuadCurveToPoint:CGPointMake(r, 0) controlPoint:CGPointZero]; [shape closePath];
-+    CGContextSaveGState(context.CGContext); CGContextTranslateCTM(context.CGContext, 0, minor ? 4 : 5);
-+    [[UIColor colorWithRed:(store ? 119 : minor ? 39 : 71)/255.0 green:(store ? 89 : minor ? 53 : 106)/255.0 blue:(store ? 64 : minor ? 72 : 152)/255.0 alpha:1] setFill]; [shape fill]; CGContextRestoreGState(context.CGContext);
-+    [[UIColor colorWithRed:(store ? 180 : minor ? 68 : 140)/255.0 green:(store ? 138 : minor ? 86 : 185)/255.0 blue:(store ? 96 : minor ? 110 : 245)/255.0 alpha:1] setFill]; [shape fill];
-+    [[UIColor colorWithRed:(store ? 227 : minor ? 110 : 213)/255.0 green:(store ? 200 : minor ? 134 : 231)/255.0 blue:(store ? 157 : minor ? 166 : 254)/255.0 alpha:1] setStroke]; shape.lineWidth = 2; [shape stroke];
-+    UIColor *text = [UIColor colorWithRed:(store ? 255 : minor ? 214 : 32)/255.0 green:(store ? 248 : minor ? 222 : 43)/255.0 blue:(store ? 232 : minor ? 233 : 57)/255.0 alpha:1];
++    [shape moveToPoint:CGPointMake(15, 3)]; [shape addLineToPoint:CGPointMake(29, 3)];
++    [shape addQuadCurveToPoint:CGPointMake(41, 15) controlPoint:CGPointMake(41, 3)]; [shape addLineToPoint:CGPointMake(41, 29)];
++    [shape addQuadCurveToPoint:CGPointMake(30, 39) controlPoint:CGPointMake(41, 39)]; [shape addLineToPoint:CGPointMake(29, 39)];
++    [shape addLineToPoint:CGPointMake(22, 50)]; [shape addLineToPoint:CGPointMake(15, 39)]; [shape addLineToPoint:CGPointMake(14, 39)];
++    [shape addQuadCurveToPoint:CGPointMake(3, 29) controlPoint:CGPointMake(3, 39)]; [shape addLineToPoint:CGPointMake(3, 15)];
++    [shape addQuadCurveToPoint:CGPointMake(15, 3) controlPoint:CGPointMake(3, 3)]; [shape closePath];
++    CGContextSaveGState(context.CGContext); CGContextTranslateCTM(context.CGContext, 0, 2);
++    [[UIColor colorWithRed:(store ? 119 : minor ? 46 : 15)/255.0 green:(store ? 81 : minor ? 61 : 55)/255.0 blue:(store ? 46 : minor ? 81 : 121)/255.0 alpha:1] setFill]; [shape fill]; CGContextRestoreGState(context.CGContext);
++    UIColor *top = [UIColor colorWithRed:(store ? 213 : minor ? 129 : 67)/255.0 green:(store ? 167 : minor ? 145 : 140)/255.0 blue:(store ? 108 : minor ? 164 : 244)/255.0 alpha:1];
++    UIColor *bottom = [UIColor colorWithRed:(store ? 156 : minor ? 73 : 24)/255.0 green:(store ? 105 : minor ? 91 : 85)/255.0 blue:(store ? 55 : minor ? 114 : 189)/255.0 alpha:1];
++    CGContextSaveGState(context.CGContext); [shape addClip];
++    CGColorSpaceRef space = CGColorSpaceCreateDeviceRGB();
++    CGGradientRef gradient = CGGradientCreateWithColors(space, (__bridge CFArrayRef)@[(__bridge id)top.CGColor, (__bridge id)bottom.CGColor], NULL);
++    CGContextDrawLinearGradient(context.CGContext, gradient, CGPointZero, CGPointMake(26, 54), 0); CGGradientRelease(gradient); CGColorSpaceRelease(space); CGContextRestoreGState(context.CGContext);
++    [UIColor.whiteColor setStroke]; shape.lineWidth = 2.2; shape.lineJoinStyle = kCGLineJoinRound; [shape stroke];
++    UIColor *text = UIColor.whiteColor;
 +    if (store) {
-+      [text setStroke]; UIBezierPath *roof = [UIBezierPath bezierPath]; [roof moveToPoint:CGPointMake(9,18)]; [roof addLineToPoint:CGPointMake(18,11)]; [roof addLineToPoint:CGPointMake(27,18)]; roof.lineWidth = 1.8; [roof stroke];
-+      UIBezierPath *body = [UIBezierPath bezierPathWithRect:CGRectMake(11,18,14,11)]; body.lineWidth = 1.8; [body stroke]; UIBezierPath *door = [UIBezierPath bezierPathWithRect:CGRectMake(16,22,4,7)]; door.lineWidth = 1.8; [door stroke];
++      [text setStroke]; UIBezierPath *roof = [UIBezierPath bezierPath]; [roof moveToPoint:CGPointMake(12,20)]; [roof addLineToPoint:CGPointMake(22,12)]; [roof addLineToPoint:CGPointMake(32,20)]; roof.lineWidth = 2; [roof stroke];
++      UIBezierPath *body = [UIBezierPath bezierPathWithRect:CGRectMake(14,20,16,11)]; body.lineWidth = 2; [body stroke]; UIBezierPath *door = [UIBezierPath bezierPathWithRect:CGRectMake(20,24,4,7)]; door.lineWidth = 2; [door stroke];
 +    } else {
-+      NSDictionary *attributes = @{ NSFontAttributeName: [UIFont boldSystemFontOfSize:label.length > 3 ? 10 : minor ? 12 : 13], NSForegroundColorAttributeName: text };
-+      CGSize size = [label sizeWithAttributes:attributes]; [label drawAtPoint:CGPointMake((w-size.width)/2,(h-size.height)/2) withAttributes:attributes];
++      NSDictionary *attributes = @{ NSFontAttributeName: [UIFont boldSystemFontOfSize:label.length > 3 ? 11 : label.length > 2 ? 16 : 22], NSForegroundColorAttributeName: text };
++      CGSize size = [label sizeWithAttributes:attributes]; [label drawAtPoint:CGPointMake(22-size.width/2,21-size.height/2) withAttributes:attributes];
 +    }
 +  }];
 +  [cache setObject:image forKey:imagePath]; return image;

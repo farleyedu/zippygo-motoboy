@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, Pressable, ScrollView, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
+import { ActivityIndicator, Animated, Easing, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, TextInputProps, View, ViewStyle } from 'react-native';
 import { ArrowLeft, ArrowRight, LucideIcon } from 'lucide-react-native';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,7 +68,7 @@ export function Screen({ children, footer }: { children: React.ReactNode; footer
     <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: footer ? footerHeight + 24 : 36 + insets.bottom }} showsVerticalScrollIndicator={false}>
       <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', paddingHorizontal: 22 }}>{children}</View>
     </ScrollView>
-    {footer && <View onLayout={event => setFooterHeight(event.nativeEvent.layout.height)} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 14), backgroundColor: pageColor }}><View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', paddingHorizontal: 20 }}>{footer}</View></View>}
+    {footer && <View onLayout={event => { const height = Math.ceil(event.nativeEvent.layout.height); setFooterHeight(previous => previous === height ? previous : height); }} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 14), backgroundColor: pageColor }}><View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', paddingHorizontal: 20 }}>{footer}</View></View>}
   </View>;
 }
 
@@ -131,7 +131,7 @@ export function Field({ label, error, hint, style, compact = true, ...props }: T
     <Text nativeID={`${id}-label`} style={[type.small, { fontWeight: '700', color: colors.ink }, compact && { fontSize: 10, lineHeight: 14 }]}>{label}</Text>
     <TextInput {...props} accessibilityLabel={props.accessibilityLabel || label} accessibilityLabelledBy={`${id}-label`} placeholderTextColor={colors.muted} selectionColor={colors.accent}
       onFocus={event => { setFocused(true); props.onFocus?.(event); }} onBlur={event => { setFocused(false); props.onBlur?.(event); }}
-      style={[type.body, { minHeight: compact ? 47 : 50, fontSize: compact ? 12 : 14, paddingHorizontal: 14, paddingVertical: 12, borderRadius: layout.radius.field, backgroundColor: colors.card, color: colors.ink, borderWidth: 1, borderColor: error ? colors.danger : focused ? colors.accent : colors.line, opacity: props.editable === false ? .6 : 1 }, style]} />
+      style={[type.body, { minHeight: compact ? 47 : 50, fontSize: compact ? 12 : 14, paddingHorizontal: 14, paddingVertical: 12, borderRadius: layout.radius.field, backgroundColor: colors.card, color: colors.ink, borderWidth: 1, borderColor: error ? colors.danger : focused ? colors.accent : colors.line, opacity: props.editable === false ? .6 : 1 }, style, Platform.OS === 'web' && { fontSize: Math.max(16, StyleSheet.flatten(style)?.fontSize || 16) }]} />
     {(error || hint) && <Text accessibilityLiveRegion={error ? 'polite' : 'none'} style={[type.small, { color: error ? colors.danger : colors.muted }]}>{error || hint}</Text>}
   </View>;
 }

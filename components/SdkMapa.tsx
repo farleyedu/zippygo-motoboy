@@ -9,6 +9,7 @@ import { waitForNavigationReset, waitForNavigationStop } from '../src/delivery/N
 import { NavigationJourney } from '../src/delivery/navigationJourney';
 import { NavigationDiagnostics, diagnoseNavigationConnection } from '../src/delivery/navigationDiagnostics';
 import type { MapaProps, MapCoordinate } from './mapTypes';
+import { uniqueNavigationStops } from '../src/delivery/externalRoute';
 
 const coordinate = (value: MapCoordinate | undefined): value is MapCoordinate => !!value && Number.isFinite(value.lat) && Number.isFinite(value.lng) && Math.abs(value.lat) <= 90 && Math.abs(value.lng) <= 180;
 const center = (points: MapCoordinate[]) => ({ lat: points.reduce((s, p) => s + p.lat, 0) / points.length, lng: points.reduce((s, p) => s + p.lng, 0) / points.length });
@@ -21,7 +22,7 @@ function useMarkers(controller: MapViewController | null, props: MapaProps, read
   useEffect(() => {
     if (!controller || !ready) return;
     let alive = true;
-    const markers = props.routeMode ? [] : props.pedidos.filter(p => coordinate(p.coordinates));
+    const markers = props.routeMode && !props.routePreview ? [] : props.pedidos.filter(p => coordinate(p.coordinates));
     pending.current = pending.current.catch(() => {}).then(async () => {
       if (!alive) return;
       if (owner.current !== controller) { previous.current.clear(); owner.current = controller; }
@@ -32,7 +33,7 @@ function useMarkers(controller: MapViewController | null, props: MapaProps, read
       }
       if (!alive) return;
       if (!props.routeMode && coordinate(props.collectionDestination)) {
-        const store = await controller.addMarker({ id: 'store', position: props.collectionDestination, title: 'Coleta no estabelecimento', imgPath: 'zippy-pin:store' });
+        const store = await controller.addMarker({ id: 'store', position: props.collectionDestination, title: 'Coleta no estabelecimento', imgPath: 'zippy-pin:store', anchor: { u: .5, v: 50 / 54 } });
         if (alive) previous.current.add(store.id);
         else { await controller.removeMarker(store.id); previous.current.delete(store.id); return; }
       }
@@ -40,13 +41,13 @@ function useMarkers(controller: MapViewController | null, props: MapaProps, read
         if (!alive) return;
         const p = markers[i], index = props.pedidos.findIndex(item => item.id === p.id);
         const highlighted = index === 0 || p.id === props.selectedPedidoId;
-        const marker = await controller.addMarker({ id: 'order:' + p.id, position: p.coordinates!, title: (index + 1) + 'ª parada · pedido #' + p.id, snippet: p.nomeCliente || p.cliente_nome || '', imgPath: 'zippy-pin:' + (highlighted ? 'current:' : 'future:') + (index + 1), alpha: highlighted ? 1 : .85 });
+        const marker = await controller.addMarker({ id: 'order:' + p.id, position: p.coordinates!, title: (index + 1) + 'ª parada · pedido #' + p.id, snippet: p.nomeCliente || p.cliente_nome || '', imgPath: 'zippy-pin:' + (highlighted ? 'current:' : 'future:') + (index + 1), anchor: { u: .5, v: 50 / 54 } });
         if (!alive) { await controller.removeMarker(marker.id); previous.current.delete(marker.id); return; }
         previous.current.add(marker.id);
       }
     }).catch(() => { /* A tela informa problemas de mapa; os pedidos continuam na lista. */ });
     return () => { alive = false; };
-  }, [controller, key, ready, props.selectedPedidoId, props.routeMode]);
+  }, [controller, key, ready, props.selectedPedidoId, props.routeMode, props.routePreview]);
 }
 
 function OverviewMap(props: MapaProps) {
@@ -89,12 +90,13 @@ function RouteMap(props: MapaProps) {
   const latest = useRef(props); latest.current = props;
   const perspective = useRef(props.view3D); perspective.current = props.view3D;
   const journey = useRef<NavigationJourney | null>(null);
-  const diagnostic = useRef(new NavigationDiagnostics(__DEV__));
+  const diagnostic = useRef(new NavigationDiagnostics(true));
   const lastGps = useRef<number | null>(null);
   const touch = useRef<{ x: number; y: number; moved: boolean } | null>(null);
-  const targets = props.collectionDestination ? [{ position: props.collectionDestination, title: 'Endereço da coleta' }] : props.pedidos.map(p => ({
+  const targets = props.collectionDestination ? [{ position: props.collectionDestination, title: 'Endereço da coleta' }] : uniqueNavigationStops(props.pedidos.map(p => ({
+    latitude: p.coordinates?.lat, longitude: p.coordinates?.lng, address: p.enderecoEntrega,
     position: p.coordinates, title: p.enderecoEntrega || p.bairro || 'Endereço de destino',
-  }));
+  })));
   const targetKey = targets.map(p => p.position?.lat + ':' + p.position?.lng).join('|');
   const destinationKey = props.collectionDestination ? 'store:' + targetKey : props.pedidos.map(p => p.id).join(',') + ':' + targetKey;
   // While driving, expose destination addresses, not order cards or product details.
@@ -103,7 +105,8 @@ function RouteMap(props: MapaProps) {
   useEffect(() => {
     if (!mapReady) { diagnostic.current.event('bootstrap.waiting.map', { retry: props.retryToken || 0, viewReady: !!view }); return; }
     let alive = true, receivedGps = false;
-    const log = new NavigationDiagnostics(__DEV__); diagnostic.current = log; lastGps.current = null;
+    let gpsTimeout: ReturnType<typeof setTimeout> | undefined;
+    const log = new NavigationDiagnostics(true); diagnostic.current = log; lastGps.current = null;
     log.event('bootstrap.begin', { retry: props.retryToken || 0, mapReady, viewReady: !!view });
     const appStateSubscription = __DEV__ ? AppState.addEventListener('change', state => log.event('app.state', { state })) : null;
     if (__DEV__) {
@@ -136,8 +139,9 @@ function RouteMap(props: MapaProps) {
       log.event('terms.result', { accepted });
       if (!alive) return;
       if (!accepted) throw new Error('Aceite os termos da navegação para abrir o percurso no app.');
-      const initStarted = Date.now(); log.event('sdk.init.begin');
+      const initStarted = Date.now(), finishInit = log.operation('sdk.init');
       const status = await engine.init();
+      finishInit({ status }, status !== NavigationSessionStatus.OK);
       log.event('sdk.init.result', { status, durationMs: Date.now() - initStarted }, status !== NavigationSessionStatus.OK);
       if (!alive) return;
       if (status !== NavigationSessionStatus.OK) throw new Error(status === NavigationSessionStatus.NOT_AUTHORIZED ? 'O serviço de navegação ainda não está habilitado para este app.' : status === NavigationSessionStatus.LOCATION_PERMISSION_MISSING ? 'Permita a localização para iniciar a navegação.' : 'A navegação não iniciou. Confira a conexão e tente novamente.');
@@ -145,12 +149,13 @@ function RouteMap(props: MapaProps) {
       // Raw GPS can arrive before the road-snapped position, especially stationary.
       engine.startUpdatingLocation();
       log.event('gps.updates.requested');
+      // Tempo de leitura dos termos/inicialização não é tempo de espera pelo GPS.
+      gpsTimeout = setTimeout(() => { if (alive && !receivedGps) { log.event('gps.timeout', { timeoutMs: 20000 }, true); observer.current?.({ status: 'error', message: 'Ainda aguardando o GPS. Confira a localização do aparelho.' }); } }, 20000);
       if (__DEV__) void engine.getNavSDKVersion().then(version => { if (alive) log.event('sdk.version', { version }); }).catch(error => log.error('sdk.version.error', error));
       setInitialized(true);
     })().catch(error => { if (alive) { log.error('bootstrap.error', error); observer.current?.({ status: 'error', message: error instanceof Error ? error.message : 'Não foi possível iniciar a navegação.' }); } });
-    const timeout = setTimeout(() => { if (alive && !receivedGps) { log.event('gps.timeout', { timeoutMs: 20000 }, true); observer.current?.({ status: 'error', message: 'Ainda aguardando o GPS. Confira a localização do aparelho.' }); } }, 20000);
     return () => {
-      alive = false; clearTimeout(timeout); appStateSubscription?.remove(); log.close(); engine.stopUpdatingLocation(); if (journey.current) waitForNavigationStop(journey.current.dispose()); journey.current = null;
+      alive = false; clearTimeout(gpsTimeout); appStateSubscription?.remove(); log.close(); engine.stopUpdatingLocation(); if (journey.current) waitForNavigationStop(journey.current.dispose()); journey.current = null;
       log.event('bootstrap.dispose');
       nav.setLogDebugInfo(null);
       nav.setOnLocationChanged(null); nav.setOnRawLocationChanged(null); nav.setOnArrival(null); nav.setOnReroutingRequestedByOffRoute(null); nav.setOnRemainingTimeOrDistanceChanged(null);
@@ -195,13 +200,21 @@ function RouteMap(props: MapaProps) {
 
   useEffect(() => {
     if (!initialized || !gpsReady || !view || !journey.current) return;
+    let alive = true;
     void journey.current.sync({
       key: destinationKey, destinations: targets as { position: MapCoordinate; title: string }[],
       enabled: !!props.routeMode, follow: props.cameraFollowing !== false,
-      cameraToken: String(props.recenterToken || 0) + ':' + !!props.view3D,
+      cameraToken: String(props.recenterToken || 0) + ':' + !!props.view3D + ':' + (props.overviewToken || 0),
+      overview: props.routePreview && !props.selectedPedidoId,
       muted: props.navigationMuted ?? !sound,
+    }).then(() => {
+      if (alive && props.routePreview && props.selectedPedidoId && map) {
+        const point = props.pedidos.find(p => p.id === props.selectedPedidoId)?.coordinates;
+        if (coordinate(point)) map.moveCamera({ target: point, zoom: 16, tilt: props.view3D ? 35 : 0 });
+      }
     });
-  }, [initialized, gpsReady, view, destinationKey, props.routeMode, props.cameraFollowing, props.view3D, props.recenterToken, props.navigationMuted, sound, props.retryToken]);
+    return () => { alive = false; };
+  }, [initialized, gpsReady, view, destinationKey, props.routeMode, props.cameraFollowing, props.view3D, props.recenterToken, props.navigationMuted, sound, props.retryToken, props.routePreview, props.overviewToken, props.selectedPedidoId]);
 
   const inset = props.routeMode ? insets.top : 0;
   return <View style={[StyleSheet.absoluteFill, { top: inset }]}

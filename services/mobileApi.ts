@@ -312,11 +312,12 @@ export async function selectEstablishment(estabelecimentoId: string): Promise<{
   return unwrap(response);
 }
 
-export async function startOperationalSession(options: { attemptId?: string; persist?: boolean; clientPlatform?: 'web' | 'native' } = {}): Promise<OperationalTokenResponse> {
+export async function startOperationalSession(options: { attemptId?: string; persist?: boolean; clientPlatform?: 'web' | 'native'; resumeSessionId?: string } = {}): Promise<OperationalTokenResponse> {
   const response = await apiClient.post(API_CONFIG.ENDPOINTS.OPERATIONAL_START, {
     attemptId: options.attemptId ?? createIdentifier(),
     clientInstanceId: await getClientInstanceId(),
     clientPlatform: options.clientPlatform ?? 'native',
+    resumeSessionId: options.resumeSessionId,
   });
   const data = unwrap<OperationalTokenResponse>(response);
   if (options.persist !== false) await saveOperationalSession(data);
@@ -486,9 +487,9 @@ export async function clearOperationalSession(): Promise<void> {
 
 export function queueToPedidos(queue: MotoboyQueue | null): Pedido[] {
   if (!queue) return [];
-  const stops = queue.offer?.stops?.length
-    ? queue.offer.stops
-    : [queue.current, ...(queue.next ?? [])].filter(Boolean) as RouteStop[];
+  const active = [queue.current, ...(queue.next ?? [])].filter(Boolean) as RouteStop[];
+  // Receber uma oferta não muda os destinos da navegação já aceita.
+  const stops = active.length ? active : queue.offer?.stops ?? [];
 
   return stops
     .filter((stop) => stop.pedido)
@@ -545,7 +546,7 @@ export function createIdentifier(): string {
   });
 }
 
-async function getClientInstanceId(): Promise<string> {
+export async function getClientInstanceId(): Promise<string> {
   const stored = await getSecureItem('clientInstanceId');
   if (stored) return stored;
   const created = createIdentifier();

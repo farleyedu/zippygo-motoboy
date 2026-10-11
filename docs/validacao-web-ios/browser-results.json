@@ -1,6 +1,6 @@
 {
   "ok": true,
-  "gpsRequests": 7,
+  "gpsRequests": 6,
   "platform": "Chromium, GPS/API controlados",
   "cases": [
     "início web sem background",

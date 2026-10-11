@@ -14,10 +14,20 @@ test('Entrega exige todos os produtos e segunda conferência das bebidas',()=>{
   check.version='bag-v2';check.confirmedKeys=['combo'];assert.equal(readyToComplete(context,false,[],undefined,check),false);
 });
 
-test('Pedido sem itens exige confirmação manual e reconfirmação dos volumes',()=>{
+test('Pedido sem detalhamento usa uma confirmação manual sem inventar extras',()=>{
   const context={requiresCode:false,requiresPayment:false,requiresProof:false,checklist:{version:'manual-v1',detailsUnavailable:true,items:[]}};
   assert.equal(readyToComplete(context,false,[]),false);
   const check={pedidoId:23,version:'manual-v1',confirmedKeys:['manual'],recheckedExtraKeys:[]};
+  assert.equal(readyToComplete(context,false,[],undefined,check),true);
+  check.recheckedExtraKeys=['manual'];assert.equal(readyToComplete(context,false,[],undefined,check),false);
+});
+
+test('Itens sem atenção não exigem reconfirmação; mudança de seleção invalida o manifesto',()=>{
+  const context={requiresCode:false,requiresPayment:false,requiresProof:false,checklist:{version:'no-attention',detailsUnavailable:false,items:[{key:'refri',name:'Refrigerante',quantity:2,extra:false}]}};
+  const check={pedidoId:23,version:'no-attention',confirmedKeys:['refri'],recheckedExtraKeys:[]};
+  assert.equal(readyToComplete(context,false,[],undefined,check),true);
+  context.checklist.version='attention';context.checklist.items[0].extra=true;
   assert.equal(readyToComplete(context,false,[],undefined,check),false);
-  check.recheckedExtraKeys=['manual'];assert.equal(readyToComplete(context,false,[],undefined,check),true);
+  check.version='attention';assert.equal(readyToComplete(context,false,[],undefined,check),false);
+  check.recheckedExtraKeys=['refri'];assert.equal(readyToComplete(context,false,[],undefined,check),true);
 });

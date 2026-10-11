@@ -1,0 +1,63 @@
+{
+  "engine": "chromium",
+  "cases": [
+    {
+      "dark": false,
+      "width": 320,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": false,
+      "width": 320,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "channel": "store",
+      "case": "Áudio WAV real: reprodução, pausa, velocidade e exclusividade entre mensagens"
+    },
+    {
+      "dark": false,
+      "width": 390,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "channel": "client",
+      "case": "Áudio WAV real: reprodução, pausa, velocidade e exclusividade entre mensagens"
+    },
+    {
+      "dark": false,
+      "width": 390,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 320,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 320,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 390,
+      "channel": "store",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    },
+    {
+      "dark": true,
+      "width": 390,
+      "channel": "client",
+      "case": "Balões agrupados, citação, leitura e geometria do áudio conforme referência"
+    }
+  ],
+  "errors": [],
+  "ok": true
+}

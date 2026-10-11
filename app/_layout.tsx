@@ -1,11 +1,13 @@
-import { claimOfferNotice, offerNoticeShown } from '../src/delivery/offerNotices';
+import { confirmOfferNotice, offerNoticeShown, releaseOfferNotice, reserveOfferNotice } from '../src/delivery/offerNotices';
+import { isCurrentOfferNotice, offerNoticeBehavior, revealOfferNotice } from '../src/delivery/offerAttention';
+import { useOfferNoticeCleanup } from '../src/delivery/useOfferNoticeCleanup';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router/react-navigation';
 import { useFonts } from 'expo-font';
-import { Stack, useRouter, useSegments, useRootNavigationState } from 'expo-router';
+import { Stack, useRouter, useSegments, useRootNavigationState, useGlobalSearchParams } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect,useRef } from 'react';
-import { Platform, Vibration, View } from 'react-native';
+import { AppState, Platform, Vibration, View } from 'react-native';
 import 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -19,7 +21,11 @@ import { useDeliveryCompletion } from '@/src/contexts/DeliveryCompletionContext'
 import { useAuth } from '@/src/contexts/AuthContext';
 import { ChatNotices } from '@/src/chat/ChatNotices';
 import { BrowserTestBanner } from '@/src/ui/BrowserTestBanner';
+import { WebViewport } from '@/src/ui/WebViewport';
 import { NativeNavigationProvider } from '@/src/delivery/NativeNavigationProvider';
+import { OfferPrompt } from '@/src/ui/OfferPrompt';
+import { configureChatChannels } from '@/src/chat/push';
+import { operationalDestination } from '@/src/delivery/operationalDestination';
 
 import '../components/locationTask';
 
@@ -65,7 +71,8 @@ export default function RootLayout() {
       <DeliveryCompletionProvider>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <BrowserTestBanner />
-        <NativeNavigationProvider><View style={{ flex: 1 }}><RootLayoutNav /><ChatNotices /></View></NativeNavigationProvider>
+        <WebViewport />
+        <NativeNavigationProvider><View style={{ flex: 1 }}><RootLayoutNav /><ChatNotices /><OfferPrompt /></View></NativeNavigationProvider>
       </GestureHandlerRootView>
       </DeliveryCompletionProvider>
       </OperationalSessionProvider>
@@ -82,6 +89,25 @@ function RootLayoutNav() {
   const completion = useDeliveryCompletion();
   const navigation = useRootNavigationState();
   const consumedResponse = useRef('');
+  const notificationClaims = useRef(new Map<string, { sessionId: string; offerId: string }>());
+  const hiddenOffer = useRef(turn.deferredOfferId); hiddenOffer.current = turn.deferredOfferId;
+  const resumeHandled = useRef('');
+  const routeParams = useGlobalSearchParams<{ intent?: string }>();
+  const owner = `${auth.user?.id}:${auth.estabelecimentoAtual && ('id' in auth.estabelecimentoAtual ? auth.estabelecimentoAtual.id : auth.estabelecimentoAtual.estabelecimentoId)}`;
+  useOfferNoticeCleanup();
+  useEffect(() => {
+    if (!navigation?.key || auth.isLoading || completion.loading || !auth.user || !auth.estabelecimentoAtual || turn.busy || !turn.permissions) return;
+    const gateway = ['index', 'permissoes', 'sessaoEncerrada'].includes(current);
+    if (current === 'permissoes' && routeParams.intent !== 'start' && routeParams.intent !== 'resume') return;
+    const initial = resumeHandled.current !== owner;
+    if (turn.phase === 'offline') { resumeHandled.current = owner; return; }
+    if (!turn.online || !turn.queue) return;
+    resumeHandled.current = owner;
+    if (!gateway || (!initial && current === 'index') || ['pending', 'sending'].includes(completion.draft?.phase || '')) return;
+    if (turn.phase === 'permission-required' || Platform.OS !== 'web' && !turn.permissions.ready) return;
+    const q = turn.queue;
+    if (q.current || q.next.length || q.routeState === 'returning' || current !== 'index') router.replace(operationalDestination(q, Platform.OS));
+  }, [navigation?.key, owner, auth.isLoading, completion.loading, turn.busy, turn.phase, turn.online, turn.queue, turn.permissions, current, completion.draft?.phase, routeParams.intent]);
   useEffect(() => {
     if (Platform.OS === 'web' || !navigation?.key || auth.isLoading || !turn.session) return;
     let alive = true; const sessionId = turn.session.sessionId;
@@ -90,12 +116,9 @@ function RootLayoutNav() {
       const request = response.notification.request, data = request.content.data;
       if (!data) return;
       if (consumedResponse.current === request.identifier || data.recipientSessionId !== sessionId) return;
-      consumedResponse.current = request.identifier;
       if (typeof data.offerId === 'string') {
-        if (Date.parse(String(data.expiresAtUtc)) <= Date.now() || !Number.isFinite(Date.parse(String(data.expiresAtUtc)))) return;
-        await turn.store.refreshQueue();
-        if (!alive || turn.store.getSnapshot().session?.sessionId !== sessionId || turn.store.getSnapshot().queue?.offer?.offerId !== data.offerId) return;
-        router.navigate('/oferta');
+        const result = await revealOfferNotice(data, turn.store.getSnapshot, turn.store.refreshQueue, () => { if (alive) turn.showOffer(); });
+        if (!alive || result === 'retry') return;
       } else if (typeof data.chatMessageId === 'string' && ['group','store','private'].includes(String(data.channel))) {
         if (!turn.store.getSnapshot().queue) await turn.store.refreshQueue();
         if (!alive || turn.store.getSnapshot().session?.sessionId !== sessionId) return;
@@ -106,55 +129,66 @@ function RootLayoutNav() {
         if (data.channel === 'private' && !target) return;
         router.navigate({ pathname: '/conversas', params: { channel: String(data.channel), message: data.chatMessageId, ...(target ? { target: String(target) } : {}) } });
       }
-      await Notifications.clearLastNotificationResponseAsync();
+      consumedResponse.current = request.identifier;
+      const last = await Notifications.getLastNotificationResponseAsync();
+      if (last?.notification.request.identifier === request.identifier) await Notifications.clearLastNotificationResponseAsync();
     };
     const sub = Notifications.addNotificationResponseReceivedListener(response => { void open(response).catch(() => {}); });
     void Notifications.getLastNotificationResponseAsync().then(open).catch(() => {});
-    return () => { alive = false; sub.remove(); };
+    const foreground = AppState.addEventListener('change', state => { if (state === 'active') void turn.store.whenIdle().then(() => Notifications.getLastNotificationResponseAsync()).then(open).catch(() => {}); });
+    return () => { alive = false; sub.remove(); foreground.remove(); };
   }, [navigation?.key, auth.isLoading, turn.session?.sessionId, router]);
 
   useEffect(() => {
     const offer = turn.queue?.offer, sessionId = turn.session?.sessionId;
-    if (Platform.OS === 'web' || !sessionId || !offer?.offerId || turn.queue?.paused || Date.parse(offer.expiresAtUtc) <= Date.now()) return;
+    if (Platform.OS === 'web' || !sessionId || !offer?.offerId || Date.parse(offer.expiresAtUtc) <= Date.now()) return;
     const offerId = offer.offerId; let alive = true;
     const timer = setTimeout(() => { void (async () => {
       if (!alive || await offerNoticeShown(sessionId, offerId)) return;
+      await configureChatChannels();
       const permission = await Notifications.getPermissionsAsync(); if (!alive || !permission.granted) return;
       const presented = await Notifications.getPresentedNotificationsAsync();
-      if (presented.some(n => n.request.content.data?.offerId === offerId)) { await claimOfferNotice(sessionId, offerId); return; }
+      if (presented.some(n => n.request.content.data?.offerId === offerId && n.request.content.data?.recipientSessionId === sessionId)) { confirmOfferNotice(sessionId, offerId); return; }
       if (!alive) return;
-      if (preferences.vibration) Vibration.vibrate([0,120,80,120]);
+      const snapshot = turn.store.getSnapshot();
+      if (snapshot.session?.sessionId !== sessionId || snapshot.queue?.offer?.offerId !== offerId || !isCurrentOfferNotice({ offerId, recipientSessionId: sessionId, expiresAtUtc: snapshot.queue.offer.expiresAtUtc }, sessionId)) return;
       await Notifications.scheduleNotificationAsync({ identifier: offerId, content: {
         title: 'Tem pedido novo pra você', body: offer.stops.length + ' pedidos · confira a oferta.', sound: preferences.sound ? 'default' : undefined,
-        data: { offerId, recipientSessionId: sessionId, expiresAtUtc: offer.expiresAtUtc, url: Linking.createURL('/oferta', { scheme: 'zippygomotoboy' }) },
+        data: { offerId, recipientSessionId: sessionId, expiresAtUtc: snapshot.queue.offer.expiresAtUtc, url: Linking.createURL('/oferta', { scheme: 'zippygomotoboy' }) },
       }, trigger: Platform.OS === 'android' ? { channelId: 'delivery-offers-' + (preferences.sound ? 'sound' : 'silent') + '-' + (preferences.vibration ? 'vibrate' : 'quiet') + '-v1' } : null });
-    })().catch(() => {}); }, 6000);
+    })().catch(() => {}); }, 300);
     return () => { alive = false; clearTimeout(timer); };
-  }, [turn.queue?.offer?.offerId, turn.queue?.paused, turn.session?.sessionId, preferences.sound, preferences.vibration]);
-  useEffect(() => {
-    const pending = ['sending','pending'].includes(completion.draft?.phase || '');
-    const execution = ['conferirExtras','confirmacaoEntrega','VerificationScreen','cobrarEntrega','dividirPagamento','comprovanteEntrega','chegadaEntrega','pedido','oferta','mapa','rota','retirada','transferencia','recusarPedido','retornoLoja','turno'];
-    if (navigation?.key && pending && execution.includes(current)) router.replace('/entregaPendente');
-  }, [navigation?.key,current,completion.draft?.phase,router]);
+  }, [turn.queue?.offer?.offerId, turn.session?.sessionId, preferences.sound, preferences.vibration]);
   useEffect(() => {
     if (Platform.OS === 'web') return;
     Notifications.setNotificationHandler({ handleNotification: async notification => {
       const data = notification.request.content.data;
       let allowed = !(data?.chatMessageId || data?.offerId) || data.recipientSessionId === turn.session?.sessionId;
-      if (allowed && typeof data?.offerId === 'string') {
-        allowed = !!turn.session && (!data.expiresAtUtc || Date.parse(String(data.expiresAtUtc)) > Date.now());
-        if (allowed) allowed = await claimOfferNotice(turn.session!.sessionId, data.offerId);
+      if (typeof data?.offerId === 'string') {
+        const sessionId = turn.store.getSnapshot().session?.sessionId;
+        allowed = isCurrentOfferNotice(data, sessionId) && reserveOfferNotice(sessionId!, data.offerId);
+        if (allowed) notificationClaims.current.set(notification.request.identifier, { sessionId: sessionId!, offerId: data.offerId });
+        const hidden = AppState.currentState === 'active' && hiddenOffer.current === data.offerId;
+        const behavior = offerNoticeBehavior(allowed, hidden, preferences.sound);
+        if (Platform.OS === 'ios' && behavior.shouldShowBanner && preferences.vibration) Vibration.vibrate([0,120,80,120]);
+        return behavior;
       }
       return { shouldShowAlert: allowed, shouldShowBanner: allowed, shouldShowList: allowed, shouldSetBadge: false, shouldPlaySound: allowed && !data?.chatMessageId && preferences.sound };
+    }, handleSuccess: id => {
+      const claim = notificationClaims.current.get(id);
+      if (claim) { notificationClaims.current.delete(id); confirmOfferNotice(claim.sessionId, claim.offerId); }
+    }, handleError: id => {
+      const claim = notificationClaims.current.get(id);
+      if (claim) { notificationClaims.current.delete(id); releaseOfferNotice(claim.sessionId, claim.offerId); }
     } });
-  }, [preferences.sound, turn.session?.sessionId]);
+  }, [preferences.sound, preferences.vibration, turn.session?.sessionId, turn.store]);
   useEffect(() => {
     if (navigation?.key && !auth.isLoading && !auth.user && !auth.restoreError && current !== '(auth)' && current !== 'index') router.replace('/(auth)/login');
   }, [navigation?.key,auth.isLoading, auth.user, auth.restoreError, current, router]);
   useEffect(() => {
     if (!navigation?.key || auth.isLoading || !auth.user || !auth.estabelecimentoAtual) return;
     if (turn.phase === 'expired' && !['(auth)', 'sessaoEncerrada', 'permissoes', 'permissaoNegada', 'entregaPendente', 'entregaConcluida', 'ganhos', 'historico', 'historicoRotas', 'rotaHistorico', 'reciboHistorico', 'acerto', 'resumoTurno', 'suporte', 'seguranca', 'ajudaOperacional'].includes(current)) router.replace('/sessaoEncerrada');
-    else if (turn.session && turn.phase === 'permission-required' && current === 'index') router.replace('/permissoes');
+    else if (turn.session && turn.phase === 'permission-required' && !turn.busy && turn.permissions && !turn.permissions.ready && current === 'index') router.replace({ pathname: '/permissoes', params: { intent: 'resume' } });
   }, [navigation?.key,turn.phase, turn.session?.sessionId, auth.isLoading, auth.user?.id, auth.estabelecimentoAtual, current, router]);
 
   return (

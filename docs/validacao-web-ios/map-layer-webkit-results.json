@@ -8,7 +8,7 @@
       "panResume": true,
       "chooser": true,
       "routeLink": true,
-      "checks": "/pedido/23"
+      "checks": "/confirmacaoEntrega?id=23"
     },
     {
       "theme": "light",
@@ -26,7 +26,7 @@
       "panResume": true,
       "chooser": true,
       "routeLink": true,
-      "checks": "/pedido/23"
+      "checks": "/confirmacaoEntrega?id=23"
     },
     {
       "theme": "dark",
@@ -41,5 +41,279 @@
   ],
   "errors": [],
   "failedRequests": [],
+  "apiCalls": [
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/stops/current/arrive",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/completion/23",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/store",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/orders/23",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/store",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/store",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/stops/current/arrive",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/completion/23",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/store",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/orders/23",
+      "method": "GET"
+    },
+    {
+      "path": "/api/motoboys/me/vinculos",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/chat/notifications",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/heartbeat",
+      "method": "POST"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/queue",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/store",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/transfers",
+      "method": "GET"
+    },
+    {
+      "path": "/api/v2/motoboys/me/session/store",
+      "method": "GET"
+    }
+  ],
   "ok": true
 }

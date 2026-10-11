@@ -1,10 +1,13 @@
+/// <reference types="node" />
 import { ExpoConfig, ConfigContext } from 'expo/config';
+import { existsSync } from 'node:fs';
 
 export default ({ config }: ConfigContext): ExpoConfig => {
   // Detectar ambiente baseado na variável EXPO_PUBLIC_APP_ENV
   const APP_ENV = process.env.EXPO_PUBLIC_APP_ENV || 'dev';
   const isDev = APP_ENV === 'dev' || APP_ENV === 'development';
   const isProd = APP_ENV === 'prod' || APP_ENV === 'production';
+  const firebaseFile = process.env.GOOGLE_SERVICES_JSON || './google-services.json';
   
   console.log('🔧 APP_ENV:', APP_ENV);
   console.log('🔧 isDev:', isDev);
@@ -41,6 +44,8 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'RECORD_AUDIO'
       ],
       package: 'com.farleyedu.zippygomotoboy',
+      softwareKeyboardLayoutMode: 'resize',
+      ...(existsSync(firebaseFile) ? { googleServicesFile: firebaseFile } : {}),
 
       config: {
         googleMaps: {
@@ -58,6 +63,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
     plugins: [
       'expo-router',
       './plugins/withNativeNavigation',
+      './plugins/withExternalNavigation',
       [
         'expo-location',
         {

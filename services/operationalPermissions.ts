@@ -4,6 +4,7 @@ import { Platform, Linking } from 'react-native';
 import { browserNativeTest, reportBrowserMock } from './browserNativeTest';
 import { expoGo } from './expoGo';
 import { readWebLocationPermission, requestWebLocationPermission, webLocationAvailable } from './webLocationPermission';
+import { requestWebNotificationPermission, webNotificationPermission } from './webOfferPush';
 
 export type PermissionKind = 'foreground' | 'background' | 'notifications' | 'services';
 export type PermissionValue = { granted: boolean; canAskAgain: boolean; supported: boolean };
@@ -24,7 +25,7 @@ export async function readOperationalPermissions(): Promise<OperationalPermissio
   const foreground = Platform.OS === 'web' ? await readWebLocationPermission() : permission(await Location.getForegroundPermissionsAsync());
   const services = Platform.OS === 'web' ? webLocationAvailable() : await Location.hasServicesEnabledAsync();
   const background = Platform.OS === 'web' ? unsupported : expoGo ? expoGoBackground : permission(await Location.getBackgroundPermissionsAsync());
-  const notifications = Platform.OS === 'web' ? unsupported : permission(await Notifications.getPermissionsAsync());
+  const notifications = Platform.OS === 'web' ? webNotificationPermission() : permission(await Notifications.getPermissionsAsync());
   return { foreground, background, notifications, services, ready: services && foreground.granted && (Platform.OS === 'web' || background.granted) };
 }
 
@@ -37,7 +38,10 @@ export async function askOperationalPermission(kind: PermissionKind): Promise<vo
     else await Location.requestForegroundPermissionsAsync();
     return;
   }
-  if (Platform.OS === 'web') throw new Error('Esta permissão precisa do aplicativo instalado no aparelho.');
+  if (Platform.OS === 'web') {
+    if (kind === 'notifications') { await requestWebNotificationPermission(); return; }
+    throw new Error('Esta permissão precisa do aplicativo instalado no aparelho.');
+  }
   if (kind === 'background') {
     if (expoGo) return;
     if (!(await Location.getForegroundPermissionsAsync()).granted) throw new Error('Permita primeiro a localização com o app aberto.');

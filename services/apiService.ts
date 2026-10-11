@@ -248,6 +248,11 @@ apiClient.interceptors.response.use(
         token: String(response.config.headers?.Authorization || '').replace(/^Bearer\s+/i, '') });
     }
 
+    if (response.status === 401 && response.data?.code === 'SESSION_REPLACED') {
+      reportAccountAuthenticationFailure({ token: String(response.config.headers?.Authorization || '').replace(/^Bearer\s+/i, ''), code: 'SESSION_REPLACED' });
+      return response;
+    }
+
     if (response.status === 401 && !requestConfig._authRetry && !isAuthEndpoint(endpoint) && !isOperationalEndpoint(endpoint)) {
       const newToken = await refreshAuthToken();
       if (newToken) {

@@ -10,6 +10,13 @@
     },
     "preview": {
       "distribution": "internal",
+      "environment": "preview",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://zippy-api.onrender.com",
+        "EXPO_PUBLIC_BROWSER_MOCKS": "false",
+        "EXPO_PUBLIC_API_DEBUG": "false"
+      },
       "android": {
         "buildType": "apk"
       }

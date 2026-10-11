@@ -1,0 +1,113 @@
+{
+  "engine": "chromium",
+  "cases": [
+    {
+      "dark": false,
+      "case": "Oferta aparece no chat, exige aceite e preserva tela e rascunho"
+    },
+    {
+      "dark": false,
+      "case": "Recusa pede confirmação inline, envia identidade da oferta e preserva chat"
+    },
+    {
+      "dark": false,
+      "case": "Oferta na rota mostra ganhos/mapa, recolhe sem responder, reabre com seleção e exige confirmação do aceite parcial"
+    },
+    {
+      "dark": true,
+      "case": "Oferta aparece no chat, exige aceite e preserva tela e rascunho"
+    },
+    {
+      "dark": true,
+      "case": "Recusa pede confirmação inline, envia identidade da oferta e preserva chat"
+    },
+    {
+      "dark": true,
+      "case": "Oferta na rota mostra ganhos/mapa, recolhe sem responder, reabre com seleção e exige confirmação do aceite parcial"
+    }
+  ],
+  "errors": [],
+  "visualDetails": [
+    {
+      "name": "oferta-completa-light",
+      "text": "R$ 20,00",
+      "rect": {
+        "x": 42,
+        "y": 406,
+        "width": 243.9375,
+        "height": 39
+      },
+      "parent": {
+        "x": 42,
+        "y": 389,
+        "width": 243.9375,
+        "height": 56
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "left",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    },
+    {
+      "name": "oferta-light",
+      "text": "R$ 12,00",
+      "rect": {
+        "x": 42,
+        "y": 406,
+        "width": 250.234375,
+        "height": 39
+      },
+      "parent": {
+        "x": 42,
+        "y": 389,
+        "width": 250.234375,
+        "height": 56
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "left",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    },
+    {
+      "name": "oferta-completa-dark",
+      "text": "R$ 20,00",
+      "rect": {
+        "x": 42,
+        "y": 406,
+        "width": 243.9375,
+        "height": 39
+      },
+      "parent": {
+        "x": 42,
+        "y": 389,
+        "width": 243.9375,
+        "height": 56
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "left",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    },
+    {
+      "name": "oferta-dark",
+      "text": "R$ 12,00",
+      "rect": {
+        "x": 42,
+        "y": 406,
+        "width": 250.234375,
+        "height": 39
+      },
+      "parent": {
+        "x": 42,
+        "y": 389,
+        "width": 250.234375,
+        "height": 56
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "left",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    }
+  ],
+  "ok": true
+}

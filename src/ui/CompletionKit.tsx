@@ -13,7 +13,7 @@ export const money=(value?:number)=>value==null?'Valor não informado':value.toL
 export const methodNames={dinheiro:'Dinheiro',pix:'Pix',debito:'Débito',credito:'Crédito'};
 export function CompletionScreen({children,footer}:{children:React.ReactNode;footer?:React.ReactNode}) {
   const completion=useDeliveryCompletion(),router=useRouter(),focused=useIsFocused();
-  useEffect(()=>{if(focused && !completion.loading && ['sending','pending'].includes(completion.draft?.phase||''))router.replace('/entregaPendente');},[focused,completion.loading,completion.draft?.phase]);
+  useEffect(()=>{if(focused && !completion.loading && completion.draft?.phase==='pending')router.replace('/entregaPendente');},[focused,completion.loading,completion.draft?.phase]);
   return <Screen footer={footer}>{completion.loading?<Feedback title="Recuperando sua conferência" loading/>:children}{!!completion.error&&<Feedback title="A conferência precisa de atenção" message={completion.error}/>}</Screen>;
 }
 export function StepCard({index,title,description,icon:Icon,verified,code,children}:{index:number;title:string;description:string;icon:LucideIcon;verified:boolean;code?:boolean;children?:React.ReactNode}) {

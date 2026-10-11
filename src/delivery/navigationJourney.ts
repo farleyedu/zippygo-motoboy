@@ -6,6 +6,7 @@ export type JourneyRequest = {
   enabled: boolean;
   follow: boolean;
   cameraToken: string;
+  overview?: boolean;
   muted: boolean;
 };
 export type JourneyBridge = {
@@ -60,6 +61,11 @@ export class NavigationJourney {
         if (request.follow && request.cameraToken !== this.cameraToken) {
           await this.bridge.follow();
           this.cameraToken = request.cameraToken;
+        }
+        if (request.overview && this.cameraToken !== 'overview:' + request.cameraToken) {
+          await this.bridge.overview();
+          if (!current()) return;
+          this.cameraToken = 'overview:' + request.cameraToken;
         }
         if (current()) this.report({ status: 'guiding' });
       } else {

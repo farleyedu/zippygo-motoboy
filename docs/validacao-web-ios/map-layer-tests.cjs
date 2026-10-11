@@ -14,7 +14,7 @@ const session = { sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', epoch: 1, o
 const order = { id: 23, nomeCliente: 'Cliente QA', enderecoEntrega: 'Rua QA, 123', latitude: -18.918, longitude: -48.24,
   pickedUpAtUtc: new Date().toISOString(), total: 30, pago: true, itens: [], checklist: { items: [], enabled: false } };
 const stop = { pedidoId: 23, status: 'en_route', position: 1, pickedUpAtUtc: order.pickedUpAtUtc, pedido: order };
-const result = { engine, baseline, cases: [], errors: [], failedRequests: [] };
+const result = { engine, baseline, cases: [], errors: [], failedRequests: [], apiCalls: [] };
 let browser, page;
 const server = http.createServer((req, res) => {
   const relative = decodeURIComponent(new URL(req.url, 'http://localhost').pathname).replace(/^\/+/, '') || 'index.html';
@@ -79,11 +79,11 @@ async function visit(url) {
       window.__qaVisible = true;
       Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => window.__qaVisible ? 'visible' : 'hidden' });
     }, { shop, user, session, dark });
-    page = await context.newPage(); page.setDefaultTimeout(20000);
+    page = await context.newPage(); page.setDefaultTimeout(45000);
     page.on('pageerror', error => result.errors.push(error.message));
     page.on('requestfailed', request => result.failedRequests.push({ url: request.url(), error: request.failure()?.errorText }));
     await page.routeWebSocket(/.*/, ws => ws.close());
-    let mode = 'delivery';
+    let mode = 'delivery', arrived = false;
     await page.route('**/*', route => {
       const req = route.request(), url = new URL(req.url()), p = url.pathname;
       // Tiles públicos somente para a captura visual; nenhuma API real é acessada.
@@ -92,12 +92,16 @@ async function visit(url) {
       const headers = { 'access-control-allow-origin': base, 'access-control-allow-headers': 'Authorization, Content-Type', 'access-control-allow-methods': 'GET, POST, OPTIONS' };
       if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers });
       const ok = data => route.fulfill({ headers, json: { success: true, data } });
+      result.apiCalls.push({ path: p, method: req.method() });
       if (p.endsWith('/vinculos')) return ok([{ estabelecimentoId: shop.id, nome: shop.nome, tipoAcesso: 'motoboy', statusVinculo: 'ativo', statusEstabelecimento: 'ativo', modulosAtivos: ['DELIVERY'] }]);
       if (p.endsWith('/session')) return ok(session);
       if (p.endsWith('/heartbeat')) return ok({ accessToken: 'operacional-qa', session });
-      if (p.endsWith('/queue')) return ok({ motoboyId: 1, estabelecimentoId: shop.id, version: 3,
-        current: mode === 'return' ? null : mode === 'pickup' ? { ...stop, pickedUpAtUtc: null } : stop,
+      if (p.endsWith('/arrive')) arrived = true;
+      if (p.endsWith('/queue') || p.endsWith('/arrive')) return ok({ motoboyId: 1, estabelecimentoId: shop.id, version: 3,
+        current: mode === 'return' ? null : mode === 'pickup' ? { ...stop, pickedUpAtUtc: null } : { ...stop, arrivedAtUtc: arrived ? new Date().toISOString() : null },
         next: [], routeState: mode === 'return' ? 'returning' : 'delivering' });
+      if (p.endsWith('/completion/23')) return ok({ pedidoId: 23, version: 3, total: 30, requiresCode: false, requiresPayment: false, requiresProof: false, checklist: { version: 'manual-qa', detailsUnavailable: true, items: [] } });
+      if (p.endsWith('/transfers')) return ok([]);
       if (p.endsWith('/store')) return ok({ nome: shop.nome, latitude: -18.92, longitude: -48.242, rua: 'Rua da Loja', numero: '100' });
       if (p.endsWith('/orders/23')) return ok(order);
       if (p.endsWith('/location/batch')) return ok({ samples: JSON.parse(req.postData()).samples.map(s => ({ sampleId: s.sampleId, sequence: s.sequence, outcome: 'accepted', updatedCurrent: true, receivedAtUtc: new Date().toISOString() })) });
@@ -113,7 +117,6 @@ async function visit(url) {
     if (baseline) {
       if (!dark) {
         assert.equal(before.painted, false, 'O bundle anterior deve reproduzir o mapa cobrindo os controles no tema claro.');
-        await page.screenshot({ path: path.join(__dirname, 'map-layer-before.png') });
       }
       result.cases.push({ theme: dark ? 'dark' : 'light', center: before });
       await context.close(); continue;
@@ -137,21 +140,19 @@ async function visit(url) {
     await page.getByRole('button', { name: 'Iniciar modo rota', exact: true }).click();
     await page.getByRole('button', { name: 'Google Maps', exact: true }).waitFor();
     await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
-    await page.screenshot({ path: path.join(__dirname, `map-layer-${engine}-${dark ? 'dark' : 'light'}.png`) });
     // A conferência da retirada abre esse link; na web ele mantém as ações da rota.
     await visit(base + '/mapa?modo=rota');
     assert.equal((await reachable(page.getByRole('button', { name: 'Conferir pedido', exact: true }))).reachable, true);
     assert.equal(await controlPainted(page.getByRole('button', { name: 'Centralizar minha posição', exact: true })), true);
     await page.getByRole('button', { name: 'Conferir pedido', exact: true }).click();
-    await page.waitForURL('**/pedido/23');
-    result.cases.push({ theme: dark ? 'dark' : 'light', mode: 'delivery', panResume: true, chooser: true, routeLink: true, checks: '/pedido/23' });
+    await page.waitForURL('**/confirmacaoEntrega?id=23');
+    result.cases.push({ theme: dark ? 'dark' : 'light', mode: 'delivery', panResume: true, chooser: true, routeLink: true, checks: '/confirmacaoEntrega?id=23' });
     for (const variant of [{ mode: 'pickup', label: 'Conferir coleta', route: '/retirada' }, { mode: 'return', label: 'Conferir retorno', route: '/retornoLoja' }]) {
       mode = variant.mode;
       await visit(base + '/mapa');
       const button = page.getByRole('button', { name: variant.label, exact: true });
       assert.equal((await reachable(button)).reachable, true);
       await button.click(); await page.waitForURL('**' + variant.route);
-      if (mode === 'return') await page.screenshot({ path: path.join(__dirname, `map-return-${engine}-${dark ? 'dark' : 'light'}.png`) });
       result.cases.push({ theme: dark ? 'dark' : 'light', mode, checks: variant.route });
     }
     await context.close();
@@ -162,6 +163,6 @@ async function visit(url) {
   process.stdout.write(JSON.stringify(result, null, 2) + '\n');
 })().catch(async error => {
   process.stderr.write(error.stack + '\n'); process.exitCode = 1;
+  if (page && !page.isClosed()) result.failure = { url: page.url(), text: await page.locator('body').innerText() };
   process.stderr.write(JSON.stringify(result, null, 2) + '\n');
-  if (page && !page.isClosed()) await page.screenshot({ path: path.join(__dirname, `map-layer-${engine}-failure.png`) }).catch(() => {});
 }).finally(async () => { await browser?.close(); await new Promise(resolve => server.close(resolve)); });

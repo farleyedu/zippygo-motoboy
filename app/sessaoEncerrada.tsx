@@ -1,5 +1,5 @@
 import React from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LockKeyhole, RefreshCw } from 'lucide-react-native';
 import { useOperationalAccess } from '../src/hooks/useOperationalAccess';
@@ -7,12 +7,17 @@ import { useOperationalSession } from '../src/contexts/OperationalSessionContext
 import { Button, Entrance, Feedback, Header, Pill, Screen, Surface, type } from '../src/ui/Kit';
 import { LogoutAction } from '../src/ui/LogoutAction';
 import { useZippyTheme } from '../src/ui/theme';
+import { operationalDestination } from '../src/delivery/operationalDestination';
 
 export default function SessaoEncerradaScreen() {
   const allowed = useOperationalAccess(), turn = useOperationalSession(), router = useRouter(), { colors } = useZippyTheme();
+  const restart = async () => {
+    if (await turn.store.start()) router.replace(operationalDestination(turn.store.getSnapshot().queue, Platform.OS));
+    else if (turn.store.getSnapshot().phase === 'permission-required') router.replace({ pathname: '/permissoes', params: { intent: 'start' } });
+  };
   if (!allowed) return <Screen><Feedback title="Preparando seu acesso" loading /></Screen>;
-  return <Screen footer={<Button icon={RefreshCw} onPress={() => router.replace('/permissoes')}>Revisar e retomar meu turno</Button>}><Entrance>
-    <Header title="Vamos retomar." subtitle="Seu próximo passo, com clareza." onBack={() => router.replace('/permissoes')} />
+  return <Screen footer={<Button icon={RefreshCw} loading={turn.busy} disabled={turn.busy} onPress={() => void restart()}>Iniciar novo turno</Button>}><Entrance>
+    <Header title="Seu turno foi encerrado" subtitle="Confira o motivo antes de continuar." onBack={() => router.replace('/')} />
     <View style={{ height: 190, alignItems: 'center', justifyContent: 'center' }}><View style={{ padding: 28, borderRadius: 30, backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: colors.warning, transform: [{ rotate: '-6deg' }] }}><LockKeyhole size={39} color={colors.warning} /></View></View>
     <Pill tone="warning">CONFIRA SUA SESSÃO</Pill>
     <Text accessibilityRole="header" style={[type.title, { fontSize: 30, lineHeight: 37, color: colors.ink, marginTop: 22 }]}>Vamos retomar de onde você parou.</Text>

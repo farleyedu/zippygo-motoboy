@@ -10,7 +10,7 @@ export default function Root({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
         <meta name="theme-color" content="#13233b" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="ZippyGo" />
@@ -34,6 +34,12 @@ export default function Root({ children }: { children: React.ReactNode }) {
 }
 
 const responsiveBackground = `
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+html, body { overflow: hidden; overscroll-behavior: none; }
+#root { position: fixed; left: 0; right: 0; top: var(--zippy-visible-top, 0px); height: var(--zippy-visible-height, 100%); overflow: hidden; }
+input, textarea, select { font-size: 16px; }
+@media (hover: none) and (pointer: coarse) { input:focus, textarea:focus { outline: none; } }
+button, [role="button"], [role="checkbox"], input, textarea, select { touch-action: manipulation; }
 body {
   background-color: #fff;
 }
