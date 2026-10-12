@@ -17,6 +17,8 @@ import {
   Text,
   TextInput,
   View,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import {
   Stack,
@@ -55,7 +57,6 @@ import {
   dismissChatNotification,
   listChat,
   chatMessageContext,
-  listChatContacts,
   listChatNotifications,
   LocalChatFile,
   reactChat,
@@ -88,6 +89,7 @@ import { AudioComposer, ChatMedia } from './ChatMedia';
 import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } from './MessageBubble';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
+import { usePagedContacts } from './usePagedContacts';
 import { decodeChatDraft, encodeChatDraft, mentionedIds } from './draft';
 
 const reactionIcons = {
@@ -200,7 +202,6 @@ export default function CommunicationScreen() {
   const live = useRef(identity);
   live.current = identity;
   const [messages, setMessages] = useState<ChatMessage[]>([]),
-    [contacts, setContacts] = useState<ChatContact[]>([]),
     [orders, setOrders] = useState<RouteStop[]>([]),
     [notices, setNotices] = useState<ChatMessage[]>([]);
   const [loading, setLoading] = useState(true),
@@ -210,6 +211,12 @@ export default function CommunicationScreen() {
     [search, setSearch] = useState(''),
     [searching, setSearching] = useState(false),
     [filter, setFilter] = useState('Todas');
+  const roster = usePagedContacts(owner && turn.session ? `${owner}:${turn.session.sessionId}` : null, target ? '' : search);
+  const { contacts } = roster;
+  const loadContactsOnScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 160) void roster.loadMore();
+  };
   const [forwarding, setForwarding] = useState<ChatMessage | null>(null);
   const [selected, setSelected] = useState<ChatMessage | null>(null),
     [reply, setReply] = useState<ChatMessage | null>(null),
@@ -281,7 +288,6 @@ export default function CommunicationScreen() {
   useEffect(() => {
     follow.current = true;
     setMessages([]);
-    setContacts([]);
     setSelected(null); setForwarding(null);
     setSearch('');
     setSearching(false);
@@ -383,9 +389,8 @@ export default function CommunicationScreen() {
             );
             setNotices(notifications);
           }
-          const roster = await listChatContacts();
+          await roster.refresh();
           if (version !== generation.current) return;
-          setContacts(roster);
           setError('');
         } catch (caught) {
           if (version === generation.current && !abort.signal.aborted)
@@ -588,7 +593,7 @@ export default function CommunicationScreen() {
   );
   if (params.view === 'group' || params.view === 'contacts')
     return (
-      <Screen footer={<AppNav active="chats" />}>
+      <Screen footer={<AppNav active="chats" />} onScroll={loadContactsOnScroll}>
         <Stack.Screen options={{ headerShown: false }} />
         <Header
           title={params.view === 'group' ? 'Sua equipe.' : 'Nova conversa'}
@@ -670,7 +675,7 @@ export default function CommunicationScreen() {
     );
   if (params.view === 'notifications')
     return (
-      <Screen footer={<AppNav active="chats" />}>
+      <Screen footer={<AppNav active="chats" />} onScroll={loadContactsOnScroll}>
         <Stack.Screen options={{ headerShown: false }} />
         <Header
           title="Notificações"
@@ -750,7 +755,7 @@ export default function CommunicationScreen() {
     );
   if (!target)
     return (
-      <Screen footer={<AppNav active="chats" />}>
+      <Screen footer={<AppNav active="chats" />} onScroll={loadContactsOnScroll}>
         <Stack.Screen options={{ headerShown: false }} />
         <Header
           title="Conversas"

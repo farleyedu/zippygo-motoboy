@@ -55,7 +55,7 @@ export function Gradient({ colors, glow = false, angle, sheen = false, highlight
   </View>;
 }
 
-export function Screen({ children, footer }: { children: React.ReactNode; footer?: React.ReactNode }) {
+export function Screen({ children, footer, onScroll }: { children: React.ReactNode; footer?: React.ReactNode; onScroll?: React.ComponentProps<typeof ScrollView>['onScroll'] }) {
   const { colors, dark } = useZippyTheme(); const insets = useSafeAreaInsets();
   const glowId = useId().replace(/:/g, '');
   // Cor e luz do CSS efetivo de .night .app-page, além dos tokens da paleta.
@@ -65,7 +65,7 @@ export function Screen({ children, footer }: { children: React.ReactNode; footer
     {dark && <View pointerEvents="none" style={{ position: 'absolute', top: insets.top, left: 0, right: 0, height: 250 }}>
       <Svg width="100%" height={250}><Defs><RadialGradient id={glowId} gradientUnits="userSpaceOnUse" cx="100%" cy={0} rx={270} ry={250}><Stop offset="0" stopColor="#74a7ea" stopOpacity={16 / 255}/><Stop offset="0.78" stopColor="#74a7ea" stopOpacity="0"/></RadialGradient></Defs><Rect width="100%" height={250} fill={`url(#${glowId})`}/></Svg>
     </View>}
-    <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: footer ? footerHeight + 24 : 36 + insets.bottom }} showsVerticalScrollIndicator={false}>
+    <ScrollView keyboardShouldPersistTaps="handled" onScroll={onScroll} scrollEventThrottle={200} contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: footer ? footerHeight + 24 : 36 + insets.bottom }} showsVerticalScrollIndicator={false}>
       <View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', paddingHorizontal: 22 }}>{children}</View>
     </ScrollView>
     {footer && <View onLayout={event => { const height = Math.ceil(event.nativeEvent.layout.height); setFooterHeight(previous => previous === height ? previous : height); }} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 14), backgroundColor: pageColor }}><View style={{ width: '100%', maxWidth: layout.contentWidth, alignSelf: 'center', paddingHorizontal: 20 }}>{footer}</View></View>}

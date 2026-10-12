@@ -128,8 +128,17 @@ export const reactChat = async (
     ),
   );
 };
-export const listChatContacts = async (): Promise<ChatContact[]> =>
-  unwrap(await apiClient.get('/v2/motoboys/me/session/contacts'));
+export type ChatContactPage = { contacts: ChatContact[]; hasMore: boolean; cursor?: string | null };
+type ContactOptions = { cursor?: string | null; search?: string; signal?: AbortSignal };
+export function listChatContacts(): Promise<ChatContact[]>;
+export function listChatContacts(options: ContactOptions): Promise<ChatContactPage>;
+export async function listChatContacts(options?: ContactOptions): Promise<ChatContact[] | ChatContactPage> {
+  const data = unwrap<ChatContact[] | ChatContactPage>(await apiClient.get('/v2/motoboys/me/session/contacts', {
+    signal: options?.signal,
+    params: options ? { paged: true, cursor: options.cursor || undefined, search: options.search || undefined } : undefined,
+  }));
+  return options && Array.isArray(data) ? { contacts: data, hasMore: false } : data;
+}
 export const listChatNotifications = async (): Promise<ChatMessage[]> =>
   unwrap(await apiClient.get(`${root}/notifications`));
 export const dismissChatNotification = async (id: string): Promise<void> => {
