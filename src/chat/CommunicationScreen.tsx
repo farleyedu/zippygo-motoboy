@@ -218,6 +218,8 @@ export default function CommunicationScreen() {
   const rosterRefresh = useRef(roster.refresh); rosterRefresh.current = roster.refresh;
   const messageSearch = target && searching ? search : '';
   const { contacts } = roster;
+  const contactCount = roster.totalContacts ?? contacts.length;
+  const onlineCount = roster.onlineContacts ?? contacts.filter(c => c.online).length;
   const loadContactsOnScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
     if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 160) void roster.loadMore();
@@ -618,8 +620,8 @@ export default function CommunicationScreen() {
                 Equipe · {store}
               </Text>
               <Text style={[styles.small, { color: colors.muted }]}>
-                {contacts.length} participantes ·{' '}
-                {contacts.filter((c) => c.online).length} online
+                {contactCount} participantes ·{' '}
+                {onlineCount} online
               </Text>
             </View>
             <View style={styles.listRow}>
@@ -850,8 +852,8 @@ export default function CommunicationScreen() {
               Equipe · {store}
             </Text>
             <Text style={[styles.small, { color: '#c3d4ed' }]}>
-              {contacts.length} pessoas ·{' '}
-              {contacts.filter((c) => c.online).length} online
+              {contactCount} pessoas ·{' '}
+              {onlineCount} online
             </Text>
           </View>
           {!!unread('group') && (
@@ -993,7 +995,7 @@ export default function CommunicationScreen() {
             </Text>
             <Text style={[styles.small, { fontSize: 9, color: colors.muted }]}>
               {channel === 'group'
-                ? `${contacts.length} participantes · ${contacts.filter((c) => c.online).length} online`
+                ? `${contactCount} participantes · ${onlineCount} online`
                 : channel === 'private'
                   ? 'Colega da sua equipe'
                   : 'Atendimento da loja'}

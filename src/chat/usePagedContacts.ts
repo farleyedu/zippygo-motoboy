@@ -40,6 +40,6 @@ export function usePagedContacts(scope: string | null, search: string, active = 
     const timer = setTimeout(() => void load(false), search.trim() ? 250 : 0);
     return () => { clearTimeout(timer); pending.current?.abort(); pending.current = null; };
   }, [key, active, load]);
-  return { contacts: page.contacts, hasMore: page.hasMore, ready, loadingMore, error,
+  return { contacts: page.contacts, hasMore: page.hasMore, totalContacts: page.totalContacts, onlineContacts: page.onlineContacts, ready, loadingMore, error,
     refresh: useCallback(() => load(false), [load]), loadMore: useCallback(() => load(true), [load]) };
 }

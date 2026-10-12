@@ -13,10 +13,11 @@ afterEach(async () => { if (renderer) await act(async () => renderer.unmount());
 async function mount(props) { await act(async () => { renderer = create(<Harness {...props} />); }); await act(async () => { jest.advanceTimersByTime(1); }); }
 
 test('busca quinze contatos e continua com cursor, sem requisições simultâneas ou duplicatas', async () => {
-  listChatContacts.mockResolvedValueOnce({ contacts: contacts(1, 15), hasMore: true, cursor: 'pagina-1' })
+  listChatContacts.mockResolvedValueOnce({ contacts: contacts(1, 15), hasMore: true, cursor: 'pagina-1', totalContacts: 24, onlineContacts: 3 })
     .mockResolvedValueOnce({ contacts: contacts(15, 10), hasMore: false });
   await mount({ scope: 'paginacao:loja:turno' });
   expect(value.contacts).toHaveLength(15);
+  expect(value.totalContacts).toBe(24); expect(value.onlineContacts).toBe(3);
   await act(async () => { await Promise.all([value.loadMore(), value.loadMore()]); });
   expect(listChatContacts).toHaveBeenCalledTimes(2);
   expect(listChatContacts.mock.calls[1][0].cursor).toBe('pagina-1');

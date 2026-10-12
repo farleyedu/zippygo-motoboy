@@ -128,7 +128,7 @@ export const reactChat = async (
     ),
   );
 };
-export type ChatContactPage = { contacts: ChatContact[]; hasMore: boolean; cursor?: string | null };
+export type ChatContactPage = { contacts: ChatContact[]; hasMore: boolean; cursor?: string | null; totalContacts?: number; onlineContacts?: number };
 type ContactOptions = { cursor?: string | null; search?: string; signal?: AbortSignal };
 export function listChatContacts(): Promise<ChatContact[]>;
 export function listChatContacts(options: ContactOptions): Promise<ChatContactPage>;
@@ -137,7 +137,7 @@ export async function listChatContacts(options?: ContactOptions): Promise<ChatCo
     signal: options?.signal,
     params: options ? { paged: true, cursor: options.cursor || undefined, search: options.search || undefined } : undefined,
   }));
-  return options && Array.isArray(data) ? { contacts: data, hasMore: false } : data;
+  return options && Array.isArray(data) ? { contacts: data, hasMore: false, totalContacts: data.length, onlineContacts: data.filter(c=>c.online).length } : data;
 }
 export const listChatNotifications = async (): Promise<ChatMessage[]> =>
   unwrap(await apiClient.get(`${root}/notifications`));
