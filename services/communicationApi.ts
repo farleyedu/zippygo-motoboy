@@ -201,7 +201,7 @@ export const listClientChat = async (
   unwrap(
     await apiClient.get(
       `/v2/motoboys/me/session/orders/${pedidoId}/client-chat`,
-      { params: { before, limit: 50, search }, signal },
+      { params: { before, limit: 20, search }, signal },
     ),
   );
 export const reactClientChat = async (
