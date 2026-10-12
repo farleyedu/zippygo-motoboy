@@ -1,0 +1,42 @@
+{
+  "cases": [
+    {
+      "dark": false,
+      "width": 320,
+      "contacts": 35,
+      "pages": 3,
+      "backgroundStopsTimers": true,
+      "searchDoesNotReloadQueue": true,
+      "teamCountIncludesUnloadedContacts": true
+    },
+    {
+      "dark": false,
+      "width": 390,
+      "contacts": 35,
+      "pages": 3,
+      "backgroundStopsTimers": true,
+      "searchDoesNotReloadQueue": true,
+      "teamCountIncludesUnloadedContacts": true
+    },
+    {
+      "dark": true,
+      "width": 320,
+      "contacts": 35,
+      "pages": 3,
+      "backgroundStopsTimers": true,
+      "searchDoesNotReloadQueue": true,
+      "teamCountIncludesUnloadedContacts": true
+    },
+    {
+      "dark": true,
+      "width": 390,
+      "contacts": 35,
+      "pages": 3,
+      "backgroundStopsTimers": true,
+      "searchDoesNotReloadQueue": true,
+      "teamCountIncludesUnloadedContacts": true
+    }
+  ],
+  "errors": [],
+  "ok": true
+}
