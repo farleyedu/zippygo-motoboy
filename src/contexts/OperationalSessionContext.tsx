@@ -132,7 +132,7 @@ export function OperationalSessionProvider({ children }: { children: React.React
   }, [store]);
   useEffect(() => {
     if (!state.session || appState !== 'active' || state.phase === 'expired') return;
-    const seconds = Math.max(5, Math.min(state.session.heartbeatIntervalSeconds || 20, 60));
+    const seconds = Math.max(5, Math.min(state.session.heartbeatIntervalSeconds || 240, 300));
     const timer = setInterval(() => { void store.tick(); }, seconds * 1000);
     return () => clearInterval(timer);
   }, [store, state.session?.sessionId, state.session?.heartbeatIntervalSeconds, appState, state.phase === 'expired']);

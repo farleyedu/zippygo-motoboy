@@ -32,7 +32,7 @@ async function scope(): Promise<TrackingScope | null> {
     const session = JSON.parse(raw) as { sessionId: string; epoch: number; isEnded: boolean; heartbeatIntervalSeconds?: number; nextLocationSequence?: number };
     if (!session.sessionId || session.isEnded || !Number.isFinite(session.epoch)) return null;
     const id = `${session.sessionId}.${session.epoch}`;
-    return { id, token, queueKey: `tracking.queue.v3.${id}`, sequenceKey: `tracking.sequence.v3.${id}`, sentKey: `tracking.sent.v3.${id}`, heartbeatKey: `tracking.heartbeat.v3.${id}`, heartbeatInterval: Math.max(5, Math.min(session.heartbeatIntervalSeconds || 25, 60)), nextSequence: Number.isSafeInteger(session.nextLocationSequence) && session.nextLocationSequence! > 0 ? session.nextLocationSequence! : 1 };
+    return { id, token, queueKey: `tracking.queue.v3.${id}`, sequenceKey: `tracking.sequence.v3.${id}`, sentKey: `tracking.sent.v3.${id}`, heartbeatKey: `tracking.heartbeat.v3.${id}`, heartbeatInterval: Math.max(5, Math.min(session.heartbeatIntervalSeconds || 240, 300)), nextSequence: Number.isSafeInteger(session.nextLocationSequence) && session.nextLocationSequence! > 0 ? session.nextLocationSequence! : 1 };
   } catch { return null; }
 }
 async function stillCurrent(context: TrackingScope) { return !closingScopes.has(context.id) && (await scope())?.id === context.id; }

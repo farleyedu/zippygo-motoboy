@@ -19,7 +19,7 @@ export function createOperationalRequestCoordinator(now: () => number = Date.now
     queue: <T>(token: string, request: () => Promise<T>) => share(`queue:${token}`, request),
     heartbeat(token: string, request: (startedAt: number) => Promise<OperationalHeartbeatResponse>, force = false): Promise<OperationalHeartbeatResponse> {
       if (!force && recent && (recent.token === token || recent.response.accessToken === token)) {
-        const interval = Math.max(5, Math.min(recent.response.session.heartbeatIntervalSeconds || 25, 60)) * 1000;
+        const interval = Math.max(5, Math.min(recent.response.session.heartbeatIntervalSeconds || 240, 300)) * 1000;
         const age = now() - recent.startedAt;
         if (age >= 0 && age < interval && !recent.response.session.isEnded) return Promise.resolve(recent.response);
       }
