@@ -90,6 +90,8 @@ import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } 
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
 import { usePagedContacts } from './usePagedContacts';
+import { useIsFocused } from 'expo-router/react-navigation';
+import { isAppForeground, useAppForeground } from '../hooks/useAppForeground';
 import { decodeChatDraft, encodeChatDraft, mentionedIds } from './draft';
 
 const reactionIcons = {
@@ -160,6 +162,7 @@ function MentionMark({ children }: { children: React.ReactNode }) {
 }
 
 export default function CommunicationScreen() {
+  const foreground = useAppForeground(), focused = useIsFocused(), active = foreground && focused;
   const keyboardVisible = useKeyboardVisible();
   const params = useLocalSearchParams<{
     channel?: string;
@@ -211,7 +214,9 @@ export default function CommunicationScreen() {
     [search, setSearch] = useState(''),
     [searching, setSearching] = useState(false),
     [filter, setFilter] = useState('Todas');
-  const roster = usePagedContacts(owner && turn.session ? `${owner}:${turn.session.sessionId}` : null, target ? '' : search);
+  const roster = usePagedContacts(owner && turn.session ? `${owner}:${turn.session.sessionId}` : null, target ? '' : search, active);
+  const rosterRefresh = useRef(roster.refresh); rosterRefresh.current = roster.refresh;
+  const messageSearch = target && searching ? search : '';
   const { contacts } = roster;
   const loadContactsOnScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -336,20 +341,20 @@ export default function CommunicationScreen() {
       setError('Nao foi possivel salvar os avisos.');
     }
   };
-  useEffect(
-    () =>
-      subscribeChatEvents((event) => {
-        if (event.estabelecimentoId === tenant) setRefresh((n) => n + 1);
-      }),
-    [tenant],
-  );
+  useEffect(() => {
+    if (!active) return;
+    return subscribeChatEvents((event) => {
+      if (event.estabelecimentoId === tenant) setRefresh(n => n + 1);
+    });
+  }, [tenant, active]);
   useFocusEffect(
     useCallback(() => {
+      if (!foreground) return;
       const version = ++generation.current,
         abort = new AbortController();
       let inFlight = false;
       const load = async () => {
-        if (inFlight) return;
+        if (inFlight || abort.signal.aborted || !isAppForeground()) return;
         inFlight = true;
         try {
           if (!turn.session)
@@ -357,10 +362,10 @@ export default function CommunicationScreen() {
               'Inicie seu turno para abrir as conversas da loja.',
             );
           if (target) {
-            const query = `${identity}:${searching ? search : ''}`;
+            const query = `${identity}:${messageSearch}`;
             const data = await listChat(target, {
               signal: abort.signal,
-              search: searching ? search : undefined,
+              search: messageSearch || undefined,
             });
             if (version !== generation.current) return;
             const replace = loadedQuery.current !== query;
@@ -389,7 +394,7 @@ export default function CommunicationScreen() {
             );
             setNotices(notifications);
           }
-          await roster.refresh();
+          await rosterRefresh.current();
           if (version !== generation.current) return;
           setError('');
         } catch (caught) {
@@ -406,13 +411,13 @@ export default function CommunicationScreen() {
       };
       setLoading(true);
       void load();
-      const timer = setInterval(() => void load(), 8000);
+      const timer = setInterval(() => void load(), 60000);
       return () => {
         generation.current++;
         abort.abort();
         clearInterval(timer);
       };
-    }, [identity, target, search, searching, refresh, turn.session?.sessionId]),
+    }, [identity, target, messageSearch, searching, refresh, turn.session?.sessionId, foreground]),
   );
   const locate = useCallback(
     async (id: string) => {

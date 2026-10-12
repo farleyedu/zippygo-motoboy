@@ -25,6 +25,7 @@ import { useZippyTheme } from '../ui/theme';
 import { priorityNotice } from './noticeRules';
 import { registerChatPush } from './push';
 import * as Notifications from 'expo-notifications';
+import { isAppForeground, useAppForeground } from '../hooks/useAppForeground';
 
 export function ChatNotices() {
   const [ready, setReady] = useState(Platform.OS !== 'web');
@@ -33,6 +34,7 @@ export function ChatNotices() {
 }
 
 function MountedChatNotices() {
+  const foreground = useAppForeground();
   const auth = useAuth(),
     turn = useOperationalSession(),
     theme = useZippyTheme(),
@@ -67,11 +69,11 @@ function MountedChatNotices() {
           ...settings,
         });
     };
-    void register().catch(() => undefined);
-    const timer = setInterval(
-      () => void register().catch(() => undefined),
-      15000,
-    );
+    if (foreground) void register().catch(() => undefined);
+    const timer = foreground ? setInterval(
+      () => { if (isAppForeground()) void register().catch(() => undefined); },
+      60000,
+    ) : null;
     const response =
       Platform.OS === 'web'
         ? null
@@ -101,7 +103,7 @@ function MountedChatNotices() {
           });
     return () => {
       alive = false;
-      clearInterval(timer);
+      if (timer) clearInterval(timer);
       response?.remove();
     };
   }, [
@@ -111,16 +113,17 @@ function MountedChatNotices() {
     theme.vibration,
     turn.queue?.motoboyId,
     router,
+    foreground,
   ]);
   useEffect(() => {
-    if (!owner || !turn.session) return;
+    if (!owner || !turn.session || !foreground) return;
     let alive = true,
       inFlight = false,
       watermark: number | undefined;
     let hide: ReturnType<typeof setTimeout> | undefined;
     const key = `zippygo.chat.notice.watermark:${owner}`;
     const load = async () => {
-      if (!alive || inFlight || AppState.currentState !== 'active') return;
+      if (!alive || inFlight || !isAppForeground()) return;
       inFlight = true;
       try {
         const [messages, rawSettings] = await Promise.all([
@@ -181,19 +184,15 @@ function MountedChatNotices() {
       }
     };
     void load();
-    const timer = setInterval(() => void load(), 8000),
+    const timer = setInterval(() => void load(), 60000),
       unsubscribe = subscribeChatEvents((event) => {
         if (event.estabelecimentoId === tenant) void load();
       });
-    const state = AppState.addEventListener('change', (value) => {
-      if (value === 'active') void load();
-    });
     return () => {
       alive = false;
       clearInterval(timer);
       if (hide) clearTimeout(hide);
       unsubscribe();
-      state.remove();
       setNotice(null);
       // No desmontar, o expo-audio ja liberou os players antes deste cleanup.
       try {
@@ -201,7 +200,7 @@ function MountedChatNotices() {
         mention.pause();
       } catch {}
     };
-  }, [owner, turn.session?.sessionId, tenant, regular, mention]);
+  }, [owner, turn.session?.sessionId, tenant, regular, mention, foreground]);
   useEffect(() => {
     if (!notice) return;
     opacity.setValue(theme.reducedMotion ? 1 : 0);

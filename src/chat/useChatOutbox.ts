@@ -15,14 +15,17 @@ import {
 } from '../../services/communicationApi';
 import { createChatOutbox } from './outbox';
 import { readChatStorage, writeChatStorage } from './storage';
+import { useIsFocused } from 'expo-router/react-navigation';
+import { useAppForeground } from '../hooks/useAppForeground';
 
 export function useChatOutbox(
   owner: string | null,
   sessionId: string | undefined,
   confirmed: (message: ChatMessage, target: ChatTarget) => void,
 ) {
-  const current = useRef({ owner, sessionId });
-  current.current = { owner, sessionId };
+  const foreground = useAppForeground(), focused = useIsFocused(), visible = foreground && focused;
+  const current = useRef({ owner, sessionId, visible });
+  current.current = { owner, sessionId, visible };
   const callback = useRef(confirmed);
   callback.current = confirmed;
   const [ready, setReady] = useState(false);
@@ -75,7 +78,7 @@ export function useChatOutbox(
       () => {
         if (alive) {
           setReady(!!owner && !!sessionId);
-          void outbox.flush().catch((e) => setError(String(e)));
+          if (current.current.visible) void outbox.flush().catch((e) => { if (alive) setError(String(e)); });
         }
       },
       (e) => {
@@ -87,16 +90,20 @@ export function useChatOutbox(
           );
       },
     );
-    const timer = setInterval(() => {
-      void outbox.flush().catch((e) => {
-        if (alive) setError(String(e));
-      });
-    }, 15000);
     return () => {
       alive = false;
-      clearInterval(timer);
       outbox.stop();
     };
   }, [outbox, owner, sessionId]);
+  useEffect(() => {
+    if (!visible || !ready) return;
+    let alive = true;
+    const flush = () => {
+      if (current.current.visible) void outbox.flush().catch(e => { if (alive) setError(String(e)); });
+    };
+    flush();
+    const timer = setInterval(flush, 60000);
+    return () => { alive = false; clearInterval(timer); };
+  }, [outbox, visible, ready]);
   return { outbox, entries, ready, error };
 }

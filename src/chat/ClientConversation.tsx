@@ -61,6 +61,7 @@ import { AudioComposer, ChatMedia } from './ChatMedia';
 import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } from './MessageBubble';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
+import { isAppForeground, useAppForeground } from '../hooks/useAppForeground';
 import { browserNativeTest } from '../../services/browserNativeTest';
 
 const reasons: Record<string, string> = {
@@ -70,6 +71,7 @@ const reasons: Record<string, string> = {
   janela_fechada: 'A janela do WhatsApp encerrou. Fale com a loja.',
 };
 export default function ClientConversation() {
+  const foreground = useAppForeground();
   const keyboardVisible = useKeyboardVisible();
   const params = useLocalSearchParams<{ pedidoId?: string }>(),
     pedidoId = Number(params.pedidoId),
@@ -168,11 +170,12 @@ export default function ClientConversation() {
   }, [draft, draftKey, draftReady]);
   useFocusEffect(
     useCallback(() => {
+      if (!foreground) return;
       let alive = true,
         inFlight = false;
       const abort = new AbortController();
       const load = async () => {
-        if (inFlight) return;
+        if (inFlight || !alive || !isAppForeground()) return;
         inFlight = true;
         try {
           if (!Number.isSafeInteger(pedidoId) || pedidoId <= 0)
@@ -226,7 +229,7 @@ export default function ClientConversation() {
         abort.abort();
         clearInterval(timer);
       };
-    }, [scope, refresh, pedidoId, search, searching]),
+    }, [scope, refresh, pedidoId, search, searching, foreground]),
   );
   const send = async (body = draft, file?: LocalChatFile) => {
     if (sending.current || !ready || !data?.channel.podeReceber) return;
