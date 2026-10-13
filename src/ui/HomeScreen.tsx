@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
-import { Platform, Pressable, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useIsFocused } from 'expo-router/react-navigation';
-import { Bell, Check, ChevronRight, LocateFixed, Map, Package, Pause, Route, Store } from 'lucide-react-native';
+import { Bell, Check, ChevronRight, Clock3, LocateFixed, Map, Package, Pause, Route, Store } from 'lucide-react-native';
 import { useAuth } from '../contexts/AuthContext';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
 import { AccountNotice, AccountScreen } from './AccountKit';
@@ -16,14 +16,29 @@ import { useRouteAction } from '../hooks/useRouteAction';
 
 export default function HomeScreen() {
   const auth = useAuth(), turn = useOperationalSession(), router = useRouter(), { colors } = useZippyTheme(), focused = useIsFocused();
+  const { width: screenWidth } = useWindowDimensions();
   const hasSession = !!turn.session, queue = turn.queue, count = activeStops(queue).length;
   const turnAction = useRouteAction();
   const goOnline = async () => {
     if (hasSession) { void turnAction.run(() => setTurnPaused(!queue?.paused)); return; }
     if (!await turn.store.start() && turn.store.getSnapshot().phase === 'permission-required') router.push({ pathname: '/permissoes', params: { intent: 'start' } });
   };
-  useEffect(() => { if (!focused || auth.isLoading || auth.restoreError) return; if (!auth.user) router.replace(auth.didSignOut ? '/(auth)/login' : '/(auth)/welcome'); else if (auth.needsLinkRequest) router.replace('/solicitarRestaurante'); else if (auth.needsEstablishmentSelection || !auth.estabelecimentoAtual) router.replace('/selecionarRestaurante'); }, [focused, auth.isLoading, auth.restoreError, auth.user, auth.didSignOut, auth.needsLinkRequest, auth.needsEstablishmentSelection, auth.estabelecimentoAtual, router]);
+  useEffect(() => { if (!focused || auth.isLoading || auth.restoreError) return; if (!auth.user) router.replace(auth.didSignOut ? '/(auth)/login' : '/(auth)/welcome'); else if (auth.estabelecimentos.length && (auth.needsEstablishmentSelection || !auth.estabelecimentoAtual)) router.replace('/selecionarRestaurante'); }, [focused, auth.isLoading, auth.restoreError, auth.user, auth.didSignOut, auth.estabelecimentos.length, auth.needsEstablishmentSelection, auth.estabelecimentoAtual, router]);
   if (auth.restoreError) return <Screen><Feedback title="Vamos reconectar seu acesso" message={auth.restoreError} onRetry={() => void auth.loadUserFromStorage()} /><LogoutAction /></Screen>;
+  if (auth.isLoading || !auth.user) return <Screen><Feedback title="Conferindo seu acesso" loading /></Screen>;
+  if (!auth.estabelecimentos.length) return <AccountScreen active="home">
+    <View style={linkStyles.header}><Text style={[type.eyebrow, { color: colors.muted }]}>{`OLÁ, ${auth.user.nome.split(' ')[0]}`.toUpperCase()}</Text><Text accessibilityRole="header" style={[linkStyles.welcome, { color: colors.ink }]}>Encontre sua equipe.</Text></View>
+    <Pressable accessibilityRole="button" accessibilityLabel="Solicitar vínculo" onPress={() => router.push('/solicitarRestaurante')} style={({ pressed }) => ({ opacity: pressed ? .8 : 1 })}>
+      <Surface hero style={linkStyles.hero}>
+        <Pill inverse>SEU PRIMEIRO VÍNCULO</Pill>
+        <View style={linkStyles.copy}><Text style={[linkStyles.title, { color: colors.heroInk }]}>{'Solicitar\nvínculo'}</Text><Text style={[linkStyles.description, { color: colors.heroMuted }]}>Veja os estabelecimentos cadastrados e escolha onde quer trabalhar.</Text></View>
+        <View pointerEvents="none" style={linkStyles.helmet}><Helmet size={screenWidth < 360 ? 112 : 158} /></View>
+        <View style={linkStyles.action}><Store size={18} color={colors.heroInk} /><Text style={[linkStyles.actionText, { color: colors.heroInk }]}>Ver estabelecimentos</Text><ChevronRight size={20} color={colors.heroInk} /></View>
+      </Surface>
+    </Pressable>
+    <View style={linkStyles.followUp}><Button icon={Clock3} secondary onPress={() => router.push('/solicitacoesVinculo')}>Minhas solicitações</Button><Button icon={Store} secondary onPress={() => router.push('/selecionarRestaurante')}>Convites e vínculos</Button></View>
+    <AccountNotice icon={Store}>Seu acesso já está liberado. Para começar a receber entregas, solicite um vínculo e aguarde a aprovação da loja.</AccountNotice>
+  </AccountScreen>;
   const target = operationalDestination(queue, Platform.OS);
   return <AccountScreen active="home" footer={<View style={{ gap: 8 }}><Button icon={hasSession ? Pause : LocateFixed} disabled={turn.busy || turnAction.busy} loading={turn.busy || turnAction.busy} onPress={() => void goOnline()}>{hasSession ? queue?.paused ? 'Retomar chamados' : 'Pausar chamados' : 'Ficar online'}</Button><Text style={{ fontFamily: 'Manrope', fontSize: 10, textAlign: 'center', color: colors.muted }}>{hasSession ? 'Localização compartilhada com a loja desde o online.' : 'Ao ficar online, a loja acompanha sua localização.'}</Text></View>}>
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9, marginBottom: 20 }}><View style={{ flex: 1 }}><Text style={[type.eyebrow, { color: colors.muted }]}>{`${new Date().getHours() < 12 ? 'BOM DIA' : new Date().getHours() < 18 ? 'BOA TARDE' : 'BOA NOITE'}, ${auth.user?.nome.split(' ')[0] || ''}`.toUpperCase()}</Text><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 25, letterSpacing: -.7, color: colors.ink, marginTop: 6 }}>Pronto pro próximo?</Text></View><IconButton icon={Bell} label="Avisos do turno" onPress={() => router.push('/avisosTurno')} /></View>
@@ -39,3 +54,16 @@ export default function HomeScreen() {
     {(turn.error || turnAction.error) && <Feedback title="Confira seu turno" message={turnAction.error || turn.error || ''} onRetry={() => void turn.store.restore()} />}
   </AccountScreen>;
 }
+
+const linkStyles = StyleSheet.create({
+  header: { marginBottom: 20 },
+  welcome: { fontFamily: 'ManropeExtraBold', fontSize: 25, letterSpacing: -.7, marginTop: 6 },
+  hero: { padding: 20, minHeight: 280 },
+  copy: { width: '67%', marginTop: 20, zIndex: 1 },
+  title: { fontFamily: 'ManropeExtraBold', fontSize: 34, lineHeight: 39, letterSpacing: -1.2 },
+  description: { width: '85%', fontFamily: 'Manrope', fontSize: 12, lineHeight: 20, marginTop: 12 },
+  helmet: { position: 'absolute', right: -34, top: 58 },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: 1, borderColor: '#ffffff20', marginTop: 24, paddingTop: 16 },
+  actionText: { flex: 1, fontFamily: 'ManropeExtraBold', fontSize: 13 },
+  followUp: { gap: 12, marginTop: 20 },
+});

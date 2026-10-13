@@ -6,10 +6,13 @@ import { getSecureItem } from '../../utils/secureStorage';
 import { browserNativeTest, reportBrowserMock } from '../../services/browserNativeTest';
 import { expoGo } from '../../services/expoGo';
 import { registerWebOfferPush, requestWebNotificationPermission, webNotificationPermission } from '../../services/webOfferPush';
+import { markNotificationPermissionRequested, notificationPermissionWasRequested } from '../../services/notificationPermissionPrompt';
 
 type NotificationAccess = 'granted' | 'denied' | 'blocked' | 'unsupported';
 let permissionFlight: Promise<NotificationAccess> | null = null;
 let automaticPrompted = false;
+// O token e a última configuração enviada ficam em memória: o registro periódico deixa de refazer rede sem mudança.
+let pushToken: string | null = null, lastPush = '';
 
 export async function configureChatChannels() {
   if (Platform.OS === 'android')
@@ -58,12 +61,17 @@ export async function ensureChatNotificationPermission(
     // Android 13 precisa de um canal antes da solicitacao/token.
     await configureChatChannels();
     let permission = await Notifications.getPermissionsAsync();
+    // No Android, areNotificationsEnabled=false pode produzir "denied" antes
+    // do primeiro pedido. O histórico do app evita perder esse pedido ou repeti-lo.
+    const automaticRequest = !permission.granted && permission.canAskAgain && !automaticPrompted &&
+      (Platform.OS === 'android' ? !(await notificationPermissionWasRequested()) : permission.status === 'undetermined');
     if (
       !permission.granted &&
       permission.canAskAgain &&
-      (explicit || (permission.status === 'undetermined' && !automaticPrompted))
+      (explicit || automaticRequest)
     ) {
       automaticPrompted = true;
+      await markNotificationPermissionRequested();
       permission = await Notifications.requestPermissionsAsync({
         ios: { allowAlert: true, allowBadge: true, allowSound: true },
       });
@@ -94,9 +102,11 @@ export async function registerChatPush(
   if (Platform.OS === 'web') { if (!browserNativeTest) await registerWebOfferPush(sessionId, settings); return; }
   if (expoGo) return;
   if ((await ensureChatNotificationPermission()) !== 'granted') return;
-  const token = await Notifications.getExpoPushTokenAsync({
+  pushToken ??= (await Notifications.getExpoPushTokenAsync({
     projectId: 'fcf691e3-47a6-446f-9e6a-5c2bcf7ee6c7',
-  });
+  })).data;
+  const registration = JSON.stringify([sessionId, pushToken, settings]);
+  if (registration === lastPush) return;
   const [raw, access] = await Promise.all([
     getSecureItem('operationalSession'),
     getSecureItem('operationalAccessToken'),
@@ -105,8 +115,9 @@ export async function registerChatPush(
   unwrap(
     await apiClient.put(
       '/v2/motoboys/me/session/chat/push',
-      { token: token.data, ...settings },
+      { token: pushToken, ...settings },
       { headers: { Authorization: `Bearer ${access}` } },
     ),
   );
+  lastPush = registration;
 }

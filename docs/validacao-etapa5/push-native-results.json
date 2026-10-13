@@ -1,10 +1,12 @@
 {
-  "passed": 12,
+  "passed": 16,
   "results": [
-    "Web nao solicita permissao nem registra push",
+    "Web delega permissao e registro ao push PWA sem chamar SDK Android",
     "Web de teste libera permissao mock sem gerar token ou HTTP",
     "Instalacao nova cria canais antes do pedido e registra apos concessao",
     "Negativa nao repete prompt em atualizacoes automaticas nem busca token",
+    "Android com status denied antes do primeiro pedido solicita e registra push",
+    "Negativa persiste apos reiniciar o app e nao provoca outro pedido automatico",
     "Pedido explicito pode tentar novamente quando sistema permite",
     "Bloqueio definitivo nao provoca novo pedido nem registro",
     "Chamadas concorrentes compartilham um unico pedido de permissao",
@@ -12,6 +14,8 @@
     "iOS solicita alertas e som sem criar canais Android",
     "Preparacao Android usa som do sistema e cria canal antes de pedir permissao",
     "Preparacao iOS solicita notificacoes sem criar canal Android",
+    "Negativa na preparacao tambem impede pedido automatico no turno",
+    "Registro periodico reutiliza token e so envia configuracao alterada",
     "WAV nativo corresponde ao asset e contratos usam nomes validos"
   ],
   "scope": "SDKs simulados e integridade de assets; nao comprova execucao em aparelho."

@@ -9,6 +9,7 @@ import { useAuth } from './AuthContext';
 import { useOperationalSession } from './OperationalSessionContext';
 import { assertRealProof } from '../../services/browserNativeTest';
 import { checklistReady, type ChecklistConfirmation } from '../delivery/checklistRules';
+import { canConcludeOperationalOrder } from '../delivery/operationalDestination';
 
 export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt};
 type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;notice:DeliveryReceipt|null;clearNotice:()=>void;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<boolean>;preparePayment:(parts:PaymentPart[])=>Promise<void>;confirmItems:(confirmation:ChecklistConfirmation)=>Promise<boolean>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
@@ -49,8 +50,12 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     })();
   },[auth.user?.id]);
   const scope=(d:CompletionDraft)=>{const state=turn.store.getSnapshot(),s=state.session;return owner.current===d.userId && s?.sessionId===d.sessionId && s.epoch===d.epoch && state.queue?.estabelecimentoId===d.storeId;};
+  const assertCompletionStage=(pedidoId:number)=>{
+    if(!canConcludeOperationalOrder(turn.store.getSnapshot().queue,pedidoId))throw new Error('Confirme a saída da loja e a chegada ao cliente antes de conferir esta entrega.');
+  };
   const patchDraft=(original:CompletionDraft,request:Partial<CompletionRequest>,codeChecked?:boolean)=>persist(latest=>{
     if(!latest || latest.phase!=='draft' || latest.request.operationId!==original.request.operationId || !scope(latest)) throw new Error('Sua conferência mudou. Confira o pedido atual.');
+    assertCompletionStage(latest.context.pedidoId);
     return {...latest,request:{...latest.request,...request},...(codeChecked===undefined?{}:{codeChecked})};
   });
   const assertRouteMutationAllowed=()=>{
@@ -64,11 +69,13 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
   const prepare=async(id:number)=>{await run(async()=>{
     const s=turn.store.getSnapshot().session,user=owner.current,old=current.current;
     if(!s || !user)throw new Error('Recupere o turno para conferir a entrega.');
+    assertCompletionStage(id);
     if(restoredOwner.current!==user)throw new Error('A conferência salva não pôde ser verificada. Não sobrescreva esse registro; peça orientação à loja.');
     if(old && ['pending','sending'].includes(old.phase))throw new Error('Existe uma conclusão aguardando confirmação. Consulte o resultado antes de continuar.');
     if(old?.phase==='draft' && old.context.pedidoId!==id)throw new Error('Há uma conferência de outro pedido. Confira a rota e peça orientação à loja.');
     const context=await getCompletionContext(id);
     if(owner.current!==user || turn.store.getSnapshot().session?.sessionId!==s.sessionId)throw new Error('Seu acesso mudou.');
+    assertCompletionStage(id);
     const preserve=old?.phase==='draft' && scope(old) && old.context.pedidoId===id && old.context.version===context.version;
     const storeId=turn.store.getSnapshot().queue?.estabelecimentoId;if(!storeId)throw new Error('Atualize a fila antes de conferir a entrega.');
     const next:CompletionDraft=preserve?{...old!,context}:{userId:user,storeId,sessionId:s.sessionId,epoch:s.epoch,phase:'draft',context,request:{operationId:createIdentifier(),expectedPedidoId:id,expectedVersion:context.version,payments:[]},codeChecked:false};
@@ -76,6 +83,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
   });};
   const validateCode=async(code:string)=>!!await run(async()=>{
     const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
+    assertCompletionStage(d.context.pedidoId);
     if(!await checkDeliveryCode(d.context.pedidoId,code))throw new Error('O código não foi confirmado.');
     if(!scope(d))throw new Error('O turno mudou durante a conferência.');
     await patchDraft(d,{codigo:code},true);
@@ -84,6 +92,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
   const preparePayment=async(parts:PaymentPart[])=>{const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');await patchDraft(d,{payments:parts});};
   const uploadProof=async(base64:string)=>!!await run(async()=>{
     const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
+    assertCompletionStage(d.context.pedidoId);
     const proofId=await uploadDeliveryProof(d.context.pedidoId,base64);if(!scope(d))throw new Error('O turno mudou durante o envio.');
     await patchDraft(d,{proofId});
     return true;
@@ -115,6 +124,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
   const send=async(d:CompletionDraft)=>{
     assertRealProof(d.request.proofId);
     if(!scope(d))throw new Error('A sessão desta conferência mudou. Consulte o recibo; recupere o turno antes de reenviar.');
+    if(d.phase==='draft')assertCompletionStage(d.context.pedidoId);
     if(turn.store.getSnapshot().queue?.current?.pedidoId!==d.context.pedidoId)throw new Error('Este pedido não é mais sua entrega atual. Consulte o resultado antes de seguir.');
     const sending={...d,phase:'sending' as const};await persist(sending);
     try{const result=await completeDelivery(sending.request);if(!scope(d))throw new Error('Seu acesso mudou após o envio. Consulte o resultado ao recuperar essa conta.');

@@ -5,6 +5,7 @@ import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { layout, useZippyTheme } from './theme';
+import { Skel, SkeletonLines } from './Skeleton';
 
 export const type = StyleSheet.create({
   eyebrow: { fontFamily: 'Manrope', fontSize: 9, letterSpacing: 1.7, fontWeight: '700' },
@@ -138,9 +139,19 @@ export function Field({ label, error, hint, style, compact = true, ...props }: T
 
 export function Feedback({ title, message, loading, onRetry }: { title: string; message?: string; loading?: boolean; onRetry?: () => void }) {
   const { colors } = useZippyTheme();
+  if (loading) return <Surface style={{ marginBottom: 16 }}>
+    <View accessibilityLiveRegion="polite" accessibilityRole="progressbar" accessibilityLabel={title} accessibilityState={{ busy: true }} style={{ gap: 14 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <Skel w={38} h={38} r={13} />
+        <View style={{ flex: 1, gap: 8 }}><Text style={[type.small, { color: colors.muted, fontWeight: '700' }]}>{title}</Text><Skel w="46%" h={9} /></View>
+      </View>
+      <SkeletonLines lines={3} />
+      {message && <Text style={[type.small, { color: colors.muted }]}>{message}</Text>}
+      {onRetry && <Button secondary onPress={onRetry}>Tentar novamente</Button>}
+    </View>
+  </Surface>;
   return <Surface style={{ marginBottom: 16 }}>
-    <View accessibilityLiveRegion="polite" accessibilityState={{ busy: !!loading }} style={{ gap: 10 }}>
-      {loading && <ActivityIndicator color={colors.accent} />}
+    <View accessibilityLiveRegion="polite" style={{ gap: 10 }}>
       <Text style={[type.body, { color: colors.ink, fontWeight: '800' }]}>{title}</Text>
       {message && <Text style={[type.body, { color: colors.muted }]}>{message}</Text>}
       {onRetry && <Button secondary onPress={onRetry}>Tentar novamente</Button>}

@@ -95,9 +95,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.farleyedu.zippygomotoboy'
+    namespace 'com.zippy.zippyboy'
     defaultConfig {
-        applicationId 'com.farleyedu.zippygomotoboy'
+        applicationId 'com.zippy.zippyboy'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

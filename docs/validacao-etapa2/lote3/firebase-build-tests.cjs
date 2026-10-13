@@ -2,7 +2,7 @@ const { test } = require('node:test'), assert = require('node:assert/strict'), f
 const { prepareFirebaseAndroid } = require('../../../scripts/prepare-firebase-android.cjs');
 const root = path.resolve(__dirname, '../../../.expo/firebase-hook-tests');
 fs.mkdirSync(root, { recursive: true });
-const valid = { project_info: { project_number: '123456', project_id: 'qa-only' }, client: [{ client_info: { android_client_info: { package_name: 'com.farleyedu.zippygomotoboy' } } }] };
+const valid = { project_info: { project_number: '123456', project_id: 'qa-only' }, client: [{ client_info: { android_client_info: { package_name: 'com.zippy.zippyboy' } } }] };
 function fixture(config) {
   const project = fs.mkdtempSync(path.join(root, 'case-'));
   const source = path.join(project, 'source.json');

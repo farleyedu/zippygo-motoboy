@@ -7,7 +7,7 @@ import {
 import { createIdentifier } from '../../services/mobileApi';
 
 function extension(contentType: string): string {
-  const type = contentType.split(';')[0].toLowerCase();
+  const type = contentType.split(';')[0].trim().toLowerCase();
   const extensions: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'audio/mp4': 'm4a', 'audio/x-m4a': 'm4a', 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/wav': 'wav' };
   if (!extensions[type]) throw new Error('Formato do anexo não suportado.');
   return extensions[type];
@@ -17,7 +17,10 @@ export async function retainChatFile(
   file: LocalChatFile,
 ): Promise<LocalChatFile> {
   if (Platform.OS === 'web') {
-    const blob = await (await fetch(file.uri)).blob();
+    const response = await fetch(file.uri);
+    if (!response.ok) throw new Error('Não foi possível abrir o arquivo para enviar.');
+    const blob = await response.blob();
+    if (!blob.size) throw new Error('O arquivo está vazio. Grave ou escolha outro anexo.');
     if (blob.size > 10485760) throw new Error('Arquivo deve ter ate 10 MB.');
     const uri = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -32,6 +35,7 @@ export async function retainChatFile(
   const uri = `${dir}${createIdentifier()}.${extension(file.contentType)}`;
   await FileSystem.copyAsync({ from: file.uri, to: uri });
   const info = await FileSystem.getInfoAsync(uri);
+  if (!info.exists || !info.size) throw new Error('O arquivo está vazio. Grave ou escolha outro anexo.');
   if (info.exists && info.size > 10485760) {
     await FileSystem.deleteAsync(uri, { idempotent: true });
     throw new Error('Arquivo deve ter ate 10 MB.');

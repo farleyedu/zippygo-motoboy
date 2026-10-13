@@ -43,7 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'FOREGROUND_SERVICE_LOCATION',
         'RECORD_AUDIO'
       ],
-      package: 'com.farleyedu.zippygomotoboy',
+      package: 'com.zippy.zippyboy',
       softwareKeyboardLayoutMode: 'resize',
       ...(existsSync(firebaseFile) ? { googleServicesFile: firebaseFile } : {}),
 

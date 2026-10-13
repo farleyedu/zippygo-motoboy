@@ -12,7 +12,7 @@ import { NavigationDiagnostics } from '../src/delivery/navigationDiagnostics';
 import { arriveCurrent, queueToPedidos } from '../services/mobileApi';
 import { getStoreDestination, type StoreDestination } from '../services/routeApi';
 import { openGoogleMapsRoute, openPreferredNavigation } from '../services/navigation';
-import { distanceMeters, uniqueNavigationStops, type ExternalStop } from '../src/delivery/externalRoute';
+import { distanceMeters, type ExternalStop } from '../src/delivery/externalRoute';
 import { nativeNavigationAvailable } from '../services/nativeNavigation';
 import { navigationSdkEnabled } from '../services/navigationFlag';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
@@ -26,6 +26,8 @@ import { OperationalNotice } from '../src/ui/OperationalNotice';
 import { useRouteAction } from '../src/hooks/useRouteAction';
 import { readNavigatorChoice, saveNavigatorChoice } from '../src/delivery/navigationChoice';
 import { stopNavigationAddress } from '../src/delivery/offerDetails';
+import { canStartOperationalNavigation, operationalDestination, operationalStage } from '../src/delivery/operationalDestination';
+import { useDeliveryCompletion } from '../src/contexts/DeliveryCompletionContext';
 
 const ARRIVAL_RADIUS_M = 300;
 
@@ -36,14 +38,26 @@ export default function MapScreen() {
   const [cameraFollowing, setCameraFollowing] = useState(true), [navigationMuted, setNavigationMuted] = useState(false), [footerInset, setFooterInset] = useState(154);
   const [deck, setDeck] = useState(false), [overview, setOverview] = useState(0);
   const orderAction = useRouteAction();
+  const completion = useDeliveryCompletion();
   const windowSize = useWindowDimensions();
-  const deckHeight = Math.max(220, Math.min(530, (windowSize.height - insets.top - insets.bottom) * .58));
+  const deckHeight = Math.max(260, Math.min(600, (windowSize.height - insets.top - insets.bottom) * .64));
   const openDeck = () => { setDeck(true); setSelectedId(0); setCameraFollowing(false); setOverview(v => v + 1); setMenu(false); };
   const closeDeck = () => { setDeck(false); setSelectedId(0); if (following) { setCameraFollowing(true); setRecenter(v => v + 1); } };
   const observeNavigation = (state: NavigationState) => setNavigation(previous => ({ ...previous, ...state, message: state.message }));
   const offset = useRef(new Animated.Value(0)).current;
   const pan = useMemo(() => PanResponder.create({ onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx), onPanResponderMove: (_, gesture) => offset.setValue(Math.max(-60, Math.min(60, gesture.dy))), onPanResponderRelease: (_, gesture) => { if (gesture.dy < -20) setExpanded(true); else if (gesture.dy > 20) setExpanded(false); Animated.timing(offset, { toValue: 0, duration: reducedMotion ? 0 : 180, useNativeDriver: true }).start(); } }), [offset, reducedMotion]);
   const queue = turn.queue, current = queue?.current, stops = activeStops(queue), pedidos = useMemo(() => queueToPedidos(queue), [queue]);
+  const navigationAllowed = canStartOperationalNavigation(queue);
+  const navigationEntry = navigationAllowed ? following ? 'Ver percurso completo' : 'Iniciar modo rota' : operationalStage(queue) === 'finish' ? 'Conferir entrega' : operationalStage(queue) === 'pickup' ? 'Conferir retirada' : 'Voltar ao início';
+  useEffect(() => {
+    if (!focused || !queue || turn.busy) return;
+    if (!navigationAllowed) {
+      setFollowing(false); setChooser(false);
+      // Logo após "saí da loja" a fila local ainda está na retirada: manter o pedido de escolha até ela atualizar.
+      const waitingPickup = params.navegar === 'escolher' && operationalStage(queue) === 'pickup';
+      if ((params.modo || params.navegar) && !waitingPickup) router.setParams({ modo: undefined, navegar: undefined });
+    } else if (params.modo === 'rota' && Platform.OS !== 'web') setFollowing(true);
+  }, [focused, navigationAllowed, queue?.version, turn.busy, params.modo, params.navegar]);
   useEffect(() => {
     if (focused && params.navegar === 'escolher' && current?.pickedUpAtUtc) {
       setFollowing(false); setChooser(true); router.setParams({ navegar: undefined, modo: undefined });
@@ -54,7 +68,7 @@ export default function MapScreen() {
     const sessionId = turn.session?.sessionId;
     if (!focused || !sessionId || params.navegar === 'escolher' || !current?.pickedUpAtUtc || Platform.OS === 'web') return;
     let alive = true;
-    void readNavigatorChoice(sessionId).then(choice => { if (alive && choice === 'ZippyGo' && nativeNavigationAvailable && navigationSdkEnabled) setFollowing(true); });
+    void readNavigatorChoice(sessionId).then(choice => { if (alive && canStartOperationalNavigation(turn.store.getSnapshot().queue) && choice === 'ZippyGo' && nativeNavigationAvailable && navigationSdkEnabled) setFollowing(true); });
     return () => { alive = false; };
   }, [focused, turn.session?.sessionId, !!current?.pickedUpAtUtc]);
   const collecting = !!current && !current.pickedUpAtUtc || queue?.routeState === 'returning' || !current && params.destino === 'loja';
@@ -67,7 +81,7 @@ export default function MapScreen() {
   }, [focused, collecting, turn.session?.sessionId, retry]);
   const latitude = store?.latitude == null ? NaN : Number(store.latitude), longitude = store?.longitude == null ? NaN : Number(store.longitude);
   const collection = Number.isFinite(latitude) && Number.isFinite(longitude) && Math.abs(latitude) <= 90 && Math.abs(longitude) <= 180 ? { lat: latitude, lng: longitude } : undefined;
-  const canRoute = navigationSdkEnabled && nativeNavigationAvailable && (collecting ? !!collection : !!current);
+  const canRoute = navigationAllowed && navigationSdkEnabled && nativeNavigationAvailable && (collecting ? !!collection : !!current);
   const retryLog = useRef(new NavigationDiagnostics(__DEV__));
   const retryNavigation = () => {
     retryLog.current.event('retry.request', { nextRetry: retry + 1, foregroundGranted: !!turn.permissions?.foreground.granted, nativeNavigationAvailable, canRoute, collecting, hasDestination: collecting ? !!collection : !!current });
@@ -77,8 +91,22 @@ export default function MapScreen() {
     setRetry(value => value + 1); setError(''); setNavigation({ status: 'loading', message: collecting && !collection ? 'Carregando o endereço da coleta…' : 'Preparando uma nova tentativa…' });
   };
   const handleMapPress = () => { if (following) return; setMenu(false); setClean(value => !value); };
-  const openNavigation = () => { setMenu(false); setChooser(true); };
+  const guardNavigation = () => {
+    try { completion.assertRouteMutationAllowed(); }
+    catch (failure) { setError(failure instanceof Error ? failure.message : 'Confira a conclusão pendente.'); return false; }
+    const state = turn.store.getSnapshot();
+    if (!state.session || !['online', 'reconnecting'].includes(state.phase) || !state.queue) { setError('Aguarde a confirmação do turno e da fila.'); return false; }
+    if (!canStartOperationalNavigation(state.queue)) {
+      setFollowing(false); setChooser(false); setMenu(false);
+      router.setParams({ modo: undefined, navegar: undefined });
+      router.replace(operationalDestination(state.queue, Platform.OS));
+      return false;
+    }
+    return true;
+  };
+  const openNavigation = () => { if (guardNavigation()) { setMenu(false); setChooser(true); } };
   const startInApp = () => {
+    if (!guardNavigation()) return;
     setChooser(false);
     if (!nativeNavigationAvailable) { setError('A navegação dentro do app exige o novo build. Expo Go mostra o mapa, mas não contém o navegador.'); return; }
     if (collecting && !collection) { setError('Confira as coordenadas do estabelecimento antes de iniciar a rota da coleta.'); return; }
@@ -103,12 +131,13 @@ export default function MapScreen() {
     return () => subscription.remove();
   }, [focused]);
   const externalNavigation = async () => {
+    if (!guardNavigation()) return;
     const destination = collecting ? { latitude: collection?.lat, longitude: collection?.lng, address: [store?.rua, store?.numero, store?.bairro, store?.cidade, store?.uf].filter(Boolean).join(', ') } : { latitude: current?.pedido?.latitude, longitude: current?.pedido?.longitude, address: current?.pedido?.enderecoEntrega };
     try { await openPreferredNavigation(destination); sentOut.current = true; setMenu(false); } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível abrir o navegador.'); }
   };
-  const allowReorder = turn.queue?.politicas?.allowMotoboyReorder !== false;
   const routeStops: ExternalStop[] = collecting ? [{ latitude: collection?.lat, longitude: collection?.lng, address: [store?.rua, store?.numero, store?.bairro, store?.cidade, store?.uf].filter(Boolean).join(', ') }] : stops.map(stop => ({ latitude: stop.pedido?.latitude, longitude: stop.pedido?.longitude, address: stopNavigationAddress(stop) }));
   const sendToGoogleMaps = async () => {
+    if (!guardNavigation()) return;
     void theme.setPreference('navigationApp', 'Google Maps');
     try {
       const route = await openGoogleMapsRoute(routeStops); sentOut.current = true; setChooser(false); setFollowing(false); router.setParams({ modo: undefined }); void saveNavigatorChoice(turn.session?.sessionId, 'Google Maps');
@@ -116,6 +145,7 @@ export default function MapScreen() {
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível abrir o Google Maps.'); }
   };
   const sendToWaze = async () => {
+    if (!guardNavigation()) return;
     void theme.setPreference('navigationApp', 'Waze');
     const next = routeStops[0];
     if (!next) { setError('Aguarde a atualização do endereço da parada.'); return; }
@@ -147,7 +177,7 @@ export default function MapScreen() {
   return <View style={{ flex: 1, backgroundColor: colors.paper }}>
     <Stack.Screen options={{ headerShown: false }} /><StatusBar style={dark ? 'light' : 'dark'} />
     {turn.permissions?.foreground.granted ? <Mapa pedidos={pedidos} emEntrega={!!current} recenterToken={recenter} retryToken={retry} sessionKey={turn.session?.sessionId} routeMode={following && canRoute} navigationEnabled={following && canRoute} collectionDestination={collecting ? collection : undefined} selectedPedidoId={deck ? selectedId || undefined : selected?.pedidoId} routePreview={deck} overviewToken={overview} mapClean={deck ? false : following ? false : clean} view3D={view3D} cameraFollowing={cameraFollowing} navigationMuted={navigationMuted} navigationBottomInset={deck ? deckHeight + Math.max(insets.bottom, 12) : following ? footerInset : 0} onCameraExplore={() => setCameraFollowing(false)} onNavigationState={observeNavigation} onMapPress={handleMapPress} onOrderPress={id => { setDeck(true); setCameraFollowing(false); setSelectedId(id); setClean(false); setExpanded(false); }} /> : <View style={styles.permission}><LocateFixed size={38} color={colors.accent} /><Text style={[type.body, { color: colors.muted, textAlign: 'center', marginVertical: 16 }]}>Permita a localização para ver sua posição no mapa.</Text><Button onPress={() => router.push({ pathname: '/permissoes', params: { intent: 'review', returnTo: '/mapa' } })}>Preparar localização</Button></View>}
-    {following && !deck && <NavigationChrome state={routeState} address={navigationAddress} following={cameraFollowing} muted={navigationMuted} top={insets.top} bottom={Math.max(insets.bottom, 8)} footerInset={footerInset} stops={stops.length} onRoute={openDeck}
+    {following && !deck && <NavigationChrome state={routeState} address={navigationAddress} following={cameraFollowing} muted={navigationMuted} top={insets.top} bottom={Math.max(insets.bottom, 8)} footerInset={footerInset} stops={stops.length} destinationName={collecting ? destinationName : current?.pedido?.nomeCliente || undefined} stopIndex={collecting ? 1 : Math.max(1, stops.findIndex(stop => stop.pedidoId === current?.pedidoId) + 1)} onRoute={openDeck}
       onCenter={() => { setCameraFollowing(true); setRecenter(value => value + 1); }}
       onMute={() => setNavigationMuted(value => !value)}
       onExit={() => { setFollowing(false); router.setParams({ modo: undefined }); void saveNavigatorChoice(turn.session?.sessionId, 'map'); setClean(false); setCameraFollowing(true); setMenu(false); setNavigation({ status: 'loading' }); }}
@@ -162,7 +192,7 @@ export default function MapScreen() {
       </View>}
       <View style={{ position: 'absolute', right: 16, top: insets.top + (following ? 160 : 76), gap: 8 }}>{control('Centralizar minha posição', LocateFixed, () => setRecenter(v => v + 1))}{!following && control(view3D ? 'Ver mapa em 2D' : 'Ver mapa em 3D', Layers, () => set3D(v => !v))}{following && control('Opções da rota', MoreHorizontal, () => setMenu(v => !v))}</View>
       {menu && <View style={[styles.options, { top: insets.top + (following ? 206 : 68), backgroundColor: colors.card, borderColor: colors.line }]}>
-        {[{ label: following ? 'Ver percurso completo' : 'Iniciar modo rota', icon: following ? Map : Navigation, action: () => { if (following) { setFollowing(false); setMenu(false); } else openNavigation(); } }, { label: 'Histórico de rotas', icon: Route, action: () => { setMenu(false); router.push('/historicoRotas'); } }, { label: 'Organizar pedidos', icon: Package, action: () => { setMenu(false); router.push('/rota'); } }, { label: 'Abrir navegador externo', icon: Navigation, action: () => void externalNavigation() }].map(item => <Pressable key={item.label} accessibilityRole="button" onPress={item.action} style={styles.option}><item.icon size={18} color={colors.accent} /><Text style={[type.small, { color: colors.ink }]}>{item.label}</Text></Pressable>)}
+        {[{ label: navigationEntry, icon: following ? Map : Navigation, action: () => { if (!navigationAllowed) { setMenu(false); router.replace(operationalDestination(turn.store.getSnapshot().queue, Platform.OS)); } else if (following) { setFollowing(false); setMenu(false); } else openNavigation(); } }, { label: 'Histórico de rotas', icon: Route, action: () => { setMenu(false); router.push('/historicoRotas'); } }, { label: 'Organizar pedidos', icon: Package, action: () => { setMenu(false); router.push('/rota'); } }, ...(navigationAllowed ? [{ label: 'Abrir navegador externo', icon: Navigation, action: () => void externalNavigation() }] : [])].map(item => <Pressable key={item.label} accessibilityRole="button" onPress={item.action} style={styles.option}><item.icon size={18} color={colors.accent} /><Text style={[type.small, { color: colors.ink }]}>{item.label}</Text></Pressable>)}
       </View>}
       <Animated.View style={[styles.sheet, { bottom: Math.max(insets.bottom, 12) + (following ? 8 : 76), backgroundColor: colors.card, borderColor: colors.line, transform: [{ translateY: offset }] }]}>
         <OperationalNotice onInspectRoute={openDeck} />
@@ -184,23 +214,14 @@ export default function MapScreen() {
       {!following && <View style={{ position: 'absolute', bottom: Math.max(insets.bottom, 12), left: 16, right: 16 }}><AppNav active="map" /></View>}
     </>}
     <Modal transparent visible={chooser} animationType={reducedMotion ? 'none' : 'fade'} onRequestClose={() => setChooser(false)}><View style={{ flex: 1, backgroundColor: '#081426bb', justifyContent: 'center', padding: 22 }}><Surface style={{ maxHeight: '92%', padding: 0 }}><ScrollView style={{ flexShrink: 1, minHeight: 0 }} contentContainerStyle={{ padding: 20 }}>
-      <Text style={[type.title, { color: colors.ink, marginBottom: 6 }]}>Como você quer navegar?</Text>
-      <Text style={[type.small, { color: colors.muted, marginBottom: 14 }]}>{collecting ? 'Destino: coleta no estabelecimento.' : stops.length + (stops.length === 1 ? ' parada na sua rota.' : ' paradas na sua rota.')}</Text>
-      {!collecting && uniqueNavigationStops(routeStops).length < routeStops.length && <Text style={[type.small, { color: colors.accent, marginBottom: 12 }]}>{uniqueNavigationStops(routeStops).length + ' endereços diferentes. Pedidos no mesmo endereço ficam juntos no navegador e são conferidos separadamente.'}</Text>}
+      <Text style={[type.title, { color: colors.ink, marginBottom: 16 }]}>Como você quer navegar?</Text>
       {!!error && <Text accessibilityRole="alert" style={[type.small, { color: colors.danger, marginBottom: 12 }]}>{error}</Text>}
-      {!collecting && stops.length > 1 && <View style={{ borderRadius: 14, borderWidth: 1, borderColor: colors.line, padding: 12, marginBottom: 14 }}>
-        <Text style={[type.small, { color: colors.ink, fontWeight: '800' }]}>{allowReorder ? 'Confira a ordem antes de navegar' : 'A ordem das paradas foi definida pela loja'}</Text>
-        <Text style={[type.small, { color: colors.muted, marginTop: 4 }]}>{allowReorder ? 'O Google Maps segue exatamente a ordem que está no ZippyGo. Para mudar a sequência, reordene as paradas aqui antes de enviar.' : 'O Google Maps vai seguir essa ordem. Você não pode reordenar as paradas.'}</Text>
-        {allowReorder && <Pressable accessibilityRole="button" onPress={() => { setChooser(false); router.push('/rota'); }} style={{ minHeight: 44, justifyContent: 'center' }}><Text style={[type.small, { color: colors.accent, fontWeight: '800' }]}>Reordenar paradas</Text></Pressable>}
-      </View>}
       <View style={{ gap: 12 }}>
         {navigationSdkEnabled && nativeNavigationAvailable && <Button icon={Navigation} onPress={startInApp}>Navegar no ZippyGo</Button>}
-        <Button secondary={navigationSdkEnabled && nativeNavigationAvailable} icon={Map} onPress={() => void sendToGoogleMaps()}>{collecting || stops.length < 2 ? 'Google Maps' : 'Google Maps · rota completa'}</Button>
-        {!collecting && stops.length > 1 && <Text style={[type.small, { color: colors.muted }]}>Segue a ordem da rota. O navegador móvel aceita até 4 destinos por envio; os demais continuam no ZippyGo.</Text>}
-        <Button secondary icon={Navigation} onPress={() => void sendToWaze()}>{collecting || stops.length < 2 ? 'Waze' : 'Waze · próxima parada'}</Button>
+        <Button secondary={navigationSdkEnabled && nativeNavigationAvailable} icon={Map} onPress={() => void sendToGoogleMaps()}>Google Maps</Button>
+        <Button secondary icon={Navigation} onPress={() => void sendToWaze()}>Waze</Button>
         <Button secondary icon={X} onPress={() => setChooser(false)}>Cancelar</Button>
       </View>
-      {!collecting && stops.length > 1 && <Text style={[type.small, { color: colors.muted, marginTop: 12 }]}>O Waze aceita um destino por vez. Ao concluir a entrega, volte aqui para seguir à próxima parada.</Text>}
     </ScrollView></Surface></View></Modal>
     <RouteDeck open={deck} height={deckHeight} bottom={Math.max(insets.bottom, 12)} stops={stops} selectedId={selectedId} onSelect={id => { orderAction.clear(); setSelectedId(id); }} onClose={closeDeck} onOverview={() => { orderAction.clear(); setSelectedId(0); setOverview(v => v + 1); }} onOrder={checkOrder} busy={orderAction.busy} actionError={orderAction.error} />
     {clean && !following && <Pressable accessibilityLabel="Mostrar controles do mapa" accessibilityRole="button" onPress={handleMapPress} style={{ position: 'absolute', right: 16, bottom: Math.max(insets.bottom, 20), minHeight: 44, minWidth: 44, borderRadius: 22, backgroundColor: '#132742dd', alignItems: 'center', justifyContent: 'center' }}><ChevronUp color="#e5f0ff" size={22} /></Pressable>}

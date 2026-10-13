@@ -1,4 +1,4 @@
-package com.farleyedu.zippygomotoboy
+package com.zippy.zippyboy
 
 import android.app.Application
 import android.content.res.Configuration

@@ -1,4 +1,4 @@
-package com.farleyedu.zippygomotoboy
+package com.zippy.zippyboy
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

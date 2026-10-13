@@ -1,3 +1,4 @@
+import { clearResources } from '../hooks/resourceCache';
 import React, { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { AppState } from 'react-native';
 import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secureStorage';
@@ -330,7 +331,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const refreshToken = await getSecureItem('refreshToken');
         unwrap(await apiClient.post('/auth/logout', { refreshToken }));
       }
-      authEpoch.current += 1;
+      authEpoch.current += 1; clearResources();
       setIsLoading(true);
       await deleteSecureItem('zippygo.user');
       await deleteSecureItem('zippygo.token');

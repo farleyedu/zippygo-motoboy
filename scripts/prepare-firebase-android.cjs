@@ -15,7 +15,7 @@ function prepareFirebaseAndroid(root, env = process.env) {
   let config;
   try { config = JSON.parse(raw); } catch { throw new Error('GOOGLE_SERVICES_JSON contém JSON inválido.'); }
   if (config.type === 'service_account' || config.private_key) throw new Error('GOOGLE_SERVICES_JSON deve ser a configuração do app Android, e não uma conta de serviço.');
-  const packageName = 'com.farleyedu.zippygomotoboy';
+  const packageName = 'com.zippy.zippyboy';
   if (!config.client?.some(client => client.client_info?.android_client_info?.package_name === packageName)) {
     throw new Error(`A configuração Firebase precisa incluir o pacote ${packageName}.`);
   }

@@ -1,5 +1,33 @@
 # APK Android para teste de campo
 
+## Atualização instalada — 12/10/2026
+
+APK atual: [ZippyBoy-atualizacao-2026-10-12.apk](C:/Users/farle/Downloads/ZippyBoy-atualizacao-2026-10-12.apk), também em `.expo/field-apk/`. Gerado com o estado atual do workspace, incluindo vínculo, áudio/anexos, controles e redução de requisições. Pacote `com.zippy.zippyboy`, ARM64, versão `1.0.0`, código `1`. 75.005.000 bytes; SHA-256 `6c489f79f8a4a232f82bd549544a86bb4bec1ded22d933c0d8d61dd8d8a1aaeb`. Compilação Gradle concluída em 3 min 6 s; assinatura compatível, alinhamento de 16 KiB e bundle atual conferidos.
+
+Instalado no Xiaomi conectado com `adb install -r` às **16:44:32**, horário de São Paulo. O hash do APK instalado corresponde ao arquivo entregue e os diretórios de dados foram preservados. Abertura a frio com `Status: ok`, 3.174 ms; conta autenticada sem vínculo retomada na tela inicial com **Solicitar vínculo**, **Minhas solicitações** e **Convites e vínculos**. Processo ativo, sem erros fatais ou exceções JavaScript nos logs da abertura; captura temporária inspecionada e removida. Evidências locais em `.expo/field-apk/install-atualizacao-2026-10-12.log`, `launch-atualizacao-2026-10-12.log` e `runtime-atualizacao-2026-10-12.log`.
+
+A instalação e a abertura não medem consumo de bateria, frequência real de requisições nem GPS em movimento/segundo plano. O intervalo de batimento continua seguindo o valor informado pela API. Nesta instalação não houve publicação da API nem alteração do banco.
+
+## Áudios, anexos e vínculos — 12/10/2026
+
+APK atualizado: [ZippyBoy-vinculos-audios-2026-10-12.apk](C:/Users/farle/Downloads/ZippyBoy-vinculos-audios-2026-10-12.apk), também em `.expo/field-apk/`. Pacote `com.zippy.zippyboy`, ARM64, versão `1.0.0`, código `1`, release assinado com a chave local. 76.917.887 bytes; SHA-256 `745f72a31677598601b9dfd90c0b6e2a0345da5bc23d2d21f29ad010e394a046`. Assinatura, alinhamento de 16 KiB e bundle completo conferidos. Instalado no Xiaomi conectado com `adb install -r` e aberto; dados preservados.
+
+Corrige MIME de foto/áudio no Android, reabertura de anexos, preservação da gravação e controles de play/pausa com um toque. O usuário confirmou som nos dois áudios da fixture local; quatro ciclos de play/pausa passaram. A entrada de QA foi retirada do pacote completo entregue. O início sem vínculo segue o padrão visual do projeto. **Login sem vínculo e conversão adicional do áudio do cliente ainda dependem da publicação da API atualizada.** Nenhum deploy nesta rodada. Registro e limites em [VINCULOS-E-ANEXOS.md](VINCULOS-E-ANEXOS.md).
+
+## Preview — online, ofertas e navegação — 11/10/2026
+
+`eas build --platform android --profile preview` concluído com sucesso: [419e8012-6d80-4417-a9cf-f7eef3eab8ce](https://expo.dev/accounts/farleyedu/projects/zippygo-motoboy/builds/419e8012-6d80-4417-a9cf-f7eef3eab8ce). Perfil `preview`, ambiente de produção, pacote `com.farleyedu.zippygomotoboy`, versão `1.0.0`, código `16`, SDK mínimo 24/alvo 36 e quatro arquiteturas. APK sem `debuggable`, com JavaScript e assets próprios, sem precisar de Metro/rede do computador.
+
+**Atualização compatível com os APKs locais anteriores:** [ZippyGo-online-ofertas-preview-2026-10-11.apk](C:/Users/farle/Downloads/ZippyGo-online-ofertas-preview-2026-10-11.apk), também em `.expo/field-apk/`. Assinado com a mesma chave local anterior; certificado SHA-256 `fac61745dc0903786fb9ede62a962b399f7348f0bb6f899b8332667591033b9c`. Permite atualizar essa instalação sem desinstalar. Arquivo com 165.012.258 bytes, SHA-256 `cd7bab298840370093fb74e4e86cd8bc577001d1e1a1c98e9926bb32d7d98ef6`.
+
+**APK original EAS:** `.expo/field-apk/ZippyGo-preview-419e8012-eas.apk` e link de instalação no build acima. Assinatura remota `875d3b92005288b191c58539d49a0f58376f3d148943b096049c3799f4197d74`; usar para atualizar instalações com essa assinatura. Arquivo com 164.751.855 bytes, SHA-256 `8fc0748e39a095eab4ac58294ff89efbb6fbf418aad482374b6cba4bc564d47a`. Assinaturas diferentes não atualizam a mesma instalação: para a versão local anterior, usar a cópia compatível.
+
+Bundle idêntico nas duas cópias: SHA-256 `4e9961fabd3994727e5766b17e12d40c92d8381d71853d2dfab9d3e3c53f2cbe`. Conferidos assinatura, alinhamento ZIP de 16 KiB, manifest, recursos Firebase correspondentes ao `google-services.json` local, provider/serviço FCM, permissão de notificações, consultas Maps/Waze e novas correções presentes no bundle. Relatório privado local em `.expo/field-apk/preview-validation.json`. Cópia em Downloads conferida por hash. Nenhum aparelho conectado na verificação final; não instalado nem homologado em navegação/push físico nesta rodada.
+
+Inclui retomada automática, aviso prioritário com reserva/confirmação/retry, ocultar/reabrir com prazo e seleção preservados, aceite com mapa e ganhos, escolha de navegador após retirada e destinos sem repetição no navegador. 63 testes Node, TypeScript, web de produção e 36 cenários por navegador passaram; 78 testes relacionados da API haviam passado. Os prints temporários desta rodada foram apagados.
+
+**Backend ainda precisa de publicação/migrations** para conservar disponibilidade/login em produção; o APK sozinho não muda o timeout da API antiga. Push web precisa das variáveis VAPID no servidor. Decisões e roteiro de homologação: [OFERTAS-PRIORITARIAS.md](OFERTAS-PRIORITARIAS.md), [DISPONIBILIDADE-E-OFERTAS.md](../../motoboyBackEnd/docs/DISPONIBILIDADE-E-OFERTAS.md). Não houve commit/push ou deploy da API/web pelo agente nesta rodada.
+
 ## Build EAS — correção de 11/10/2026
 
 O build `a88f9ea6-65c0-47b1-94b8-12396fbaaf89` falhou ao configurar o Gradle: o diretório da biblioteca de navegação apareceu como `/home/expo/workingdir/build/android/C:/Users/farle/...`. O arquivo `android/build/generated/autolinking/autolinking.json`, gerado no Windows, entrou no pacote enviado ao Linux.
@@ -42,7 +70,7 @@ No Xiaomi conectado, o Android recusou as duas primeiras tentativas por ADB com 
 - API: `https://zippy-api.onrender.com`.
 - Ambiente: `EXPO_PUBLIC_APP_ENV=production`.
 - Simulações de navegador e logs detalhados da API desativados.
-- Identificador Android: `com.farleyedu.zippygomotoboy`.
+- Identificador Android: `com.zippy.zippyboy`.
 - Arquitetura: `arm64-v8a`, compatível com o Xiaomi conectado. Este APK exige um Android com suporte a ARM64.
 - Versão: `1.0.0`, código `1`, Android mínimo API 24 e alvo API 36.
 - Assinatura: chave local de teste já configurada no projeto; este pacote é para instalação direta.

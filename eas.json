@@ -22,9 +22,16 @@
       }
     },
     "production": {
+      "environment": "production",
+      "env": {
+        "EXPO_PUBLIC_APP_ENV": "production",
+        "EXPO_PUBLIC_API_BASE_URL": "https://zippy-api.onrender.com",
+        "EXPO_PUBLIC_BROWSER_MOCKS": "false",
+        "EXPO_PUBLIC_API_DEBUG": "false"
+      },
       "distribution": "store",
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
       },
       "autoIncrement": true
     }

@@ -181,7 +181,8 @@ export function OperationalSessionProvider({ children }: { children: React.React
     }
     if (!(await store.end('logout'))) throw new Error(store.getSnapshot().error || 'Não foi possível encerrar o turno. Seu acesso foi mantido.');
   }), [store]);
-  const value: Value = { ...state, store, routeNotice, setRouteNotice, clearRouteNotice: () => setRouteNotice(null), transferNotice, setTransferNotice, deferredOfferId, deferOffer: () => setDeferredOfferId(state.queue?.offer?.offerId || null), showOffer: () => setDeferredOfferId(null), online: !!state.session && !['offline', 'expired', 'ending'].includes(state.phase), busy: ['restoring', 'starting', 'ending'].includes(state.phase) };
+  // Identidade estável: só quem lê o que mudou volta a renderizar (antes cada batimento renderizava o app inteiro).
+  const value = useMemo<Value>(() => ({ ...state, store, routeNotice, setRouteNotice, clearRouteNotice: () => setRouteNotice(null), transferNotice, setTransferNotice, deferredOfferId, deferOffer: () => setDeferredOfferId(state.queue?.offer?.offerId || null), showOffer: () => setDeferredOfferId(null), online: !!state.session && !['offline', 'expired', 'ending'].includes(state.phase), busy: ['restoring', 'starting', 'ending'].includes(state.phase) }), [state, store, routeNotice, transferNotice, deferredOfferId]);
   return <OperationalContext.Provider value={value}>{children}</OperationalContext.Provider>;
 }
 export function useOperationalSession() {

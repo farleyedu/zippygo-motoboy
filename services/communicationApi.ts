@@ -226,10 +226,22 @@ export async function chatAttachmentData(
   const response = await apiClient.get(path, {
     responseType: 'blob',
   });
+  if (response.status < 200 || response.status >= 300) {
+    throw new Error('Não foi possível abrir o anexo. Tente novamente.');
+  }
+  const blob = response.data as Blob;
+  if (!blob.size) throw new Error('O anexo está vazio. Tente novamente.');
+  // No Android, o Blob/FileReader pode devolver application/octet-stream mesmo
+  // quando a API informou o tipo real. Preservar o MIME do download permite
+  // salvar a foto/áudio com a extensão correta e carregar no player nativo.
+  const contentType = String(response.headers?.['content-type'] || blob.type).split(';')[0].trim().toLowerCase();
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(new Error('Nao foi possivel abrir o anexo.'));
-    reader.onload = () => resolve(String(reader.result));
-    reader.readAsDataURL(response.data as Blob);
+    reader.onload = () => {
+      const data = String(reader.result);
+      resolve(contentType ? data.replace(/^data:[^,]*;base64,/, `data:${contentType};base64,`) : data);
+    };
+    reader.readAsDataURL(blob);
   });
 }

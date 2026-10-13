@@ -1,7 +1,7 @@
 // Valida o bundle real com API e áudio WAV controlados; não acessa pedidos reais.
-const { chromium, webkit } = require('playwright');
+const { chromium, webkit } = require(process.env.QA_PLAYWRIGHT_MODULE || 'playwright');
 const assert = require('node:assert/strict'), fs = require('node:fs'), path = require('node:path'), http = require('node:http');
-const engine = process.env.QA_BROWSER || 'chromium', dist = path.resolve(__dirname, '../../dist');
+const engine = process.env.QA_BROWSER || 'chromium', dist = path.resolve(process.env.QA_DIST || path.join(__dirname, '../../dist'));
 const shop = { id: '11111111-1111-4111-8111-111111111111', nome: 'Loja QA' }, user = { id: '7', nome: 'Motoboy QA', role: 'motoboy' };
 const session = { sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', epoch: 1, origin: 'mobile', clientPlatform: 'web', startedAtUtc: new Date().toISOString(), isEnded: false, version: 1, heartbeatIntervalSeconds: 25, presenceExpiresAtUtc: new Date(Date.now() + 43200000).toISOString() };
 const wav = Buffer.alloc(44 + 16000 * 2 * 8); wav.write('RIFF'); wav.writeUInt32LE(wav.length - 8, 4); wav.write('WAVEfmt ', 8); wav.writeUInt32LE(16, 16); wav.writeUInt16LE(1, 20); wav.writeUInt16LE(1, 22); wav.writeUInt32LE(16000, 24); wav.writeUInt32LE(32000, 28); wav.writeUInt16LE(2, 32); wav.writeUInt16LE(16, 34); wav.write('data', 36); wav.writeUInt32LE(wav.length - 44, 40);
@@ -44,7 +44,7 @@ async function checkVoice(id) {
   return voice;
 }
 (async () => {
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); base = `http://127.0.0.1:${server.address().port}`;
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); base = process.env.QA_BASE_URL || `http://127.0.0.1:${server.address().port}`;
   browser = await (engine === 'webkit' ? webkit.launch() : chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' }));
   for (const dark of [false, true]) for (const width of [320, 390]) {
     const context = await browser.newContext({ viewport: { width, height: 1000 }, permissions: ['geolocation'], geolocation: { latitude: -18.92, longitude: -48.24 }, reducedMotion: 'reduce' });

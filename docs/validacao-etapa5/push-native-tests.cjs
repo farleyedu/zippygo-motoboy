@@ -7,6 +7,7 @@ const results = [];
 const settings = { sound: true, vibration: true, muted: false, mentionAlerts: true };
 function fixture(options = {}) {
   const calls = [], channels = [];
+  const storage = options.storage || new Map();
   let permission = options.permission || { granted: false, canAskAgain: true, status: 'undetermined' };
   const notifications = {
     AndroidImportance: { HIGH: 4, DEFAULT: 3 },
@@ -24,6 +25,10 @@ function fixture(options = {}) {
     getExpoPushTokenAsync: async () => { calls.push('token'); return { data: 'ExpoPushToken[test]' }; },
   };
   const modules = {
+    '@react-native-async-storage/async-storage': { __esModule: true, default: {
+      getItem: async key => storage.get(key) ?? null,
+      setItem: async (key, value) => { storage.set(key, value); },
+    } },
     'react-native': { Platform: { OS: options.platform || 'android' } },
     'expo-notifications': notifications,
     '../../services/apiService': { apiClient: { put: async () => { calls.push('put'); return {}; } } },
@@ -35,22 +40,34 @@ function fixture(options = {}) {
     './browserNativeTest': { browserNativeTest: !!options.browserMock, reportBrowserMock: () => calls.push('mock') },
     './expoGo': { expoGo: false },
   };
-  const source = fs.readFileSync(path.join(root, options.operational ? 'services/operationalPermissions.ts' : 'src/chat/push.ts'), 'utf8');
-  const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
-  const module = { exports: {} };
-  new Function('module', 'exports', 'require', js)(module, module.exports, name => {
-    assert.ok(name in modules, name);
-    return modules[name];
-  });
-  return { ...module.exports, calls, channels };
+  const webPush = {
+    registerWebOfferPush: async () => calls.push('web-register'),
+    requestWebNotificationPermission: async () => { calls.push('web-request'); return 'unsupported'; },
+    webNotificationPermission: () => ({ granted: false }),
+  };
+  modules['../../services/webOfferPush'] = modules['./webOfferPush'] = webPush;
+  modules['./webLocationPermission'] = {};
+  const load = file => {
+    const source = fs.readFileSync(path.join(root, file), 'utf8');
+    const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
+    const module = { exports: {} };
+    new Function('module', 'exports', 'require', js)(module, module.exports, name => {
+      assert.ok(name in modules, name);
+      return modules[name];
+    });
+    return module.exports;
+  };
+  const prompt = load('services/notificationPermissionPrompt.ts');
+  modules['../../services/notificationPermissionPrompt'] = modules['./notificationPermissionPrompt'] = prompt;
+  return { ...load(options.operational ? 'services/operationalPermissions.ts' : 'src/chat/push.ts'), calls, channels, storage };
 }
 async function test(name, work) { await work(); results.push(name); console.log('OK ' + name); }
 (async () => {
-  await test('Web nao solicita permissao nem registra push', async () => {
+  await test('Web delega permissao e registro ao push PWA sem chamar SDK Android', async () => {
     const f = fixture({ platform: 'web' });
     assert.equal(await f.ensureChatNotificationPermission(true), 'unsupported');
     await f.registerChatPush('current', settings);
-    assert.deepEqual(f.calls, []);
+    assert.deepEqual(f.calls, ['web-request', 'web-register']);
   });
   await test('Web de teste libera permissao mock sem gerar token ou HTTP', async () => {
     const f = fixture({ platform: 'web', browserMock: true });
@@ -88,8 +105,25 @@ async function test(name, work) { await work(); results.push(name); console.log(
     assert.equal(f.calls.filter(c => c === 'request').length, 1);
     assert.equal(f.calls.includes('token'), false);
   });
-  await test('Pedido explicito pode tentar novamente quando sistema permite', async () => {
+  await test('Android com status denied antes do primeiro pedido solicita e registra push', async () => {
     const f = fixture({ permission: { granted: false, canAskAgain: true, status: 'denied' } });
+    await f.registerChatPush('current', settings);
+    assert.equal(f.calls.filter(c => c === 'request').length, 1);
+    assert.equal(f.calls.at(-1), 'put');
+  });
+  await test('Negativa persiste apos reiniciar o app e nao provoca outro pedido automatico', async () => {
+    const denied = { granted: false, canAskAgain: true, status: 'denied' };
+    const first = fixture({ permission: denied, answer: denied });
+    await first.registerChatPush('current', settings);
+    const restarted = fixture({ permission: denied, storage: first.storage });
+    await restarted.registerChatPush('current', settings);
+    assert.equal(first.calls.filter(c => c === 'request').length, 1);
+    assert.equal(restarted.calls.includes('request'), false);
+    assert.equal(restarted.calls.includes('token'), false);
+  });
+  await test('Pedido explicito pode tentar novamente quando sistema permite', async () => {
+    const f = fixture({ permission: { granted: false, canAskAgain: true, status: 'denied' },
+      storage: new Map([['zippygo.notifications.permission-requested.v1', '1']]) });
     assert.equal(await f.ensureChatNotificationPermission(), 'denied');
     assert.equal(await f.ensureChatNotificationPermission(true), 'granted');
     assert.equal(f.calls.filter(c => c === 'request').length, 1);
@@ -124,6 +158,23 @@ async function test(name, work) { await work(); results.push(name); console.log(
     const f = fixture({ operational: true, platform: 'ios' });
     await f.askOperationalPermission('notifications');
     assert.deepEqual(f.calls, ['request']);
+  });
+  await test('Negativa na preparacao tambem impede pedido automatico no turno', async () => {
+    const denied = { granted: false, canAskAgain: true, status: 'denied' };
+    const preparation = fixture({ operational: true, answer: denied });
+    await preparation.askOperationalPermission('notifications');
+    const turn = fixture({ permission: denied, storage: preparation.storage });
+    await turn.registerChatPush('current', settings);
+    assert.equal(turn.calls.includes('request'), false);
+    assert.equal(turn.calls.includes('put'), false);
+  });
+  await test('Registro periodico reutiliza token e so envia configuracao alterada', async () => {
+    const f = fixture();
+    await f.registerChatPush('current', settings);
+    await f.registerChatPush('current', settings);
+    await f.registerChatPush('current', { ...settings, sound: false });
+    assert.equal(f.calls.filter(c => c === 'token').length, 1);
+    assert.equal(f.calls.filter(c => c === 'put').length, 2);
   });
   await test('WAV nativo corresponde ao asset e contratos usam nomes validos', () => {
     const config = fs.readFileSync(path.join(root, 'app.config.ts'), 'utf8');

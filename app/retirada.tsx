@@ -14,11 +14,12 @@ import { pickUpCurrent, resumeQueue } from '../services/mobileApi';
 import { useRouteAction } from '../src/hooks/useRouteAction';
 import { checklistItems } from '../src/delivery/checklistRules';
 import { ExtrasConfirmation } from '../src/ui/ExtrasConfirmation';
+import { operationalStage } from '../src/delivery/operationalDestination';
 
 export default function PickupScreen() {
   const turn = useOperationalSession(), router = useRouter(), { colors } = useZippyTheme();
   const stops = activeStops(turn.queue), data = useChecklistOrders(stops.map(s => s.pedidoId)), checks = useOrderChecklists(data.orders, 'pickup');
-  const ready = !data.loading && !data.error && data.orders.length === stops.length && checks.primaryReady;
+  const ready = operationalStage(turn.queue) === 'pickup' && !data.loading && !data.error && data.orders.length === stops.length && checks.primaryReady;
   const action = useRouteAction(), [showExtras, setShowExtras] = useState(false), [confirming, setConfirming] = useState(false), pending = useRef(false);
   const hasExtras = data.orders.some(order => checklistItems(order.checklist).some(item => item.extra));
   const activation = useRef('');
@@ -30,7 +31,7 @@ export default function PickupScreen() {
       const confirmations = hasExtras ? await checks.confirmExtras() : checks.confirmations;
       if (!confirmations) return;
       const queue = turn.store.getSnapshot().queue;
-      if (!queue?.current) return;
+      if (!queue?.current || operationalStage(queue) !== 'pickup') return;
       await action.run(() => pickUpCurrent({ expectedPedidoId: queue.current!.pedidoId, expectedVersion: queue.version, pedidoIds: data.orders.map(order => order.id), checklists: confirmations }),
         () => { setShowExtras(false); router.replace({ pathname: '/mapa', params: { navegar: 'escolher' } }); });
     } finally { pending.current = false; setConfirming(false); }

@@ -25,7 +25,7 @@ import { WebViewport } from '@/src/ui/WebViewport';
 import { NativeNavigationProvider } from '@/src/delivery/NativeNavigationProvider';
 import { OfferPrompt } from '@/src/ui/OfferPrompt';
 import { configureChatChannels } from '@/src/chat/push';
-import { operationalDestination } from '@/src/delivery/operationalDestination';
+import { operationalDestination, operationalPageRedirect } from '@/src/delivery/operationalDestination';
 
 import '../components/locationTask';
 
@@ -92,9 +92,15 @@ function RootLayoutNav() {
   const notificationClaims = useRef(new Map<string, { sessionId: string; offerId: string }>());
   const hiddenOffer = useRef(turn.deferredOfferId); hiddenOffer.current = turn.deferredOfferId;
   const resumeHandled = useRef('');
-  const routeParams = useGlobalSearchParams<{ intent?: string }>();
+  const routeParams = useGlobalSearchParams<{ intent?: string; id?: string }>();
   const owner = `${auth.user?.id}:${auth.estabelecimentoAtual && ('id' in auth.estabelecimentoAtual ? auth.estabelecimentoAtual.id : auth.estabelecimentoAtual.estabelecimentoId)}`;
   useOfferNoticeCleanup();
+  useEffect(() => {
+    if (!navigation?.key || auth.isLoading || completion.loading || turn.busy || !turn.online || !turn.queue || !auth.estabelecimentoAtual) return;
+    if (['pending', 'sending'].includes(completion.draft?.phase || '')) return;
+    const destination = operationalPageRedirect(turn.queue, current, routeParams.id, Platform.OS);
+    if (destination) router.replace(destination);
+  }, [navigation?.key, auth.isLoading, completion.loading, completion.draft?.phase, turn.busy, turn.online, turn.queue, current, routeParams.id, auth.estabelecimentoAtual]);
   useEffect(() => {
     if (!navigation?.key || auth.isLoading || completion.loading || !auth.user || !auth.estabelecimentoAtual || turn.busy || !turn.permissions) return;
     const gateway = ['index', 'permissoes', 'sessaoEncerrada'].includes(current);
@@ -193,7 +199,7 @@ function RootLayoutNav() {
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false, animation: 'fade', animationDuration: 180, freezeOnBlur: true }}>
         <Stack.Screen name="permissoes" options={{ headerShown: false }} />
         <Stack.Screen name="permissaoNegada" options={{ headerShown: false }} />
         <Stack.Screen name="sessaoEncerrada" options={{ headerShown: false }} />
@@ -225,6 +231,7 @@ function RootLayoutNav() {
             headerShown: false,
             presentation: 'transparentModal',
             animation: 'fade',
+            freezeOnBlur: false,
             contentStyle: { backgroundColor: 'transparent' },
             statusBarTranslucent: true,
           }}

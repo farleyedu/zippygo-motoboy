@@ -38,14 +38,53 @@
     {
       "dark": false,
       "case": "Falha mantém conclusão e fila; mapa permanece consultável; sincronização única reutiliza operação"
+    },
+    {
+      "dark": false,
+      "case": "Revisão de permissões já concedidas fecha direto, sem iniciar turno; som e vibração ficam nas configurações"
+    },
+    {
+      "dark": false,
+      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura; a conversa não mostra a barra de abas, como no WhatsApp"
+    },
+    {
+      "dark": false,
+      "case": "Chat de cliente com 25 mensagens mantém última mensagem e caixa de texto acima do teclado"
+    },
+    {
+      "dark": false,
+      "case": "Permissão negada informa ajuste, verifica GPS real e permite retornar ao turno"
+    },
+    {
+      "dark": false,
+      "case": "Reabertura retoma mapa; rota completa e detalhes inline preservam a instância do mapa"
+    },
+    {
+      "dark": false,
+      "case": "Pins com numeração legível e próxima parada destacada cabem inteiros no mapa do início"
+    },
+    {
+      "dark": false,
+      "case": "Oferta aparece no chat, exige aceite e preserva tela e rascunho"
+    },
+    {
+      "dark": false,
+      "case": "Recusa pede confirmação inline, envia identidade da oferta e preserva chat"
     }
   ],
   "errors": [],
   "failure": {
-    "error": "page.waitForURL: Timeout 45000ms exceeded.\n=========================== logs ===========================\nwaiting for navigation to \"**/configuracoes\" until \"load\"\n  navigated to \"http://127.0.0.1:57715/permissoes?intent=review&returnTo=%2Fconfiguracoes&qaOffline=1\"\n  navigated to \"http://127.0.0.1:57715/permissoes?intent=review&returnTo=%2Fconfiguracoes&qaOffline=1\"\n============================================================",
-    "text": "Permissão necessária\nAjuste somente o que falta.\nSeu caminho,\nsempre conectado.\nConfira as permissões antes de começar. A loja acompanha sua localização somente durante o turno online.\nLoja QA\nLocalização com o ZippyGo aberto\nAo abrir ou voltar, atualizamos sua posição. No Maps/Waze ou com a tela bloqueada, a loja vê a última localização e há quanto tempo ela foi capturada. Sua entrega continua.\nA localização para o cliente é uma preferência separada. As notificações não bloqueiam seu turno.\nSair da conta\nVoltar",
-    "checkboxes": [],
-    "drafts": {},
+    "error": "locator.waitFor: Timeout 45000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByText('3 · #31 · Cliente 31', { exact: true }) to be visible\u001b[22m\n",
+    "text": "1\n2\n Leaflet | © OpenStreetMap\nSua rota · 2 paradas\nSua rota · 2 pedidos\nPRÓXIMA ENTREGA\nPedido #23\n1ª parada\nCliente 23\nRua QA, 123\nIniciar modo rota\nConferir pedido\nInício\nRota\nChat\nGanhos\nPerfil\nSua rota, de perto\n2 paradas · toque em um pedido\nO mapa mostra a sequência. O percurso pelas ruas abre no Google Maps.\n1\n#23 · Cliente 23\nRua QA, 123\nPróxima entrega\nPago online\n2\n#24 · Cliente 24\nRua QA, 123\nNa sequência\nReceber R$ 30,00\n1\n2\n3\n4\n Leaflet | © OpenStreetMap\n2 paradas\nOcultar\nNova rota\n0:15 para responder\nVOCÊ GANHA\nR$ 20,00\n1,6 km\ndistância\n2\nentregas\n11 min\ntempo aprox.\nR$ 12,88\npor km\nCada valor é gerado ao concluir o pedido. Distâncias em linha reta; o caminho pelas ruas pode ser maior.\nSEU CAMINHO · desmarque o que não quiser\nRetirada · Loja QA\nPonto de coleta da loja\n1\n#31 · Cliente 31\nR$ 8,00\nRua da oferta, 31\n0,7 km da loja\nPago online\n2\n#32 · Cliente 32\nR$ 12,00\nRua da oferta, 32\n0,8 km da anterior\nPago online\nAceitar 2 pedidos · R$ 20,00\nRecusar",
+    "inputs": [],
+    "checkboxes": [
+      "<div aria-label=\"Selecionar pedido #31\" role=\"checkbox\" tabindex=\"0\" class=\"css-g5y9jx r-1loqt21 r-1otgn73 r-1awozwy r-1777fci r-1kz6sp\"><div class=\"css-g5y9jx r-1awozwy r-1dedoh8 r-1rf8fdq r-1k25im9 r-1777fci r-19tjxh9\" style=\"background-color: rgb(48, 108, 223); border-color: rgb(48, 108, 223);\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M20 6 9 17l-5-5\"></path></svg></div></div>",
+      "<div aria-label=\"Selecionar pedido #32\" role=\"checkbox\" tabindex=\"0\" class=\"css-g5y9jx r-1loqt21 r-1otgn73 r-1awozwy r-1777fci r-1kz6sp\"><div class=\"css-g5y9jx r-1awozwy r-1dedoh8 r-1rf8fdq r-1k25im9 r-1777fci r-19tjxh9\" style=\"background-color: rgb(48, 108, 223); border-color: rgb(48, 108, 223);\"><svg xmlns=\"http://www.w3.org/2000/svg\" width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path fill=\"none\" stroke=\"#ffffff\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\" d=\"M20 6 9 17l-5-5\"></path></svg></div></div>"
+    ],
+    "drafts": {
+      "zippygo.chat.draft.v2:7:11111111-1111-4111-8111-111111111111:client:23": "Teste com cliente",
+      "zippygo.chat.draft.v2:7:11111111-1111-4111-8111-111111111111:store:undefined:undefined": "{\"version\":1,\"body\":\"Conversa preservada\",\"mentions\":[]}"
+    },
     "calls": [
       {
         "p": "/api/motoboys/me/vinculos",
@@ -56,8 +95,8 @@
         "p": "/api/v2/motoboys/me/session/start",
         "method": "POST",
         "body": {
-          "attemptId": "70add0ee-1822-4d72-a142-99969d4da38d",
-          "clientInstanceId": "35d136cd-d490-41f6-83e7-8e1982af1e69",
+          "attemptId": "d0d4d5bd-492c-478c-9cca-2b4c050dc726",
+          "clientInstanceId": "c5b75dda-b358-4916-adf6-c3ad81508d07",
           "clientPlatform": "web"
         }
       },
@@ -85,6 +124,25 @@
         "p": "/api/v2/motoboys/me/session/orders/24",
         "method": "GET",
         "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:20:28.508Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "4da98eab-3d45-4656-9429-ea9e23f935c9",
+              "sequence": 1
+            }
+          ]
+        }
       },
       {
         "p": "/api/motoboys/me/vinculos",
@@ -132,6 +190,25 @@
         "body": null
       },
       {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:20:30.742Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "online_idle",
+              "sampleId": "c27b242a-211d-4816-b729-117ceadf3aed",
+              "sequence": 2
+            }
+          ]
+        }
+      },
+      {
         "p": "/api/v2/motoboys/me/session/orders/23",
         "method": "GET",
         "body": null
@@ -150,6 +227,25 @@
         "p": "/api/v2/motoboys/me/session/queue",
         "method": "GET",
         "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:20:30.742Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "f8485846-ee28-4ac4-8f79-783587ea834d",
+              "sequence": 3
+            }
+          ]
+        }
       },
       {
         "p": "/api/motoboys/me/vinculos",
@@ -270,6 +366,16 @@
       },
       {
         "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/23",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/24",
         "method": "GET",
         "body": null
       },
@@ -395,15 +501,15 @@
         "body": {
           "samples": [
             {
-              "capturedAtUtc": "2026-10-11T17:34:00.854Z",
+              "capturedAtUtc": "2026-10-12T02:20:39.962Z",
               "latitude": -18.92,
               "longitude": -48.24,
               "accuracyMeters": 0,
               "speedMps": null,
               "headingDegrees": null,
               "trackingMode": "active_route",
-              "sampleId": "035ac83c-097e-4dfc-a51e-cc886d0229d7",
-              "sequence": 1
+              "sampleId": "f64a556b-167f-4892-9a55-ec3060ea2a88",
+              "sequence": 4
             }
           ]
         }
@@ -552,10 +658,29 @@
         "body": null
       },
       {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:20:42.919Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "b2eaba8c-d987-4c4d-b175-7e2afbf57bfd",
+              "sequence": 5
+            }
+          ]
+        }
+      },
+      {
         "p": "/api/v2/motoboys/me/session/completion",
         "method": "POST",
         "body": {
-          "operationId": "8c9747c5-7452-4c7d-bb90-a9418719b761",
+          "operationId": "cb2d7b8f-fe65-4abc-895b-ac211933aaa8",
           "expectedPedidoId": 23,
           "expectedVersion": 3,
           "payments": [],
@@ -708,7 +833,7 @@
         "p": "/api/v2/motoboys/me/session/completion",
         "method": "POST",
         "body": {
-          "operationId": "00fcf6b8-e636-475f-a480-542973b3b136",
+          "operationId": "d07bba5a-ab53-4261-b79b-c47ff17175fd",
           "expectedPedidoId": 23,
           "expectedVersion": 3,
           "payments": [
@@ -802,7 +927,7 @@
         "p": "/api/v2/motoboys/me/session/completion",
         "method": "POST",
         "body": {
-          "operationId": "0d42f81d-fa8e-4f39-bc14-cc20dd9c26c9",
+          "operationId": "c7c479ca-8acf-45b0-b9cd-5ae91f5391ee",
           "expectedPedidoId": 23,
           "expectedVersion": 3,
           "payments": [],
@@ -818,7 +943,7 @@
         }
       },
       {
-        "p": "/api/motoboys/me/receipts/0d42f81d-fa8e-4f39-bc14-cc20dd9c26c9",
+        "p": "/api/motoboys/me/receipts/c7c479ca-8acf-45b0-b9cd-5ae91f5391ee",
         "method": "GET",
         "body": null
       },
@@ -826,7 +951,7 @@
         "p": "/api/v2/motoboys/me/session/completion",
         "method": "POST",
         "body": {
-          "operationId": "0d42f81d-fa8e-4f39-bc14-cc20dd9c26c9",
+          "operationId": "c7c479ca-8acf-45b0-b9cd-5ae91f5391ee",
           "expectedPedidoId": 23,
           "expectedVersion": 3,
           "payments": [],
@@ -843,6 +968,471 @@
       },
       {
         "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/contacts",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/store/messages",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/store/read",
+        "method": "POST",
+        "body": {
+          "through": 25
+        }
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/transfers",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/23/client-chat",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/23/client-chat",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/23/client-chat",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/transfers",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:21:05.124Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "8e5d2acb-06be-44b7-b201-e04f5b0ca0a2",
+              "sequence": 6
+            }
+          ]
+        }
+      },
+      {
+        "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/transfers",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/transfers",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:21:10.200Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": null,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "e0fee305-3464-4bd7-b04f-82c263f2966c",
+              "sequence": 7
+            },
+            {
+              "capturedAtUtc": "2026-10-12T02:21:10.532Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "4f924b55-c205-4f6e-ad27-b6740bd8f96f",
+              "sequence": 8
+            }
+          ]
+        }
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/23",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/24",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/orders/23",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/contacts",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/store/messages",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/store/read",
+        "method": "POST",
+        "body": {
+          "through": 25
+        }
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/store",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/transfers",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:21:13.840Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "935dc70b-837d-423b-999d-2c216b7f110c",
+              "sequence": 9
+            }
+          ]
+        }
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue/offer/accept",
+        "method": "POST",
+        "body": {
+          "expectedOfferId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          "expectedVersion": 7,
+          "acceptedPedidoIds": [
+            31
+          ]
+        }
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/store",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue/offer/reject",
+        "method": "POST",
+        "body": {
+          "motivo": "Recusada pelo motoboy",
+          "expectedOfferId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+        }
+      },
+      {
+        "p": "/api/motoboys/me/vinculos",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/transfers",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/location/batch",
+        "method": "POST",
+        "body": {
+          "samples": [
+            {
+              "capturedAtUtc": "2026-10-12T02:21:16.816Z",
+              "latitude": -18.92,
+              "longitude": -48.24,
+              "accuracyMeters": 0,
+              "speedMps": null,
+              "headingDegrees": null,
+              "trackingMode": "active_route",
+              "sampleId": "b310d488-498f-4735-9e34-3e32a99fcb31",
+              "sequence": 10
+            }
+          ]
+        }
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/heartbeat",
+        "method": "POST",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/store",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/chat/notifications",
+        "method": "GET",
+        "body": null
+      },
+      {
+        "p": "/api/v2/motoboys/me/session/queue",
         "method": "GET",
         "body": null
       }

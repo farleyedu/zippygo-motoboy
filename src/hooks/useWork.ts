@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { getWork, type Work, type WorkPeriod } from '../../services/workApi';
 import { useAuth } from '../contexts/AuthContext';
+import { peekResource, putResource } from './resourceCache';
 
 export function useWork(period: WorkPeriod): { data?: Work; error?: string; loading: boolean; store: string; refresh: () => void } {
   const auth = useAuth(), focused = useIsFocused();
@@ -14,11 +15,13 @@ export function useWork(period: WorkPeriod): { data?: Work; error?: string; load
   useEffect(() => {
     if (!focused) return;
     const controller = new AbortController();
-    setState({ key, loading: !!store });
+    const cached = peekResource<Work>('work:' + key);
+    setState({ key, data: cached, loading: !!store && !cached });
     if (!store) { setState({ key, loading: false, error: 'Escolha um estabelecimento para consultar seu trabalho.' }); return; }
-    getWork(store, period, controller.signal).then(data => { if (!controller.signal.aborted) setState({ key, data, loading: false }); }).catch(e => { if (!controller.signal.aborted) setState({ key, error: e instanceof Error ? e.message : 'Não foi possível conectar. Tente novamente.', loading: false }); });
+    getWork(store, period, controller.signal).then(data => { if (!controller.signal.aborted) { putResource('work:' + key, data); setState({ key, data, loading: false }); } }).catch(e => { if (!controller.signal.aborted) setState({ key, error: e instanceof Error ? e.message : 'Não foi possível conectar. Tente novamente.', loading: false }); });
     return () => controller.abort();
   }, [key, store, period, revision, focused]);
-  const current = state.key === key ? state : undefined;
+  const cached = peekResource<Work>('work:' + key);
+  const current = state.key === key ? state : cached ? { key, data: cached, loading: false } : undefined;
   return { data: current?.data, error: current?.error, loading: current?.loading ?? true, store, refresh };
 }

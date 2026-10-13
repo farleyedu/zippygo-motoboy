@@ -8,8 +8,8 @@ export function useOperationalAccess() {
   useEffect(() => {
     if (!focused || auth.isLoading) return;
     if (!auth.user) router.replace('/(auth)/login');
-    else if (auth.needsLinkRequest) router.replace('/solicitarRestaurante');
+    else if (!auth.estabelecimentos.length) router.replace('/');
     else if (!auth.estabelecimentoAtual) router.replace('/selecionarRestaurante');
-  }, [focused, auth.isLoading, auth.user?.id, auth.needsLinkRequest, auth.estabelecimentoAtual, router]);
+  }, [focused, auth.isLoading, auth.user?.id, auth.estabelecimentos.length, auth.estabelecimentoAtual, router]);
   return !auth.isLoading && !!auth.user && !!auth.estabelecimentoAtual;
 }

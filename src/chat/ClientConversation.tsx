@@ -6,11 +6,11 @@ import React, {
   useState,
 } from 'react';
 import {
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   View,
@@ -27,12 +27,9 @@ import * as ImagePicker from 'expo-image-picker';
 import {
   ArrowLeft,
   Check,
-  CheckCheck,
+  Clock,
   Package,
-  Paperclip,
-  Reply,
   Search,
-  Send,
   Trash2,
   Heart,
   ThumbsUp,
@@ -50,19 +47,32 @@ import {
 import { createIdentifier } from '../../services/mobileApi';
 import { useAuth } from '../contexts/AuthContext';
 import { useOperationalSession } from '../contexts/OperationalSessionContext';
-import { AppNav } from '../ui/AccountKit';
+import { StatusBar } from 'expo-status-bar';
+import { dayLabel, sameDay, SwipeReply, useWa, WaChip, WaComposer, WaHeader, WaReplyBar, WaScrollFab } from './WaKit';
+import { previewKey, rememberPreview } from './chatPreview';
 import { ChatMessageActions } from './ChatMessageActions';
 import { ChatForwardSheet } from './ChatForwardSheet';
 import * as Haptics from 'expo-haptics';
-import { Avatar } from '../ui/Kit';
+import { SkeletonBubbles } from '../ui/Skeleton';
+
+// Última conversa vista por pedido: abre instantânea e confere a rede em seguida.
+const clientSnapshots = new Map<string, { data: ClientRichChat; messages: ClientRichChat['messages'] }>();
 import { useZippyTheme } from '../ui/theme';
 import { useKeyboardVisible } from '../hooks/useKeyboardVisible';
 import { AudioComposer, ChatMedia } from './ChatMedia';
 import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } from './MessageBubble';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
-import { isAppForeground, useAppForeground } from '../hooks/useAppForeground';
 import { browserNativeTest } from '../../services/browserNativeTest';
+import { subscribeChatEvents } from '../../services/chatEvents';
+import { isAppForeground, useAppForeground } from '../hooks/useAppForeground';
+
+// O aviso em tempo real (SignalR) traz a mensagem nova na hora; a busca periodica e so reserva
+// para quando a conexao em tempo real cai.
+const FALLBACK_POLL_MS = 30000;
+const sameMessages = (a: ClientRichChat['messages'], b: ClientRichChat['messages']) =>
+  a.length === b.length &&
+  a.every((m, i) => m.id === b[i].id && m.status === b[i].status && m.body === b[i].body && (m.reactions?.length ?? 0) === (b[i].reactions?.length ?? 0));
 
 const reasons: Record<string, string> = {
   ifood: 'Este cliente deve ser contatado pelo canal do iFood.',
@@ -77,7 +87,8 @@ export default function ClientConversation() {
     pedidoId = Number(params.pedidoId),
     router = useRouter(),
     insets = useSafeAreaInsets(),
-    { colors, dark } = useZippyTheme(),
+    theme = useZippyTheme(),
+    { colors, dark } = theme,
     auth = useAuth(),
     turn = useOperationalSession();
   const tenant =
@@ -90,12 +101,13 @@ export default function ClientConversation() {
     () => ({ channel: 'client', pedidoId }),
     [pedidoId],
   );
-  const [data, setData] = useState<ClientRichChat | null>(null),
-    [messages, setMessages] = useState<ClientRichChat['messages']>([]),
+  const scope = `${owner}:${turn.session?.sessionId}:${pedidoId}`, saved = clientSnapshots.get(scope);
+  const [data, setData] = useState<ClientRichChat | null>(() => saved?.data ?? null),
+    [messages, setMessages] = useState<ClientRichChat['messages']>(() => saved?.messages ?? []),
     [draft, setDraft] = useState(''),
     [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null),
     [error, setError] = useState(''),
-    [loading, setLoading] = useState(true),
+    [loading, setLoading] = useState(!saved),
     [refresh, setRefresh] = useState(0),
     [busy, setBusy] = useState(false),
     [search, setSearch] = useState(''),
@@ -110,8 +122,7 @@ export default function ClientConversation() {
   const [reacting, setReacting] = useState(false);
   const [forwarding, setForwarding] = useState<ClientRichChat['messages'][number] | null>(null);
   const loadedQuery = useRef('');
-  const scope = `${owner}:${turn.session?.sessionId}:${pedidoId}`,
-    live = useRef(scope);
+  const live = useRef(scope);
   live.current = scope;
   const scroll = useRef<ScrollView>(null),
     follow = useRef(true),
@@ -148,10 +159,17 @@ export default function ClientConversation() {
   }, [draftKey]);
   useEffect(() => {
     follow.current = true;
-    setMessages([]); setSelected(null); setForwarding(null); setReply(null);
-    setData(null); setSearch(''); setSearching(false); setLoading(true);
-    loadedQuery.current = '';
+    const hit = clientSnapshots.get(scope);
+    setMessages(hit?.messages ?? []); setSelected(null); setForwarding(null); setReply(null);
+    setData(hit?.data ?? null); setSearch(''); setSearching(false); setLoading(!hit);
+    loadedQuery.current = hit ? `${scope}:` : '';
   }, [scope]);
+  useEffect(() => {
+    if (data && messages.length && loadedQuery.current === `${scope}:`) {
+      if (clientSnapshots.size >= 30) clientSnapshots.delete(clientSnapshots.keys().next().value as string);
+      clientSnapshots.delete(scope); clientSnapshots.set(scope, { data, messages });
+    }
+  }, [data, messages, scope]);
   useEffect(() => {
     if (!keyboardVisible) return;
     follow.current = true;
@@ -198,8 +216,8 @@ export default function ClientConversation() {
                 }
               : result,
           );
-          setMessages((current) =>
-            Array.from(
+          setMessages((current) => {
+            const merged = Array.from(
               new Map(
                 [...(replace ? [] : current), ...result.messages].map((m) => [
                   m.id,
@@ -208,8 +226,10 @@ export default function ClientConversation() {
               ).values(),
             ).sort(
               (a, b) => Date.parse(a.createdAtUtc) - Date.parse(b.createdAtUtc),
-            ),
-          );
+            );
+            // Resposta igual a que ja esta na tela: mantem a mesma lista e evita redesenhar todas as bolhas.
+            return sameMessages(current, merged) ? current : merged;
+          });
           loadedQuery.current = query;
           setError('');
         } catch (e) {
@@ -223,22 +243,29 @@ export default function ClientConversation() {
         }
       };
       void load();
-      const timer = setInterval(() => void load(), 8000);
+      const timer = setInterval(() => void load(), FALLBACK_POLL_MS);
+      const unsubscribe = subscribeChatEvents((event) => {
+        if (event.channel === 'client' && event.threadKey === `client:${pedidoId}`) void load();
+      });
       return () => {
         alive = false;
         abort.abort();
         clearInterval(timer);
+        unsubscribe();
       };
     }, [scope, refresh, pedidoId, search, searching, foreground]),
   );
   const send = async (body = draft, file?: LocalChatFile) => {
-    if (sending.current || !ready || !data?.channel.podeReceber) return;
+    if (sending.current || !ready || !data?.channel.podeReceber) {
+      if (file) throw new Error('Aguarde a conversa ficar disponível para enviar o anexo.');
+      return;
+    }
     sending.current = true;
     setBusy(true);
     const before = live.current;
     try {
       const saved = file ? await retainChatFile(file) : undefined;
-      if (before !== live.current) return;
+      if (before !== live.current) throw new Error('A conversa mudou. Retome o envio do anexo.');
       await outbox.enqueue({
         target,
         request: {
@@ -258,6 +285,7 @@ export default function ClientConversation() {
       void outbox.flush().catch((e) => setError(String(e)));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Envio nao confirmado.');
+      if (file) throw e;
     } finally {
       sending.current = false;
       setBusy(false);
@@ -316,425 +344,170 @@ export default function ClientConversation() {
         entry.target.channel === 'client' && entry.target.pedidoId === pedidoId,
     ),
     name = data?.channel.clienteNome || `Cliente · #${pedidoId}`;
+  const wa = useWa();
+  const [atBottom, setAtBottom] = useState(true), [away, setAway] = useState(0), lastCount = useRef(0);
+  useEffect(() => {
+    const added = messages.length - lastCount.current; lastCount.current = messages.length;
+    if (added > 0 && !follow.current) setAway((count) => count + added);
+  }, [messages.length]);
+  useEffect(() => { rememberPreview(previewKey(owner, 'client', pedidoId), messages.at(-1), false); }, [messages, owner, pedidoId]);
+  const atEnd = () => { follow.current = true; setAtBottom(true); setAway(0); scroll.current?.scrollToEnd({ animated: !theme.reducedMotion }); };
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-      style={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#111c30' : colors.paper }}
+      style={{ flex: 1, minHeight: 0, backgroundColor: wa.wallpaper }}
     >
       <Stack.Screen options={{ headerShown: false }} />
-      <View
-        style={{
-          flex: 1,
-          minHeight: 0,
-          width: '100%',
-          maxWidth: 480,
-          alignSelf: 'center',
-          paddingTop: insets.top,
-        }}
-      >
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-            padding: 12,
-            backgroundColor: colors.card,
-          }}
-        >
-          <Pressable
-            accessibilityLabel="Voltar"
-            onPress={() => router.back()}
-            style={{ padding: 8 }}
-          >
-            <ArrowLeft size={18} color={colors.ink} />
-          </Pressable>
-          <Avatar name={name} />
-          <View style={{ flex: 1 }}>
-            <Text
-              style={{
-                fontFamily: 'Manrope',
-                fontSize: 12,
-                fontWeight: '800',
-                color: colors.ink,
-              }}
-            >
-              {name}
-            </Text>
-            <Text
-              style={{
-                fontFamily: 'Manrope',
-                fontSize: 9,
-                color: colors.muted,
-              }}
-            >
-              WhatsApp do estabelecimento
-            </Text>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <View style={{ flex: 1, minHeight: 0, width: '100%', maxWidth: 480, alignSelf: 'center' }}>
+        {searching ? (
+          <View style={{ paddingTop: insets.top, backgroundColor: wa.header, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: wa.divider }}>
+            <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Fechar busca" onPress={() => { setSearching(false); setSearch(''); }} style={{ width: 46, height: 48, alignItems: 'center', justifyContent: 'center' }}><ArrowLeft size={23} color={wa.ink} /></Pressable>
+              <TextInput accessibilityLabel="Buscar mensagens do cliente" autoFocus value={search} onChangeText={setSearch} placeholder="Pesquisar…" placeholderTextColor={wa.meta} selectionColor={wa.send}
+                style={{ flex: 1, minWidth: 0, fontFamily: 'Manrope', fontSize: 17, color: wa.ink, paddingVertical: 10, outlineStyle: 'none' } as never} />
+              {!!search && <Pressable accessibilityRole="button" accessibilityLabel="Limpar busca" onPress={() => setSearch('')} style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={20} color={wa.meta} /></Pressable>}
+            </View>
           </View>
-          <Pressable
-            accessibilityLabel="Buscar mensagens"
-            onPress={() => setSearching((v) => !v)}
-            style={{ padding: 8 }}
-          >
-            <Search size={18} color={colors.ink} />
-          </Pressable>
-          <Pressable accessibilityLabel={'Detalhes do pedido ' + pedidoId} onPress={() => router.push({ pathname: '/pedido/[id]', params: { id: String(pedidoId) } })} style={{ padding: 10, minHeight: 44 }}><Package size={19} color={colors.accent} /><Text style={{ color: colors.accent, fontSize: 9 }}>#{pedidoId}</Text></Pressable>
-        </View>
-        {searching && (
-          <TextInput
-            accessibilityLabel="Buscar mensagens do cliente"
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Buscar mensagens…"
-            placeholderTextColor={colors.muted}
-            style={{ padding: 12, color: colors.ink, fontSize: Platform.OS === 'web' ? 16 : undefined }}
+        ) : (
+          <WaHeader
+            title={name}
+            subtitle={`Cliente · pedido #${pedidoId}`}
+            avatar={name}
+            onBack={() => router.back()}
+            onTitle={() => router.push({ pathname: '/pedido/[id]', params: { id: String(pedidoId) } })}
+            actions={[
+              { icon: Search, label: 'Buscar mensagens', onPress: () => setSearching(true) },
+              { icon: Package, label: 'Detalhes do pedido ' + pedidoId, onPress: () => router.push({ pathname: '/pedido/[id]', params: { id: String(pedidoId) } }) },
+            ]}
           />
         )}
         {!!(error || queueError) && (
-          <Text
-            accessibilityRole="alert"
-            style={{ fontSize: 11, padding: 12, color: colors.danger }}
-          >
-            {error || queueError}
-          </Text>
+          <Text accessibilityRole="alert" style={{ fontFamily: 'Manrope', fontSize: 13.5, paddingVertical: 10, paddingHorizontal: 16, color: colors.danger, backgroundColor: colors.dangerSoft }}>{error || queueError}</Text>
         )}
         {data && !data.channel.podeReceber && (
           <View style={{ padding: 16, backgroundColor: colors.warningSoft }}>
-            <Text
-              style={{
-                fontFamily: 'Manrope',
-                fontSize: 15,
-                fontWeight: '800',
-                color: colors.ink,
-              }}
-            >
-              Vamos pelo canal certo.
-            </Text>
-            <Text
-              style={{
-                fontFamily: 'Manrope',
-                fontSize: 11,
-                lineHeight: 18,
-                color: colors.warning,
-                marginTop: 8,
-              }}
-            >
-              {reasons[data.channel.motivo || ''] ||
-                'Este canal nao permite envio.'}
-            </Text>
-            <Pressable
-              accessibilityLabel="Pedir ajuda a loja"
-              onPress={() =>
-                router.push({
-                  pathname: '/conversas',
-                  params: { channel: 'store', pedidoId: String(pedidoId) },
-                })
-              }
-              style={{ marginTop: 12 }}
-            >
-              <Text
-                style={{
-                  fontSize: 11,
-                  fontWeight: '800',
-                  color: colors.accent,
-                }}
-              >
-                Pedir ajuda à loja
-              </Text>
+            <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 15, color: colors.ink }}>Vamos pelo canal certo.</Text>
+            <Text style={{ fontFamily: 'Manrope', fontSize: 13.5, lineHeight: 20, color: colors.warning, marginTop: 6 }}>{reasons[data.channel.motivo || ''] || 'Este canal nao permite envio.'}</Text>
+            <Pressable accessibilityLabel="Pedir ajuda a loja" onPress={() => router.push({ pathname: '/conversas', params: { channel: 'store', pedidoId: String(pedidoId) } })} style={{ marginTop: 10, minHeight: 44, justifyContent: 'center' }}>
+              <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 14, color: colors.accent }}>Pedir ajuda à loja</Text>
             </Pressable>
           </View>
         )}
-        <ScrollView
-          ref={scroll}
-          style={{ flex: 1, minHeight: 0 }}
-          onLayout={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16, flexGrow: 1 }}
-          keyboardShouldPersistTaps="handled"
-          onScroll={(event) => {
-            const { contentOffset, contentSize, layoutMeasurement } =
-              event.nativeEvent;
-            follow.current =
-              contentSize.height - contentOffset.y - layoutMeasurement.height <
-              60;
-          }}
-          scrollEventThrottle={100}
-          onContentSizeChange={() => {
-            if (follow.current)
-              scroll.current?.scrollToEnd({ animated: false });
-          }}
-        >
-          {loading && <ActivityIndicator color={colors.accent} />}
-          {data?.hasMore && (
-            <Pressable
-              accessibilityLabel="Carregar mensagens anteriores"
-              onPress={() => void loadOlder()}
-              style={{ padding: 12, alignSelf: 'center' }}
-            >
-              <Text style={{ fontSize: 10, color: colors.accent }}>
-                {older ? 'Carregando…' : 'Mensagens anteriores'}
-              </Text>
-            </Pressable>
-          )}
-          {messages.map((message, index) => {
-            const fg = message.mine && dark ? '#fff' : colors.ink;
-            const continuation = continuesMessage(messages[index - 1], message);
-            const quoted = messages.find(original => original.id === message.replyTo);
-            const audioOnly = !!message.attachment?.contentType.startsWith('audio/') && !message.body;
-            const metadata = <MessageMeta createdAtUtc={message.createdAtUtc} mine={message.mine} read={['read', 'lida'].includes(message.status)} delivered={['delivered', 'entregue'].includes(message.status)} />;
-            return (
-              <MessageBubble
-                key={message.id}
-                testID={`chat-bubble-${message.id}`}
-                mine={message.mine}
-                continuation={continuation}
-                onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
-                accessibilityLabel={`Mensagem de ${message.mine ? 'você' : name}: ${message.body || 'anexo'}`}
-              >
-                {message.replyTo && <ReplyQuote mine={message.mine} sender={quoted ? quoted.mine ? 'Você' : name : 'Mensagem anterior'} body={quoted?.body || (quoted?.attachment ? 'Anexo' : 'Mensagem fora deste histórico')} />}
-                {message.attachment && <ChatMedia attachment={message.attachment} foreground={fg} senderName={message.mine ? auth.user?.nome || 'Você' : name} metadata={audioOnly ? metadata : undefined} />}
-                {!!message.body && <BubbleText body={message.body} foreground={fg} metadata={metadata} />}
-                {!message.body && !audioOnly && <View style={{ marginTop: 4 }}>{metadata}</View>}
-                {!!message.reactions?.length && (
-                  <View
-                    style={{
-                      flexDirection: 'row',
-                      flexWrap: 'wrap',
-                      gap: 8,
-                      marginTop: 6,
-                    }}
-                  >
-                    {message.reactions.map((reaction) => {
-                      const Icon =
-                        reaction.reaction === 'like'
-                          ? ThumbsUp
-                          : reaction.reaction === 'heart'
-                            ? Heart
-                            : reaction.reaction === 'alert'
-                              ? TriangleAlert
-                              : Check;
-                      return (
-                        <View
-                          key={reaction.reaction}
-                          accessibilityLabel={`${reaction.reaction}: ${reaction.count}`}
-                          style={{
-                            flexDirection: 'row',
-                            gap: 4,
-                            alignItems: 'center',
-                          }}
-                        >
-                          {['like', 'heart', 'check', 'alert'].includes(reaction.reaction) ? <Icon size={13} color={fg} /> : <Text style={{ fontSize: 16 }}>{reaction.reaction}</Text>}
-                          <Text style={{ fontSize: 9, color: fg }}>
-                            {reaction.count}
-                          </Text>
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <ScrollView
+            ref={scroll}
+            style={{ flex: 1, minHeight: 0 }}
+            onLayout={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
+            contentContainerStyle={{ paddingTop: 4, paddingBottom: 10, flexGrow: 1 }}
+            keyboardShouldPersistTaps="handled"
+            onScroll={(event) => {
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              const near = contentSize.height - contentOffset.y - layoutMeasurement.height < 60;
+              follow.current = near;
+              setAtBottom((previous) => (previous === near ? previous : near));
+              if (near) setAway((count) => (count ? 0 : count));
+            }}
+            scrollEventThrottle={100}
+            onContentSizeChange={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
+          >
+            {loading && !messages.length && <View style={{ paddingHorizontal: 12 }}><SkeletonBubbles /></View>}
+            {data?.hasMore && (
+              <Pressable accessibilityLabel="Carregar mensagens anteriores" onPress={() => void loadOlder()} style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, backgroundColor: wa.chip }}>
+                <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 13, color: wa.send }}>{older ? 'Carregando…' : 'Mensagens anteriores'}</Text>
+              </Pressable>
+            )}
+            {messages.map((message, index) => {
+              const previous = messages[index - 1];
+              const newDay = !previous || !sameDay(previous.createdAtUtc, message.createdAtUtc);
+              const fg = wa.ink;
+              const continuation = continuesMessage(previous, message);
+              const quoted = messages.find(original => original.id === message.replyTo);
+              const audioOnly = !!message.attachment?.contentType.startsWith('audio/') && !message.body;
+              const metadata = <MessageMeta createdAtUtc={message.createdAtUtc} mine={message.mine} read={['read', 'lida'].includes(message.status)} delivered={['delivered', 'entregue'].includes(message.status)} />;
+              return (
+                <React.Fragment key={message.id}>
+                  {newDay && <WaChip>{dayLabel(message.createdAtUtc)}</WaChip>}
+                  <SwipeReply enabled={!!data?.channel.podeReceber} onReply={() => setReply(message)}>
+                    <MessageBubble
+                      testID={`chat-bubble-${message.id}`}
+                      mine={message.mine}
+                      continuation={continuation}
+                      onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
+                      accessibilityLabel={`Mensagem de ${message.mine ? 'você' : name}: ${message.body || 'anexo'}`}
+                    >
+                      {message.replyTo && <ReplyQuote mine={message.mine} sender={quoted ? quoted.mine ? 'Você' : name : 'Mensagem anterior'} body={quoted?.body || (quoted?.attachment ? 'Anexo' : 'Mensagem fora deste histórico')} />}
+                      {message.attachment && <ChatMedia attachment={message.attachment} foreground={fg} senderName={message.mine ? auth.user?.nome || 'Você' : name} metadata={audioOnly ? metadata : undefined} />}
+                      {!!message.body && <BubbleText body={message.body} foreground={fg} metadata={metadata} />}
+                      {!message.body && !audioOnly && <View style={{ marginTop: 2, alignSelf: 'flex-end' }}>{metadata}</View>}
+                      {!!message.reactions?.length && (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                          {message.reactions.map((reaction) => {
+                            const Icon = reaction.reaction === 'like' ? ThumbsUp : reaction.reaction === 'heart' ? Heart : reaction.reaction === 'alert' ? TriangleAlert : Check;
+                            return (
+                              <View key={reaction.reaction} accessibilityLabel={`${reaction.reaction}: ${reaction.count}`} style={{ flexDirection: 'row', gap: 4, alignItems: 'center', paddingVertical: 2, paddingHorizontal: 8, borderRadius: 12, backgroundColor: wa.dark ? '#ffffff14' : '#0000000d' }}>
+                                {['like', 'heart', 'check', 'alert'].includes(reaction.reaction) ? <Icon size={12} color={wa.send} /> : <Text style={{ fontSize: 15 }}>{reaction.reaction}</Text>}
+                                <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 12, color: fg }}>{reaction.count}</Text>
+                              </View>
+                            );
+                          })}
                         </View>
-                      );
-                    })}
+                      )}
+                    </MessageBubble>
+                  </SwipeReply>
+                </React.Fragment>
+              );
+            })}
+            {pending.map((entry) => (
+              <View key={entry.request.clientId} style={{ alignSelf: 'flex-end', marginTop: 8, marginHorizontal: 8, maxWidth: '84%', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 10, borderTopRightRadius: 0, backgroundColor: wa.outgoing, boxShadow: '0 1px 0.5px #0000002b' }}>
+                <Text style={{ fontFamily: 'Manrope', fontSize: 16, lineHeight: 22, color: wa.ink }}>{entry.request.body || '📷 Anexo'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                  <Clock size={12} color={entry.state === 'failed' ? colors.danger : wa.meta} />
+                  <Text style={{ fontFamily: 'Manrope', fontSize: 11.5, color: entry.state === 'failed' ? colors.danger : wa.meta }}>{entry.state === 'sending' ? 'Enviando…' : entry.error || 'Aguardando envio'}</Text>
+                </View>
+                {entry.state !== 'sending' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                    <Pressable accessibilityLabel="Conferir envio ao cliente" onPress={() => void outbox.retry(entry.request.clientId).catch((e) => setError(String(e)))} style={{ minHeight: 40, paddingHorizontal: 8, justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 13, color: wa.send }}>Conferir envio</Text>
+                    </Pressable>
+                    <Pressable accessibilityLabel="Remover mensagem pendente" onPress={() => void outbox.remove(entry.request.clientId).catch((e) => setError(String(e)))} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+                      <Trash2 size={17} color={wa.meta} />
+                    </Pressable>
                   </View>
                 )}
-              </MessageBubble>
-            );
-          })}
-          {pending.map((entry) => (
-            <View
-              key={entry.request.clientId}
-              style={{
-                alignSelf: 'flex-end',
-                marginTop: 8,
-                maxWidth: '90%',
-                padding: 12,
-                borderRadius: 12,
-                backgroundColor: colors.accentSoft,
-              }}
-            >
-              <Text style={{ fontSize: 11, color: colors.ink }}>
-                {entry.request.body || 'Anexo'}
-              </Text>
-              <Text
-                style={{
-                  fontSize: 10,
-                  color:
-                    entry.state === 'failed' ? colors.danger : colors.muted,
-                }}
-              >
-                {entry.state === 'sending'
-                  ? 'Enviando…'
-                  : entry.error || 'Aguardando envio'}
-              </Text>
-              {entry.state !== 'sending' && (
-                <View
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 16,
-                  }}
-                >
-                  <Pressable
-                    accessibilityLabel="Conferir envio ao cliente"
-                    onPress={() =>
-                      void outbox
-                        .retry(entry.request.clientId)
-                        .catch((e) => setError(String(e)))
-                    }
-                  >
-                    <Text style={{ fontSize: 10, color: colors.accent }}>
-                      Conferir envio
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel="Remover mensagem pendente"
-                    onPress={() =>
-                      void outbox
-                        .remove(entry.request.clientId)
-                        .catch((e) => setError(String(e)))
-                    }
-                    style={{ padding: 10 }}
-                  >
-                    <Trash2 size={15} color={colors.muted} />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+              </View>
+            ))}
+          </ScrollView>
+          <WaScrollFab visible={!atBottom} count={away} bottom={12} onPress={atEnd} />
+        </View>
         {forwarding && <ChatForwardSheet message={{ ...forwarding, attachment: forwarding.attachment ? { ...forwarding.attachment, clientPedidoId: pedidoId } : undefined }} outbox={outbox} onDismiss={() => setForwarding(null)} />}
         {selected && <ChatMessageActions onForward={() => { setForwarding(selected); setSelected(null); }} message={selected} senderName={selected.mine ? auth.user?.nome || 'Você' : name} busy={reacting} onDismiss={() => setSelected(null)} onReply={() => { setReply(selected); setSelected(null); }}
           onReact={data?.channel.podeReceber ? emoji => { const before = live.current; setReacting(true); void reactClientChat(pedidoId, selected.id, emoji).then(() => { if (before === live.current) { setSelected(null); setRefresh(n => n + 1); } }).catch(e => { if (before === live.current) setError(String(e)); }).finally(() => { if (before === live.current) setReacting(false); }); } : undefined} />}
-        {reply && (
-          <View
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 8,
-              padding: 10,
-              backgroundColor: colors.soft,
-            }}
-          >
-            <Reply size={15} color={colors.accent} />
-            <Text
-              style={{ flex: 1, fontSize: 10, color: colors.ink }}
-              numberOfLines={2}
-            >
-              {reply.body}
-            </Text>
-            <Pressable
-              accessibilityLabel="Cancelar resposta"
-              onPress={() => setReply(null)}
-              style={{ padding: 8 }}
-            >
-              <X size={16} color={colors.muted} />
-            </Pressable>
-          </View>
-        )}
         {data?.channel.podeReceber && (
-          <>
-            <ScrollView
-              horizontal
-              style={{ flexGrow: 0, flexShrink: 0, height: 42 }}
-              contentContainerStyle={{
-                paddingHorizontal: 16,
-                gap: 8,
-                paddingBottom: 10,
-                alignItems: 'flex-start',
-              }}
-            >
-              {['Estou chegando', 'Cheguei!', 'Estou na portaria'].map(
-                (text) => (
-                  <Pressable
-                    key={text}
-                    disabled={!ready || busy}
-                    onPress={() => setDraft(text)}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.line,
-                      borderRadius: 20,
-                      padding: 9,
-                    }}
-                  >
-                    <Text style={{ fontSize: 9, color: colors.accent }}>
-                      {text}
-                    </Text>
+          <WaComposer
+            value={draft}
+            onChange={setDraft}
+            onSend={() => void send()}
+            onAttach={() => void attach()}
+            onFocus={() => { follow.current = true; scroll.current?.scrollToEnd({ animated: false }); }}
+            disabled={!ready || busy}
+            busy={busy}
+            editable={ready && draftReady && !busy}
+            placeholder="Mensagem"
+            keyboardVisible={keyboardVisible}
+            audio={(Platform.OS !== 'web' || browserNativeTest) ? <AudioComposer disabled={!ready || busy} send={(file) => send('', file)} onError={setError} /> : <View style={{ width: 48, height: 48 }} />}
+            top={reply ? <WaReplyBar sender={reply.mine ? 'Você' : name} body={reply.body || 'Anexo'} onCancel={() => setReply(null)} /> : undefined}
+            accessory={!draft ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 10, paddingTop: 6, gap: 7, alignItems: 'center' }}>
+                {['Estou chegando', 'Cheguei!', 'Estou na portaria'].map((text) => (
+                  <Pressable key={text} disabled={!ready || busy} onPress={() => setDraft(text)} style={{ paddingVertical: 7, paddingHorizontal: 13, borderRadius: 16, backgroundColor: wa.chip, borderWidth: StyleSheet.hairlineWidth, borderColor: wa.divider }}>
+                    <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 13, color: wa.send }}>{text}</Text>
                   </Pressable>
-                ),
-              )}
-            </ScrollView>
-            <View
-              style={{
-                flexDirection: 'row',
-                gap: 6,
-                paddingHorizontal: 12,
-                paddingBottom: 10,
-                alignItems: 'flex-end',
-                flexShrink: 0,
-              }}
-            >
-              <View
-                style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  borderRadius: 19,
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  backgroundColor: colors.card,
-                }}
-              >
-                <Pressable
-                  accessibilityLabel="Anexar foto"
-                  disabled={!ready || busy}
-                  onPress={() => void attach()}
-                  style={{ padding: 10 }}
-                >
-                  <Paperclip size={18} color={colors.muted} />
-                </Pressable>
-                <TextInput
-                  accessibilityLabel="Mensagem"
-                  placeholder="Escreva uma mensagem…"
-                  placeholderTextColor={colors.muted}
-                  value={draft}
-                  onChangeText={setDraft}
-                  maxLength={500}
-                  editable={ready && draftReady && !busy}
-                  onFocus={() => { follow.current = true; scroll.current?.scrollToEnd({ animated: false }); }}
-                  multiline
-                  style={{
-                    fontFamily: 'Manrope',
-                    fontSize: 16,
-                    lineHeight: 22,
-                    flex: 1,
-                    minHeight: 45,
-                    maxHeight: 120,
-                    color: colors.ink,
-                    paddingVertical: 10,
-                    paddingRight: 8,
-                  }}
-                />
-              </View>
-              {(Platform.OS !== 'web' || browserNativeTest) && (
-                <AudioComposer
-                  disabled={!ready || busy}
-                  send={(file) => send('', file)}
-                  onError={setError}
-                />
-              )}
-              <Pressable
-                accessibilityLabel="Enviar mensagem"
-                disabled={!ready || busy || !draft.trim()}
-                onPress={() => void send()}
-                style={{
-                  width: 42,
-                  height: 45,
-                  borderRadius: 16,
-                  backgroundColor: '#2872e3',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: !ready || busy || !draft.trim() ? 0.5 : 1,
-                }}
-              >
-                <Send size={19} color="#fff" />
-              </Pressable>
-            </View>
-          </>
+                ))}
+              </ScrollView>
+            ) : undefined}
+          />
         )}
-        {!keyboardVisible && <View style={{ flexShrink: 0, paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>}
       </View>
     </KeyboardAvoidingView>
   );

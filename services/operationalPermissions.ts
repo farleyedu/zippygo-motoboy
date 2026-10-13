@@ -5,6 +5,7 @@ import { browserNativeTest, reportBrowserMock } from './browserNativeTest';
 import { expoGo } from './expoGo';
 import { readWebLocationPermission, requestWebLocationPermission, webLocationAvailable } from './webLocationPermission';
 import { requestWebNotificationPermission, webNotificationPermission } from './webOfferPush';
+import { markNotificationPermissionRequested } from './notificationPermissionPrompt';
 
 export type PermissionKind = 'foreground' | 'background' | 'notifications' | 'services';
 export type PermissionValue = { granted: boolean; canAskAgain: boolean; supported: boolean };
@@ -53,6 +54,7 @@ export async function askOperationalPermission(kind: PermissionKind): Promise<vo
     // O som padrao do Android e selecionado ao omitir sound.
     vibrationPattern: [0, 250, 250, 250], lightColor: '#2872e3',
   });
+  await markNotificationPermissionRequested();
   await Notifications.requestPermissionsAsync();
 }
 

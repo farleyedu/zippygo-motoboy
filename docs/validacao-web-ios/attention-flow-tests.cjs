@@ -3,7 +3,7 @@
 const { chromium, webkit } = require('playwright');
 const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path'), http = require('node:http');
-const dist = path.resolve(__dirname, '../../dist'), engine = process.env.QA_BROWSER || 'chromium';
+const dist = path.resolve(process.env.QA_DIST || path.join(__dirname, '../../dist')), engine = process.env.QA_BROWSER || 'chromium';
 const shop = { id: '11111111-1111-4111-8111-111111111111', nome: 'Loja QA' };
 const user = { id: '7', nome: 'Motoboy QA', role: 'motoboy', email: 'qa@exemplo.invalid' };
 const session = { sessionId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', epoch: 1, origin: 'mobile', clientPlatform: 'web',
@@ -37,7 +37,7 @@ const chatMessages = () => Array.from({ length: 25 }, (_, i) => ({ id: `qa-messa
   mine: false, createdAtUtc: new Date(Date.now() - (25 - i) * 1000).toISOString(), readCount: 1, read: true, mentioned: false, mentions: [], reactions: [], type: 'text', status: 'delivered' }));
 const order = id => ({ id, nomeCliente: 'Cliente ' + id, total: 30, pago: true, enderecoEntrega: id >= 31 ? 'Rua da oferta, ' + id : 'Rua QA, 123', latitude: id === 24 ? -18.926 : id === 31 ? -18.921 : id === 32 ? -18.924 : -18.918, longitude: id === 24 ? -48.232 : id === 31 ? -48.235 : id === 32 ? -48.242 : -48.24,
   pickedUpAtUtc: mode === 'pickup' ? null : new Date().toISOString(),
-  isCurrent: id === 23, isOffer: id === 31, itens: [{ nome: 'Pizza QA', quantidade: 2, adicionais: [] }], statusPagamento: 'pago',
+  isCurrent: id === 23, isOffer: id === 31, itens: [{ nome: 'Pizza QA', quantidade: 2, observacao: id === 24 ? 'Sem cebola' : null, adicionais: id === 24 ? [{ nome: 'Borda de catupiry', preco: 8, quantidade: 1 }] : [] }], statusPagamento: id === 24 ? 'pendente' : 'pago', formaPagamento: id === 24 ? 'Dinheiro' : 'Pix', troco: id === 24 ? 50 : null, observacoes: id === 24 ? 'Portão azul. Tocar o interfone do apto 32.' : null, bairro: 'Centro', cidade: 'Uberlândia', value: 30, requerCodigoEntrega: id === 24,
   checklist: { version: 'v' + id + (attention ? '-attention' : ''), detailsUnavailable: false, requiresExtraRecheck: attention,
     items: [{ key: 'p' + id, name: 'Pizza', quantity: 2, extra: false },
       { key: 'a' + id, name: 'Refrigerante', quantity: 4, parentName: 'Pizza', extra: attention }] } });
@@ -290,16 +290,20 @@ let base;
     assert.equal(await page.getByLabel('Dígito 4 do código', { exact: true }).inputValue(), '4');
     const countBeforePayment = completionCalls().length;
     await page.getByRole('button', { name: 'Cobrar', exact: true }).click();
+    await capture(`cobrar-${dark ? 'dark' : 'light'}`);
     await page.getByRole('button', { name: 'Dividir em duas formas', exact: true }).click();
-    await page.getByLabel('Forma de pagamento da parte 1', { exact: true }).selectOption('pix');
+    await page.getByRole('radiogroup', { name: 'Forma de pagamento da parte 1' }).getByRole('radio', { name: 'Pix', exact: true }).click();
     await page.getByLabel('Valor da parte 1', { exact: true }).fill('10,00');
-    await page.getByLabel('Forma de pagamento da parte 2', { exact: true }).selectOption('dinheiro');
+    await page.getByRole('radiogroup', { name: 'Forma de pagamento da parte 2' }).getByRole('radio', { name: 'Dinheiro', exact: true }).click();
     await page.getByLabel('Dinheiro recebido na parte 2', { exact: true }).fill('15,00');
     assert.equal(await page.getByRole('button', { name: 'Confirmo que recebi as duas partes', exact: true }).isEnabled(), false);
     await page.getByLabel('Dinheiro recebido na parte 2', { exact: true }).fill('30,00');
+    await capture(`cobrar-dividido-${dark ? 'dark' : 'light'}`);
     await page.getByRole('button', { name: 'Confirmo que recebi as duas partes', exact: true }).click();
     await page.getByText('Arraste para concluir', { exact: true }).waitFor();
+    await capture(`cobrar-conferido-${dark ? 'dark' : 'light'}`);
     assert.equal(completionCalls().length, countBeforePayment, 'Preparar recebimento não conclui nem registra pago sozinho.');
+    await page.getByRole('button', { name: 'Alterar recebimento', exact: true }).click();
     await page.getByLabel('Valor da parte 1', { exact: true }).fill('12,00');
     await page.getByText('Conclua as conferências acima', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Confirmo que recebi as duas partes', exact: true }).click();
@@ -336,7 +340,7 @@ let base;
     result.cases.push({ dark, case: 'Revisão de permissões já concedidas fecha direto, sem iniciar turno; som e vibração ficam nas configurações' });
     proofRequired = true; requirements = false; returned = false;
     await fresh(context, base + '/conversas?channel=store');
-    const input = page.getByPlaceholder('Escreva uma mensagem…', { exact: true }); await input.waitFor();
+    const input = page.getByLabel('Mensagem', { exact: true }); await input.waitFor();
     const fontSize = await input.evaluate(el => parseFloat(getComputedStyle(el).fontSize)); assert.ok(fontSize >= 16);
     await page.getByText('Última mensagem visível', { exact: true }).waitFor();
     await input.fill(''); await input.pressSequentially('Teste do teclado', { delay: 25 });
@@ -355,11 +359,11 @@ let base;
     await input.evaluate(el => el.blur());
     await page.evaluate(() => { window.__qaKeyboardHeight = 844; visualViewport.dispatchEvent(new Event('resize')); });
     await page.waitForFunction(() => document.documentElement.dataset.zippyKeyboard === 'closed');
-    await page.getByRole('tab', { name: 'Chat', exact: true }).waitFor();
+    await page.getByLabel('Mensagem', { exact: true }).waitFor();
     assert.equal(await page.locator('#root').evaluate(el => el.getBoundingClientRect().height), 844);
-    result.cases.push({ dark, case: 'Chat com fonte 16px, teclado simulado reserva altura, mantém largura e restaura navegação' });
+    result.cases.push({ dark, case: 'Chat com fonte 16px, teclado simulado reserva altura, mantém largura; a conversa não mostra a barra de abas, como no WhatsApp' });
     await fresh(context, base + '/conversas?channel=client&pedidoId=23');
-    const clientInput = page.getByPlaceholder('Escreva uma mensagem…', { exact: true }); await clientInput.fill('Teste com cliente');
+    const clientInput = page.getByLabel('Mensagem', { exact: true }); await clientInput.fill('Teste com cliente');
     await waitForDraft('Teste com cliente');
     await clientInput.focus();
     await page.evaluate(() => { window.__qaKeyboardHeight = 420; visualViewport.dispatchEvent(new Event('resize')); });
@@ -396,6 +400,7 @@ let base;
     await capture(`percurso-${dark ? 'dark' : 'light'}`);
     await page.getByRole('button', { name: 'Ver pedido 24, parada 2', exact: true }).click();
     await page.getByText('2× Pizza QA', { exact: true }).waitFor();
+    await capture(`percurso-detalhe-${dark ? 'dark' : 'light'}`);
     assert.ok(page.url().endsWith('/mapa'), 'Detalhes abrem dentro da rota.');
     assert.equal(await page.getByRole('button', { name: 'Mais detalhes do pedido', exact: true }).count(), 0);
     await page.getByRole('button', { name: 'Voltar à sequência da rota', exact: true }).click();
@@ -419,7 +424,7 @@ let base;
     mode = 'delivery'; returned = false; routeStudy = true;
     offered = false; offerAccepted = false;
     await fresh(context, base + '/conversas?channel=store');
-    const draft = page.getByPlaceholder('Escreva uma mensagem…', { exact: true }); await draft.fill('Conversa preservada');
+    const draft = page.getByLabel('Mensagem', { exact: true }); await draft.fill('Conversa preservada');
     const responseCalls = () => calls.filter(c => /\/offer\/(accept|reject)$/.test(c.p));
     const beforeOffer = responseCalls().length;
     startOffer();
@@ -454,11 +459,11 @@ let base;
     offerIds = [31, 32]; startOffer();
     await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
     await page.getByRole('heading', { name: 'Nova rota', exact: true }).waitFor();
-    await page.getByText('Rota atual + novas paradas', { exact: true }).waitFor();
+    await page.getByText('2 paradas', { exact: true }).waitFor();
     await page.getByRole('button', { name: /Aceitar 2 pedidos.*20/ }).waitFor();
     await page.waitForFunction(() => document.querySelectorAll('.leaflet-container')[1]?.querySelectorAll('.leaflet-marker-icon').length === 4);
-    await page.getByText('3 · #31 · Cliente 31', { exact: true }).waitFor();
-    await page.getByText('4 · #32 · Cliente 32', { exact: true }).waitFor();
+    await page.getByText('#31 · Cliente 31', { exact: true }).waitFor();
+    await page.getByText('#32 · Cliente 32', { exact: true }).waitFor();
     await capture('oferta-completa-' + (dark ? 'dark' : 'light'));
     await page.getByRole('checkbox', { name: 'Selecionar pedido #31', exact: true }).click();
     await page.getByRole('button', { name: /Aceitar pedido.*12/ }).waitFor();

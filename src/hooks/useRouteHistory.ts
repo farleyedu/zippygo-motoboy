@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { useAuth } from '../contexts/AuthContext';
+import { peekResource, putResource } from './resourceCache';
 import { routeHistory, routeHistoryDetail, type RouteHistoryPage, type HistoryRouteDetail } from '../../services/routeHistoryApi';
 import type { WorkPeriod } from '../../services/workApi';
 
@@ -12,12 +13,13 @@ function useHistoryResource<T>(resource: string, fetcher: (store: string, signal
   const refresh = useCallback(() => setRevision(v => v + 1), []);
   useEffect(() => {
     if (!focused || !auth.user) return;
-    const controller = new AbortController(); setState({ key, loading: !!store });
+    const controller = new AbortController(); const cached = peekResource<T>('history:' + key); setState({ key, data: cached, loading: !!store && !cached });
     if (!store) { setState({ key, loading: false, error: 'Escolha a loja para consultar seu histórico.' }); return; }
-    void fetcher(store, controller.signal).then(data => { if (!controller.signal.aborted) setState({ key, data, loading: false }); }).catch(e => { if (!controller.signal.aborted) setState({ key, loading: false, error: e instanceof Error ? e.message : 'Não foi possível consultar suas rotas.' }); });
+    void fetcher(store, controller.signal).then(data => { if (!controller.signal.aborted) { putResource('history:' + key, data); setState({ key, data, loading: false }); } }).catch(e => { if (!controller.signal.aborted) setState({ key, loading: false, error: e instanceof Error ? e.message : 'Não foi possível consultar suas rotas.' }); });
     return () => controller.abort();
   }, [key, revision, focused, !!auth.user]);
-  const current = state.key === key ? state : undefined;
+  const cached = peekResource<T>('history:' + key);
+  const current = state.key === key ? state : cached ? { key, data: cached, loading: false } : undefined;
   return { data: current?.data, error: current?.error, loading: current?.loading ?? true, refresh };
 }
 export function useRouteHistory(period: WorkPeriod, offset: number) { return useHistoryResource<RouteHistoryPage>(JSON.stringify({ period, offset }), (store, signal) => routeHistory(store, period, offset, signal)); }

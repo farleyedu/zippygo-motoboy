@@ -22,7 +22,7 @@ export default function SolicitarRestauranteScreen() {
     void data.act(async () => { const created = await requestMotoboyLink(id); createdId = created.id; }, () => router.push({ pathname: '/solicitacoesVinculo', params: { id: createdId } }));
   };
   return <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}><Screen><Entrance>
-    <Header title="Encontre sua próxima equipe." subtitle="Solicitar vínculo" onBack={() => { if (!blocked) router.replace('/selecionarRestaurante'); }} />
+    <Header title="Encontre sua próxima equipe." subtitle="Solicitar vínculo" onBack={() => { if (!blocked) router.replace(data.links.length ? '/selecionarRestaurante' : '/'); }} />
     <Field label="Buscar estabelecimento" placeholder="Nome ou cidade…" value={query} onChangeText={setQuery} autoCorrect={false} editable={!data.busy} />
     <Surface style={{ marginTop: 18, marginBottom: 18 }}><View style={{ flexDirection: 'row', gap: 10 }}><ShieldCheck size={20} color={colors.accent} /><Text style={[type.body, { color: colors.muted, flex: 1 }]}>A loja precisa aprovar o vínculo antes do seu primeiro turno.</Text></View></Surface>
     {data.loading && <Feedback title="Buscando estabelecimentos" loading />}

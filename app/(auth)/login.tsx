@@ -48,8 +48,7 @@ export default function LoginScreen() {
         if (confirmed) setFailure('A sessão ativa mudou. Confira o aviso e confirme novamente.');
       } else if (result.success) {
         setConfirmation(null);
-        if (result.requiresLinkRequest) router.replace('/solicitarRestaurante');
-        else router.replace(result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/');
+        router.replace(result.requiresEstablishmentSelection ? '/selecionarRestaurante' : '/');
       } else setFailure(result.error || 'Não foi possível entrar. Tente novamente.');
     } catch {
       if (alive.current) setFailure('Não foi possível entrar. Confira sua conexão e tente novamente.');

@@ -47,3 +47,4 @@ yarn-error.*
 # Configuracao Firebase local; arquivo de conta de servico nunca faz parte do app.
 google-services.json
 firebase-admin*.json
+dist-layout

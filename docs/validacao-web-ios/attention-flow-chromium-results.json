@@ -45,7 +45,7 @@
     },
     {
       "dark": false,
-      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura e restaura navegação"
+      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura; a conversa não mostra a barra de abas, como no WhatsApp"
     },
     {
       "dark": false,
@@ -119,7 +119,7 @@
     },
     {
       "dark": true,
-      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura e restaura navegação"
+      "case": "Chat com fonte 16px, teclado simulado reserva altura, mantém largura; a conversa não mostra a barra de abas, como no WhatsApp"
     },
     {
       "dark": true,
@@ -151,5 +151,87 @@
     }
   ],
   "errors": [],
+  "visualDetails": [
+    {
+      "name": "oferta-completa-light",
+      "text": "R$ 20,00",
+      "rect": {
+        "x": 30,
+        "y": 384.828125,
+        "width": 330,
+        "height": 46
+      },
+      "parent": {
+        "x": 30,
+        "y": 384.828125,
+        "width": 330,
+        "height": 46
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "start",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    },
+    {
+      "name": "oferta-light",
+      "text": "R$ 12,00",
+      "rect": {
+        "x": 30,
+        "y": 333.828125,
+        "width": 330,
+        "height": 46
+      },
+      "parent": {
+        "x": 30,
+        "y": 333.828125,
+        "width": 330,
+        "height": 46
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "start",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    },
+    {
+      "name": "oferta-completa-dark",
+      "text": "R$ 20,00",
+      "rect": {
+        "x": 30,
+        "y": 384.828125,
+        "width": 330,
+        "height": 46
+      },
+      "parent": {
+        "x": 30,
+        "y": 384.828125,
+        "width": 330,
+        "height": 46
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "start",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    },
+    {
+      "name": "oferta-dark",
+      "text": "R$ 12,00",
+      "rect": {
+        "x": 30,
+        "y": 333.828125,
+        "width": 330,
+        "height": 46
+      },
+      "parent": {
+        "x": 30,
+        "y": 333.828125,
+        "width": 330,
+        "height": 46
+      },
+      "font": "ManropeExtraBold",
+      "textAlign": "start",
+      "scrollLeft": 0,
+      "parentScrollLeft": 0
+    }
+  ],
   "ok": true
 }

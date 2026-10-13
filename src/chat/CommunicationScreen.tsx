@@ -34,8 +34,10 @@ import {
   Check,
   CheckCheck,
   ChevronRight,
+  Clock,
   Heart,
   MessageCircle,
+  MessageSquarePlus,
   MoreVertical,
   Paperclip,
   Reply,
@@ -89,10 +91,20 @@ import { AudioComposer, ChatMedia } from './ChatMedia';
 import { BubbleText, continuesMessage, MessageBubble, MessageMeta, ReplyQuote } from './MessageBubble';
 import { retainChatFile } from './media';
 import { useChatOutbox } from './useChatOutbox';
+import { decodeChatDraft, encodeChatDraft, mentionedIds } from './draft';
+import { SkeletonBubbles, SkeletonRows } from '../ui/Skeleton';
+import { StatusBar } from 'expo-status-bar';
+import { dayLabel, sameDay, senderTone, SwipeReply, useWa, WaAvatar, WaChip, WaComposer, WaFab, WaFilters, WaHeader, WaListRow, WaPage, WaReplyBar, WaScrollFab, WaSearch } from './WaKit';
+import { describeMessage, getPreview, listTime, previewKey, rememberPreview } from './chatPreview';
 import { usePagedContacts } from './usePagedContacts';
 import { useIsFocused } from 'expo-router/react-navigation';
 import { isAppForeground, useAppForeground } from '../hooks/useAppForeground';
-import { decodeChatDraft, encodeChatDraft, mentionedIds } from './draft';
+
+// Última resposta vista de cada lista/conversa: a tela abre com isso na hora e confere a rede em seguida.
+type ChatSnapshot = { messages: ChatMessage[]; more: boolean; cursor?: number };
+const chatSnapshots = new Map<string, ChatSnapshot>();
+const listSnapshots = new Map<string, { orders: RouteStop[]; notices: ChatMessage[] }>();
+const remember = <V,>(map: Map<string, V>, key: string, value: V) => { if (map.size >= 40) map.delete(map.keys().next().value as string); map.delete(key); map.set(key, value); };
 
 const reactionIcons = {
   like: ThumbsUp,
@@ -175,7 +187,8 @@ export default function CommunicationScreen() {
   const router = useRouter(),
     insets = useSafeAreaInsets(),
     theme = useZippyTheme(),
-    { colors, dark } = theme;
+    { colors, dark } = theme,
+    wa = useWa();
   const auth = useAuth(),
     turn = useOperationalSession();
   const tenant =
@@ -204,10 +217,11 @@ export default function CommunicationScreen() {
   const identity = `${owner}:${turn.session?.sessionId}:${channel}:${params.target}:${params.pedidoId}`;
   const live = useRef(identity);
   live.current = identity;
-  const [messages, setMessages] = useState<ChatMessage[]>([]),
-    [orders, setOrders] = useState<RouteStop[]>([]),
-    [notices, setNotices] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState(true),
+  const snapshot = chatSnapshots.get(identity), listed = listSnapshots.get(`${owner}:${turn.session?.sessionId}`);
+  const [messages, setMessages] = useState<ChatMessage[]>(() => snapshot?.messages ?? []),
+    [orders, setOrders] = useState<RouteStop[]>(() => listed?.orders ?? []),
+    [notices, setNotices] = useState<ChatMessage[]>(() => listed?.notices ?? []);
+  const [loading, setLoading] = useState(() => !(target ? snapshot : listed)),
     [error, setError] = useState(''),
     [draft, setDraft] = useState(''),
     [restoredDraftKey, setRestoredDraftKey] = useState<string | null>(null),
@@ -217,9 +231,7 @@ export default function CommunicationScreen() {
   const roster = usePagedContacts(owner && turn.session ? `${owner}:${turn.session.sessionId}` : null, target ? '' : search, active);
   const rosterRefresh = useRef(roster.refresh); rosterRefresh.current = roster.refresh;
   const messageSearch = target && searching ? search : '';
-  const { contacts } = roster;
-  const contactCount = roster.totalContacts ?? contacts.length;
-  const onlineCount = roster.onlineContacts ?? contacts.filter(c => c.online).length;
+  const { contacts, ready: rosterReady } = roster;
   const loadContactsOnScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
     if (contentOffset.y + layoutMeasurement.height >= contentSize.height - 160) void roster.loadMore();
@@ -231,8 +243,8 @@ export default function CommunicationScreen() {
     [mentions, setMentions] = useState<ChatContact[]>([]),
     [muted, setMuted] = useState(false),
     [mentionAlerts, setMentionAlerts] = useState(true);
-  const [more, setMore] = useState(false),
-    [cursor, setCursor] = useState<number | undefined>(),
+  const [more, setMore] = useState(() => snapshot?.more ?? false),
+    [cursor, setCursor] = useState<number | undefined>(() => snapshot?.cursor),
     [older, setOlder] = useState(false),
     [refresh, setRefresh] = useState(0),
     [busy, setBusy] = useState(false);
@@ -241,6 +253,15 @@ export default function CommunicationScreen() {
     generation = useRef(0),
     enqueueing = useRef(false);
   const [highlighted, setHighlighted] = useState<string | null>(null);
+  const [atBottom, setAtBottom] = useState(true), [away, setAway] = useState(0), lastCount = useRef(0);
+  useEffect(() => {
+    const added = messages.length - lastCount.current; lastCount.current = messages.length;
+    if (added > 0 && !follow.current) setAway((count) => count + added);
+  }, [messages.length]);
+  useEffect(() => {
+    if (!channel || !messages.length) return;
+    rememberPreview(previewKey(owner, channel, channel === 'private' ? target?.target : undefined), messages.at(-1), channel === 'group');
+  }, [messages, channel, owner, target?.target]);
   const loadedQuery = useRef('');
   const paginationQuery = useRef('');
   const draftKey = `zippygo.chat.draft.v2:${identity.replace(`:${turn.session?.sessionId}:`, ':')}`;
@@ -294,16 +315,20 @@ export default function CommunicationScreen() {
   }, [draft, mentions, restored, draftKey, target]);
   useEffect(() => {
     follow.current = true;
-    setMessages([]);
+    const saved = chatSnapshots.get(identity), listing = listSnapshots.get(`${owner}:${turn.session?.sessionId}`);
+    setMessages(saved?.messages ?? []);
+    setOrders(listing?.orders ?? []); setNotices(listing?.notices ?? []);
+    setLoading(!(target ? saved : listing));
     setSelected(null); setForwarding(null);
     setSearch('');
     setSearching(false);
-    setMore(false);
-    setCursor(undefined);
+    setMore(saved?.more ?? false);
+    setCursor(saved?.cursor);
     setHighlighted(null);
-    loadedQuery.current = '';
-    paginationQuery.current = '';
+    loadedQuery.current = saved ? `${identity}:` : '';
+    paginationQuery.current = saved ? `${identity}:` : '';
   }, [identity]);
+  useEffect(() => { if (target && messages.length && loadedQuery.current === `${identity}:`) remember(chatSnapshots, identity, { messages, more, cursor }); }, [messages, more, cursor, identity, target]);
   useEffect(() => {
     if (!keyboardVisible) return;
     follow.current = true;
@@ -343,12 +368,15 @@ export default function CommunicationScreen() {
       setError('Nao foi possivel salvar os avisos.');
     }
   };
-  useEffect(() => {
-    if (!active) return;
-    return subscribeChatEvents((event) => {
-      if (event.estabelecimentoId === tenant) setRefresh(n => n + 1);
-    });
-  }, [tenant, active]);
+  useEffect(
+    () => {
+      if (!active) return;
+      return subscribeChatEvents((event) => {
+        if (event.estabelecimentoId === tenant) setRefresh((n) => n + 1);
+      });
+    },
+    [tenant, active],
+  );
   useFocusEffect(
     useCallback(() => {
       if (!foreground) return;
@@ -363,40 +391,44 @@ export default function CommunicationScreen() {
             throw new Error(
               'Inicie seu turno para abrir as conversas da loja.',
             );
-          if (target) {
-            const query = `${identity}:${messageSearch}`;
-            const data = await listChat(target, {
-              signal: abort.signal,
-              search: messageSearch || undefined,
-            });
-            if (version !== generation.current) return;
-            const replace = loadedQuery.current !== query;
-            setMessages((current) =>
-              replace ? data.messages : merge(current, data.messages),
-            );
-            if (paginationQuery.current !== query) {
-              setMore(data.hasMore);
-              setCursor(data.cursor);
-              paginationQuery.current = query;
-            }
-            loadedQuery.current = query;
-            const through = data.messages.at(-1)?.sequence;
-            if (through && !searching)
-              void readChat(target, through).catch(() => undefined);
-          } else {
-            const [queue, notifications] = await Promise.all([
-              getOperationalQueue(),
-              listChatNotifications(),
-            ]);
-            if (version !== generation.current) return;
-            setOrders(
-              [queue.current, ...queue.next].filter(
+          const rosterApplied = rosterRefresh.current();
+          const mainTask = (async () => {
+            if (target) {
+              const query = `${identity}:${messageSearch}`;
+              const data = await listChat(target, {
+                signal: abort.signal,
+                search: messageSearch || undefined,
+              });
+              if (version !== generation.current) return;
+              const replace = loadedQuery.current !== query;
+              setMessages((current) =>
+                replace ? data.messages : merge(current, data.messages),
+              );
+              if (paginationQuery.current !== query) {
+                setMore(data.hasMore);
+                setCursor(data.cursor);
+                paginationQuery.current = query;
+              }
+              loadedQuery.current = query;
+              const through = data.messages.at(-1)?.sequence;
+              if (through && !searching)
+                void readChat(target, through).catch(() => undefined);
+            } else {
+              const [queue, notifications] = await Promise.all([
+                turn.store.getSnapshot().queue ?? getOperationalQueue(),
+                listChatNotifications(),
+              ]);
+              if (version !== generation.current) return;
+              const active = [queue.current, ...queue.next].filter(
                 (stop): stop is RouteStop => !!stop,
-              ),
-            );
-            setNotices(notifications);
-          }
-          await rosterRefresh.current();
+              );
+              remember(listSnapshots, `${owner}:${turn.session?.sessionId}`, { orders: active, notices: notifications });
+              setOrders(active);
+              setNotices(notifications);
+            }
+            if (version === generation.current) setLoading(false);
+          })();
+          await Promise.all([mainTask, rosterApplied]);
           if (version !== generation.current) return;
           setError('');
         } catch (caught) {
@@ -411,7 +443,7 @@ export default function CommunicationScreen() {
           if (version === generation.current) setLoading(false);
         }
       };
-      setLoading(true);
+      setLoading(!(target ? chatSnapshots.get(identity) : listSnapshots.get(`${owner}:${turn.session?.sessionId}`)));
       void load();
       const timer = setInterval(() => void load(), 60000);
       return () => {
@@ -470,13 +502,16 @@ export default function CommunicationScreen() {
       entry.target.target === target?.target && entry.target.pedidoId === target?.pedidoId,
   );
   const send = async (body = draft, file?: LocalChatFile) => {
-    if (!target || !ready || enqueueing.current) return;
+    if (!target || !ready || enqueueing.current) {
+      if (file) throw new Error('Aguarde a conversa ficar disponível para enviar o anexo.');
+      return;
+    }
     enqueueing.current = true;
     setBusy(true);
     const scope = live.current;
     try {
       const savedFile = file ? await retainChatFile(file) : undefined;
-      if (scope !== live.current) return;
+      if (scope !== live.current) throw new Error('A conversa mudou. Retome o envio do anexo.');
       await outbox.enqueue({
         target,
         request: {
@@ -502,6 +537,7 @@ export default function CommunicationScreen() {
         setError(
           e instanceof Error ? e.message : 'Nao foi possivel colocar na fila.',
         );
+      if (file) throw e;
     } finally {
       enqueueing.current = false;
       setBusy(false);
@@ -567,372 +603,130 @@ export default function CommunicationScreen() {
         ? m.channel === kind && (m.motoboyId === id || m.recipientId === id)
         : m.channel === kind,
     ).length;
-  const contactRow = (contact: ChatContact) => (
-    <Pressable
-      key={contact.motoboyId}
-      onPress={() =>
-        open({ channel: 'private', target: contact.motoboyId }, contact.nome)
-      }
-      style={[styles.listRow, { borderBottomColor: colors.line }]}
-    >
-      <Avatar name={contact.nome} />
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.name, { color: colors.ink }]}>{contact.nome}</Text>
-        <Text style={[styles.small, { color: colors.muted }]}>
-          {contact.online ? 'Online' : 'Offline'}
-        </Text>
-      </View>
-      {!!unread('private', contact.motoboyId) && (
-        <Text
-          style={[
-            styles.badge,
-            {
-              backgroundColor: colors.accent,
-              color: dark ? '#13233e' : '#fff',
-            },
-          ]}
-        >
-          {unread('private', contact.motoboyId)}
-        </Text>
-      )}
-      <ChevronRight color={colors.muted} size={16} />
-    </Pressable>
-  );
+  const info = (kind: string, id: number | undefined, fallback: string) => {
+    const saved = getPreview(previewKey(owner, kind, id));
+    const list = notices.filter((m) => kind === 'private' ? m.channel === kind && (m.motoboyId === id || m.recipientId === id) : m.channel === kind);
+    const last = list.reduce<ChatMessage | undefined>((a, m) => !a || Date.parse(m.createdAtUtc) > Date.parse(a.createdAtUtc) ? m : a, undefined);
+    const fromNotice = last ? describeMessage(last, kind === 'group') : undefined;
+    const best = fromNotice && (!saved || fromNotice.at >= saved.at) ? fromNotice : saved;
+    return { text: best?.text || fallback, at: best?.at || 0, unread: list.length };
+  };
+  const contactCount = roster.totalContacts ?? contacts.length;
+  const onlineCount = roster.onlineContacts ?? contacts.filter((c) => c.online).length;
+  const contactRow = (contact: ChatContact) => {
+    const data = info('private', contact.motoboyId, contact.online ? 'Online' : 'Offline');
+    return <WaListRow key={contact.motoboyId} name={contact.nome} title={contact.nome} preview={data.text} time={listTime(data.at)} unread={data.unread} online={contact.online}
+      onPress={() => open({ channel: 'private', target: contact.motoboyId }, contact.nome)} />;
+  };
+  const pageFooter = <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 12), backgroundColor: wa.header, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: wa.divider }}><View style={{ width: '100%', maxWidth: 480, alignSelf: 'center' }}><AppNav active="chats" /></View></View>;
   if (params.view === 'group' || params.view === 'contacts')
     return (
-      <Screen footer={<AppNav active="chats" />} onScroll={loadContactsOnScroll}>
+      <WaPage header={<WaHeader title={params.view === 'group' ? 'Dados da equipe' : 'Nova conversa'} subtitle={store} onBack={back} />} footer={pageFooter}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Header
-          title={params.view === 'group' ? 'Sua equipe.' : 'Nova conversa'}
-          subtitle={store}
-          onBack={back}
-        />
-        {params.view === 'group' && (
-          <>
-            <View style={{ alignItems: 'center', padding: 18 }}>
-              <Users color={colors.accent} size={34} />
-              <Text
-                style={[
-                  styles.name,
-                  { fontSize: 18, color: colors.ink, marginTop: 12 },
-                ]}
-              >
-                Equipe · {store}
-              </Text>
-              <Text style={[styles.small, { color: colors.muted }]}>
-                {contactCount} participantes ·{' '}
-                {onlineCount} online
-              </Text>
-            </View>
-            <View style={styles.listRow}>
-              <Bell size={20} color={colors.accent} />
-              <Text style={[styles.name, { color: colors.ink, flex: 1 }]}>
-                Silenciar avisos do grupo
-              </Text>
-              <Switch
-                accessibilityLabel="Silenciar avisos do grupo"
-                value={muted}
-                onValueChange={(v) => void setting('muted', v)}
-              />
-            </View>
-            <View style={styles.listRow}>
-              <AtSign size={20} color={colors.warning} />
-              <Text style={[styles.name, { color: colors.ink, flex: 1 }]}>
-                Avisar quando me mencionarem
-              </Text>
-              <Switch
-                accessibilityLabel="Avisar quando me mencionarem"
-                value={mentionAlerts}
-                onValueChange={(v) => void setting('mentionAlerts', v)}
-              />
-            </View>
-          </>
-        )}
-        <TextInput
-          accessibilityLabel="Buscar contato"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Buscar nome…"
-          placeholderTextColor={colors.muted}
-          style={[
-            styles.input,
-            {
-              color: colors.ink,
-              borderColor: colors.line,
-              backgroundColor: colors.card,
-            },
-          ]}
-        />
-        <SectionTitle>Estabelecimento</SectionTitle>
-        <Pressable
-          style={styles.listRow}
-          onPress={() => open({ channel: 'store' })}
-        >
-          <Avatar name={store} />
-          <Text style={[styles.name, { color: colors.ink, flex: 1 }]}>
-            {store}
-          </Text>
-          <ChevronRight size={16} color={colors.muted} />
-        </Pressable>
-        <SectionTitle>Motoboys</SectionTitle>
-        {colleagues.filter((c) => matches(c.nome)).map(contactRow)}
-        {loading && <ActivityIndicator color={colors.accent} />}
-        {!!error && <Text style={{ color: colors.danger }}>{error}</Text>}
-      </Screen>
+        <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 24 }} onScroll={loadContactsOnScroll} scrollEventThrottle={200}>
+          {params.view === 'group' && (
+            <>
+              <View style={{ alignItems: 'center', paddingVertical: 24, gap: 6 }}>
+                <WaAvatar name={`Equipe · ${store}`} size={96} />
+                <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 22, letterSpacing: -.5, color: wa.ink, marginTop: 8 }}>Equipe · {store}</Text>
+                <Text style={{ fontFamily: 'Manrope', fontSize: 14, color: wa.meta }}>Grupo · {contactCount} participantes · {onlineCount} online</Text>
+              </View>
+              <View style={{ height: 8, backgroundColor: wa.wallpaper }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 18, minHeight: 60 }}>
+                <Bell size={21} color={wa.meta} />
+                <Text style={{ flex: 1, fontFamily: 'Manrope', fontWeight: '700', fontSize: 15.5, color: wa.ink }}>Silenciar avisos do grupo</Text>
+                <Switch accessibilityLabel="Silenciar avisos do grupo" value={muted} onValueChange={(v) => void setting('muted', v)} />
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 18, minHeight: 60 }}>
+                <AtSign size={21} color={wa.meta} />
+                <Text style={{ flex: 1, fontFamily: 'Manrope', fontWeight: '700', fontSize: 15.5, color: wa.ink }}>Avisar quando me mencionarem</Text>
+                <Switch accessibilityLabel="Avisar quando me mencionarem" value={mentionAlerts} onValueChange={(v) => void setting('mentionAlerts', v)} />
+              </View>
+              <View style={{ height: 8, backgroundColor: wa.wallpaper }} />
+              <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 13.5, color: wa.meta, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 6 }}>{contactCount} participantes</Text>
+            </>
+          )}
+          {params.view !== 'group' && <View style={{ paddingTop: 10 }}><WaSearch label="Buscar contato" value={search} onChange={setSearch} placeholder="Buscar nome…" /></View>}
+          {params.view !== 'group' && matches(store) && <WaListRow name={store} title={store} preview="Atendimento da loja" onPress={() => open({ channel: 'store' })} />}
+          {colleagues.filter((c) => matches(c.nome)).map(contactRow)}
+          {!rosterReady && !error && <View style={{ padding: 16 }}><SkeletonRows rows={4} /></View>}
+          {roster.loadingMore && <ActivityIndicator color={wa.meta} style={{ padding: 16 }} accessibilityLabel="Carregando contatos" />}
+          {!!roster.error && <Pressable onPress={() => void roster.refresh()}><Text style={{ color: colors.danger, padding: 16 }}>{roster.error}</Text></Pressable>}
+          {!!error && <Text style={{ color: colors.danger, padding: 16 }}>{error}</Text>}
+        </ScrollView>
+      </WaPage>
     );
   if (params.view === 'notifications')
     return (
-      <Screen footer={<AppNav active="chats" />} onScroll={loadContactsOnScroll}>
+      <WaPage header={<WaHeader title="Notificações" subtitle="Sua equipe. Seus avisos." onBack={back} />} footer={pageFooter}>
         <Stack.Screen options={{ headerShown: false }} />
-        <Header
-          title="Notificações"
-          subtitle="Sua equipe. Seus avisos."
-          onBack={back}
-        />
-        {loading && <ActivityIndicator color={colors.accent} />}
-        {!!error && <Text style={{ color: colors.danger }}>{error}</Text>}
-        {notices.map((notice) => (
-          <View
-            key={notice.id}
-            style={[
-              styles.listRow,
-              {
-                borderBottomColor: colors.line,
-                backgroundColor: notice.mentioned
-                  ? colors.warningSoft
-                  : undefined,
-              },
-            ]}
-          >
-            <Pressable
-              style={{ flex: 1 }}
-              onPress={() => {
-                void dismissChatNotification(notice.id).catch(() => undefined);
-                open(
-                  {
-                    channel: notice.channel,
-                    target:
-                      notice.channel === 'private'
-                        ? notice.motoboyId === turn.queue?.motoboyId
-                          ? notice.recipientId
-                          : notice.motoboyId
-                        : undefined,
-                  },
-                  notice.senderName,
-                );
-              }}
-            >
-              {notice.mentioned && (
-                <Text
-                  style={[
-                    styles.small,
-                    { color: colors.warning, fontWeight: '800' },
-                  ]}
-                >
-                  @ Mencionou voce
-                </Text>
-              )}
-              <Text style={[styles.name, { color: colors.ink }]}>
-                {notice.senderName}
-              </Text>
-              <Text
-                numberOfLines={2}
-                style={[styles.small, { color: colors.muted }]}
-              >
-                {notice.body || 'Anexo recebido'}
-              </Text>
-            </Pressable>
-            <IconButton
-              icon={Check}
-              label="Marcar aviso como lido"
-              onPress={() =>
-                void dismissChatNotification(notice.id)
-                  .then(() => setRefresh((n) => n + 1))
-                  .catch((e) => setError(String(e)))
-              }
-            />
-          </View>
-        ))}
-        {!loading && !notices.length && (
-          <Text style={[type.small, { color: colors.muted }]}>
-            Nenhum aviso pendente.
-          </Text>
-        )}
-      </Screen>
-    );
-  if (!target)
-    return (
-      <Screen footer={<AppNav active="chats" />} onScroll={loadContactsOnScroll}>
-        <Stack.Screen options={{ headerShown: false }} />
-        <Header
-          title="Conversas"
-          subtitle="Sua equipe. Seu caminho."
-          onBack={back}
-          right={
-            <View style={styles.row}>
-              <IconButton
-                icon={Bell}
-                label="Notificacoes"
-                onPress={() =>
-                  router.push({
-                    pathname: '/conversas',
-                    params: { view: 'notifications' },
-                  })
-                }
-              />
-              <IconButton
-                icon={UserPlus}
-                label="Nova conversa"
-                onPress={() =>
-                  router.push({
-                    pathname: '/conversas',
-                    params: { view: 'contacts' },
-                  })
-                }
-              />
-            </View>
-          }
-        />
-        <TextInput
-          accessibilityLabel="Buscar conversas"
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Buscar nome ou pedido…"
-          placeholderTextColor={colors.muted}
-          style={[
-            styles.input,
-            {
-              color: colors.ink,
-              borderColor: colors.line,
-              backgroundColor: colors.card,
-            },
-          ]}
-        />
-        <ScrollView
-          horizontal
-          style={{ flexGrow: 0, flexShrink: 0, height: 46 }}
-          keyboardShouldPersistTaps="handled"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ gap: 8, marginVertical: 14 }}
-        >
-          {['Todas', 'Loja', 'Clientes', 'Colegas'].map((label) => (
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ selected: filter === label }}
-              key={label}
-              onPress={() => setFilter(label)}
-              style={[
-                styles.chip,
-                {
-                  backgroundColor:
-                    filter === label ? colors.accentSoft : colors.card,
-                  borderColor: colors.line,
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.small,
-                  { color: filter === label ? colors.accent : colors.muted },
-                ]}
-              >
-                {label}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <Pressable
-          onPress={() => open({ channel: 'group' })}
-          style={[styles.group, { borderColor: colors.line }]}
-        >
-          <Gradient colors={[colors.heroEnd, colors.hero]} glow />
-          <Users color="#c6e0ff" size={27} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.name, { color: '#fff' }]}>
-              Equipe · {store}
-            </Text>
-            <Text style={[styles.small, { color: '#c3d4ed' }]}>
-              {contactCount} pessoas ·{' '}
-              {onlineCount} online
-            </Text>
-          </View>
-          {!!unread('group') && (
-            <Text
-              style={[
-                styles.badge,
-                { backgroundColor: '#edf4ff', color: '#285ac7' },
-              ]}
-            >
-              {unread('group')}
-            </Text>
-          )}
-        </Pressable>
-        {(filter === 'Todas' || filter === 'Loja') && matches(store) && (
-          <Pressable
-            onPress={() => open({ channel: 'store' })}
-            style={[styles.listRow, { borderBottomColor: colors.line }]}
-          >
-            <Avatar name={store} />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.name, { color: colors.ink }]}>{store}</Text>
-              <Text style={[styles.small, { color: colors.muted }]}>
-                Atendimento da loja
-              </Text>
-            </View>
-            {!!unread('store') && (
-              <Text
-                style={[
-                  styles.badge,
-                  { backgroundColor: colors.accent, color: '#fff' },
-                ]}
-              >
-                {unread('store')}
-              </Text>
-            )}
-            <ChevronRight color={colors.muted} size={16} />
-          </Pressable>
-        )}
-        {(filter === 'Todas' || filter === 'Clientes') &&
-          orders
-            .filter((stop) =>
-              matches(`${stop.pedido?.nomeCliente} ${stop.pedidoId}`),
-            )
-            .map((stop) => (
+        <ScrollView style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 24 }}>
+          {loading && !notices.length && <View style={{ padding: 16 }}><SkeletonRows rows={4} /></View>}
+          {!!error && <Text style={{ color: colors.danger, padding: 16 }}>{error}</Text>}
+          {notices.map((notice) => (
+            <View key={notice.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: notice.mentioned ? colors.warningSoft : 'transparent', paddingRight: 6 }}>
               <Pressable
-                key={stop.pedidoId}
-                onPress={() =>
-                  router.push({
-                    pathname: '/conversas',
-                    params: {
-                      channel: 'client',
-                      pedidoId: String(stop.pedidoId),
-                    },
-                  })
-                }
-                style={[styles.listRow, { borderBottomColor: colors.line }]}
+                style={({ pressed }) => ({ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: 16, paddingVertical: 12, opacity: pressed ? .7 : 1 })}
+                onPress={() => {
+                  void dismissChatNotification(notice.id).catch(() => undefined);
+                  open({ channel: notice.channel, target: notice.channel === 'private' ? (notice.motoboyId === turn.queue?.motoboyId ? notice.recipientId : notice.motoboyId) : undefined }, notice.senderName);
+                }}
               >
-                <Avatar name={stop.pedido?.nomeCliente || 'Cliente'} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.name, { color: colors.ink }]}>
-                    {stop.pedido?.nomeCliente || 'Cliente'} · #{stop.pedidoId}
-                  </Text>
-                  <Text style={[styles.small, { color: colors.muted }]}>
-                    Pedido em andamento
-                  </Text>
+                <WaAvatar name={notice.senderName} size={48} />
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  {notice.mentioned && <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.warning }}>@ Mencionou voce</Text>}
+                  <Text numberOfLines={1} style={{ fontFamily: 'ManropeExtraBold', fontSize: 16, color: wa.ink }}>{notice.senderName}</Text>
+                  <Text numberOfLines={2} style={{ fontFamily: 'Manrope', fontSize: 14.5, color: wa.meta }}>{notice.body || 'Anexo recebido'}</Text>
                 </View>
-                <ChevronRight size={16} color={colors.muted} />
               </Pressable>
-            ))}
-        {(filter === 'Todas' || filter === 'Colegas') &&
-          colleagues.filter((c) => matches(c.nome)).map(contactRow)}
-        {loading && <ActivityIndicator color={colors.accent} />}
-        {!!error && (
-          <Pressable onPress={() => setRefresh((n) => n + 1)}>
-            <Text style={{ color: colors.danger }}>{error}</Text>
-          </Pressable>
-        )}
-      </Screen>
+              <Pressable accessibilityRole="button" accessibilityLabel="Marcar aviso como lido" onPress={() => void dismissChatNotification(notice.id).then(() => setRefresh((n) => n + 1)).catch((e) => setError(String(e)))} style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }}><Check size={22} color={wa.send} /></Pressable>
+            </View>
+          ))}
+          {!loading && !notices.length && <Text style={{ fontFamily: 'Manrope', fontSize: 14.5, color: wa.meta, textAlign: 'center', padding: 36 }}>Nenhum aviso pendente.</Text>}
+        </ScrollView>
+      </WaPage>
     );
+  if (!target) {
+    type ChatRow = { key: string; kind: string; name: string; title: string; text: string; at: number; unread: number; online?: boolean; onPress: () => void };
+    const rows: ChatRow[] = [
+      { key: 'group', kind: 'group', name: `Equipe · ${store}`, title: `Equipe · ${store}`, ...info('group', undefined, `${contactCount} pessoas · ${onlineCount} online`), onPress: () => open({ channel: 'group' }) },
+      { key: 'store', kind: 'store', name: store, title: store, ...info('store', undefined, 'Atendimento da loja'), onPress: () => open({ channel: 'store' }) },
+      ...orders.map((stop): ChatRow => ({ key: `client-${stop.pedidoId}`, kind: 'client', name: stop.pedido?.nomeCliente || 'Cliente', title: `${stop.pedido?.nomeCliente || 'Cliente'} · #${stop.pedidoId}`, ...info('client', stop.pedidoId, 'Pedido em andamento'),
+        onPress: () => router.push({ pathname: '/conversas', params: { channel: 'client', pedidoId: String(stop.pedidoId) } }) })),
+      ...colleagues.map((c): ChatRow => ({ key: `private-${c.motoboyId}`, kind: 'private', name: c.nome, title: c.nome, ...info('private', c.motoboyId, c.online ? 'Online' : 'Offline'), online: c.online, onPress: () => open({ channel: 'private', target: c.motoboyId }, c.nome) })),
+    ];
+    const visible = rows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => matches(`${row.title} ${row.name}`) && (filter === 'Todas' || (filter === 'Não lidas' ? row.unread > 0 : filter === 'Equipe' ? row.kind === 'group' || row.kind === 'store' : filter === 'Clientes' ? row.kind === 'client' : row.kind === 'private')))
+      .sort((a, b) => b.row.at - a.row.at || a.index - b.index)
+      .map(({ row }) => row);
+    return (
+      <WaPage
+        header={<View style={{ paddingTop: insets.top, backgroundColor: wa.header }}><View style={{ height: 60, flexDirection: 'row', alignItems: 'center', paddingLeft: 18, paddingRight: 6 }}>
+          <Text accessibilityRole="header" style={{ flex: 1, fontFamily: 'ManropeExtraBold', fontSize: 27, letterSpacing: -.9, color: wa.ink }}>Conversas</Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Notificacoes" onPress={() => router.push({ pathname: '/conversas', params: { view: 'notifications' } })} style={{ width: 46, height: 46, alignItems: 'center', justifyContent: 'center' }}>
+            <Bell size={23} color={wa.ink} />{notices.length > 0 && <View style={{ position: 'absolute', top: 10, right: 11, width: 10, height: 10, borderRadius: 5, backgroundColor: wa.send, borderWidth: 2, borderColor: wa.header }} />}
+          </Pressable>
+        </View></View>}
+        footer={pageFooter}
+      >
+        <Stack.Screen options={{ headerShown: false }} />
+        <ScrollView keyboardShouldPersistTaps="handled" style={{ flex: 1, minHeight: 0 }} contentContainerStyle={{ paddingBottom: 96 }} stickyHeaderIndices={[0]} onScroll={loadContactsOnScroll} scrollEventThrottle={200}>
+          <View style={{ backgroundColor: wa.header, paddingTop: 2 }}>
+            <WaSearch label="Buscar conversas" value={search} onChange={setSearch} placeholder="Pesquisar conversas" />
+            <WaFilters options={['Todas', 'Não lidas', 'Equipe', 'Clientes', 'Colegas']} value={filter} onChange={setFilter} />
+          </View>
+          {visible.map((row) => <WaListRow key={row.key} name={row.name} title={row.title} preview={row.text} time={listTime(row.at)} unread={row.unread} online={row.online} onPress={row.onPress} />)}
+          {!visible.length && !loading && rosterReady && <Text style={{ fontFamily: 'Manrope', fontSize: 14.5, color: wa.meta, textAlign: 'center', padding: 36 }}>{filter === 'Não lidas' ? 'Nenhuma conversa com mensagens não lidas.' : 'Nenhuma conversa encontrada.'}</Text>}
+          {(loading || !rosterReady) && !error && !colleagues.length && !orders.length && <View style={{ padding: 16 }}><SkeletonRows rows={5} /></View>}
+          {roster.loadingMore && <ActivityIndicator color={wa.meta} style={{ padding: 16 }} accessibilityLabel="Carregando contatos" />}
+          {!!roster.error && <Pressable onPress={() => void roster.refresh()}><Text style={{ color: colors.danger, padding: 16 }}>{roster.error}</Text></Pressable>}
+          {!!error && <Pressable onPress={() => setRefresh((n) => n + 1)}><Text style={{ color: colors.danger, padding: 16 }}>{error}</Text></Pressable>}
+        </ScrollView>
+        <WaFab icon={MessageSquarePlus} label="Nova conversa" bottom={20} onPress={() => router.push({ pathname: '/conversas', params: { view: 'contacts' } })} />
+      </WaPage>
+    );
+  }
   const name =
     channel === 'group'
       ? `Equipe · ${store}`
@@ -953,489 +747,232 @@ export default function CommunicationScreen() {
           )
           .slice(0, 6)
       : [];
+  const headerSubtitle = channel === 'group'
+    ? `${contactCount} participantes · ${onlineCount} online`
+    : channel === 'private'
+      ? contacts.find((c) => c.motoboyId === target.target)?.online ? 'online' : 'offline'
+      : 'Atendimento da loja';
+  const atEnd = () => { follow.current = true; setAtBottom(true); setAway(0); scroll.current?.scrollToEnd({ animated: !theme.reducedMotion }); };
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined}
-      style={{ flex: 1, minHeight: 0, backgroundColor: dark ? '#111c30' : colors.paper }}
+      style={{ flex: 1, minHeight: 0, backgroundColor: wa.wallpaper }}
     >
       <Stack.Screen options={{ headerShown: false }} />
-      <View
-        style={{
-          width: '100%',
-          maxWidth: 480,
-          flex: 1,
-          minHeight: 0,
-          alignSelf: 'center',
-          paddingTop: insets.top,
-        }}
-      >
-        <View
-          style={[
-            styles.chatHeader,
-            {
-              backgroundColor: dark ? '#243952' : colors.card,
-              borderBottomColor: colors.line,
-            },
-          ]}
-        >
-          <Pressable
-            accessibilityLabel="Voltar"
-            onPress={back}
-            style={styles.tool}
-          >
-            <ArrowLeft size={18} color={colors.ink} />
-          </Pressable>
-          <Avatar name={name} />
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[styles.name, { color: colors.ink }]}
-              numberOfLines={2}
-            >
-              {name}
-            </Text>
-            <Text style={[styles.small, { fontSize: 9, color: colors.muted }]}>
-              {channel === 'group'
-                ? `${contactCount} participantes · ${onlineCount} online`
-                : channel === 'private'
-                  ? 'Colega da sua equipe'
-                  : 'Atendimento da loja'}
-            </Text>
+      <StatusBar style={dark ? 'light' : 'dark'} />
+      <View style={{ width: '100%', maxWidth: 480, flex: 1, minHeight: 0, alignSelf: 'center' }}>
+        {searching ? (
+          <View style={{ paddingTop: insets.top, backgroundColor: wa.header, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: wa.divider }}>
+            <View style={{ height: 58, flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 4 }}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Fechar busca" onPress={() => { setSearching(false); setSearch(''); }} style={{ width: 46, height: 48, alignItems: 'center', justifyContent: 'center' }}><ArrowLeft size={23} color={wa.ink} /></Pressable>
+              <TextInput accessibilityLabel="Buscar mensagens" autoFocus placeholder="Pesquisar…" placeholderTextColor={wa.meta} value={search} onChangeText={setSearch} selectionColor={wa.send}
+                style={{ flex: 1, minWidth: 0, fontFamily: 'Manrope', fontSize: 17, color: wa.ink, paddingVertical: 10, outlineStyle: 'none' } as never} />
+              {!!search && <Pressable accessibilityRole="button" accessibilityLabel="Limpar busca" onPress={() => setSearch('')} style={{ width: 44, height: 48, alignItems: 'center', justifyContent: 'center' }}><X size={20} color={wa.meta} /></Pressable>}
+            </View>
           </View>
-          <Pressable
-            accessibilityLabel="Buscar mensagens"
-            onPress={() => setSearching((v) => !v)}
-            style={styles.tool}
-          >
-            <Search color={colors.ink} size={18} />
-          </Pressable>
-          <Pressable
-            accessibilityLabel="Menu da conversa"
-            onPress={() => setMenu((v) => !v)}
-            style={styles.tool}
-          >
-            <MoreVertical size={18} color={colors.ink} />
-          </Pressable>
-        </View>
-        {menu && (
-          <View
-            style={[styles.row, { padding: 12, backgroundColor: colors.card }]}
-          >
-            <Pressable
-              onPress={() =>
-                router.push({
-                  pathname: '/conversas',
-                  params: { view: channel === 'group' ? 'group' : 'contacts' },
-                })
-              }
-            >
-              <Text style={[styles.small, { color: colors.accent }]}>
-                {channel === 'group' ? 'Participantes e avisos' : 'Contatos'}
-              </Text>
-            </Pressable>
-          </View>
-        )}
-        {searching && (
-          <TextInput
-            accessibilityLabel="Buscar mensagens"
-            placeholder="Buscar nesta conversa…"
-            placeholderTextColor={colors.muted}
-            value={search}
-            onChangeText={setSearch}
-            style={[
-              styles.input,
-              {
-                color: colors.ink,
-                backgroundColor: colors.card,
-                borderColor: colors.line,
-                margin: 12,
-              },
+        ) : (
+          <WaHeader
+            title={name}
+            subtitle={headerSubtitle}
+            avatar={name}
+            onBack={back}
+            onTitle={channel === 'group' ? () => router.push({ pathname: '/conversas', params: { view: 'group' } }) : undefined}
+            actions={[
+              { icon: Search, label: 'Buscar mensagens', onPress: () => setSearching(true) },
+              { icon: MoreVertical, label: 'Menu da conversa', onPress: () => setMenu((v) => !v) },
             ]}
           />
         )}
+        {menu && (
+          <>
+            <Pressable accessibilityLabel="Fechar menu" onPress={() => setMenu(false)} style={[StyleSheet.absoluteFill, { zIndex: 8 }]} />
+            <View style={{ position: 'absolute', zIndex: 9, top: insets.top + 50, right: 8, minWidth: 210, paddingVertical: 6, borderRadius: 12, backgroundColor: wa.header, boxShadow: '0 4px 18px #00000040' }}>
+              {[
+                { label: channel === 'group' ? 'Dados da equipe' : 'Contatos', run: () => router.push({ pathname: '/conversas', params: { view: channel === 'group' ? 'group' : 'contacts' } }) },
+                { label: 'Buscar', run: () => setSearching(true) },
+              ].map((item) => (
+                <Pressable key={item.label} accessibilityRole="button" onPress={() => { setMenu(false); item.run(); }} style={({ pressed }) => ({ minHeight: 48, justifyContent: 'center', paddingHorizontal: 18, backgroundColor: pressed ? wa.divider : 'transparent' })}>
+                  <Text style={{ fontFamily: 'Manrope', fontSize: 16, color: wa.ink }}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </>
+        )}
         {!!(error || queueError) && (
-          <Pressable
-            accessibilityRole="alert"
-            onPress={() => setRefresh((n) => n + 1)}
-            style={{ backgroundColor: colors.warningSoft, padding: 12 }}
-          >
-            <Text style={[styles.small, { color: colors.warning }]}>
-              {error || queueError}
-            </Text>
+          <Pressable accessibilityRole="alert" onPress={() => setRefresh((n) => n + 1)} style={{ backgroundColor: colors.warningSoft, paddingVertical: 10, paddingHorizontal: 16 }}>
+            <Text style={{ fontFamily: 'Manrope', fontSize: 13.5, color: colors.warning }}>{error || queueError} · toque para tentar de novo</Text>
           </Pressable>
         )}
-        <ScrollView
-          ref={scroll}
-          style={{ flex: 1, minHeight: 0 }}
-          keyboardShouldPersistTaps="handled"
-          onLayout={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
-          contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 6, paddingBottom: 16, flexGrow: 1 }}
-          onScroll={(event) => {
-            const { contentOffset, contentSize, layoutMeasurement } =
-              event.nativeEvent;
-            follow.current =
-              contentSize.height - contentOffset.y - layoutMeasurement.height <
-              60;
-          }}
-          scrollEventThrottle={100}
-          onContentSizeChange={() => {
-            if (follow.current)
-              scroll.current?.scrollToEnd({ animated: false });
-          }}
-        >
-          {more && (
-            <Pressable
-              accessibilityLabel="Carregar mensagens anteriores"
-              onPress={() => void loadOlder()}
-              style={{ alignSelf: 'center', padding: 12 }}
-            >
-              {older ? (
-                <ActivityIndicator color={colors.accent} />
-              ) : (
-                <Text style={[styles.small, { color: colors.accent }]}>
-                  Mensagens anteriores
+        <View style={{ flex: 1, minHeight: 0 }}>
+          <ScrollView
+            ref={scroll}
+            style={{ flex: 1, minHeight: 0 }}
+            keyboardShouldPersistTaps="handled"
+            onLayout={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
+            contentContainerStyle={{ paddingTop: 4, paddingBottom: 10, flexGrow: 1 }}
+            onScroll={(event) => {
+              const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+              const near = contentSize.height - contentOffset.y - layoutMeasurement.height < 60;
+              follow.current = near;
+              setAtBottom((previous) => (previous === near ? previous : near));
+              if (near) setAway((count) => (count ? 0 : count));
+            }}
+            scrollEventThrottle={100}
+            onContentSizeChange={() => { if (follow.current) scroll.current?.scrollToEnd({ animated: false }); }}
+          >
+            {more && (
+              <Pressable accessibilityLabel="Carregar mensagens anteriores" onPress={() => void loadOlder()} style={{ alignSelf: 'center', marginTop: 10, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 16, backgroundColor: wa.chip }}>
+                {older ? <ActivityIndicator color={wa.send} /> : <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 13, color: wa.send }}>Mensagens anteriores</Text>}
+              </Pressable>
+            )}
+            {loading && !messages.length && <View style={{ paddingHorizontal: 12 }}><SkeletonBubbles /></View>}
+            {!loading && !messages.length && !pending.length && (
+              <View style={{ alignSelf: 'center', marginTop: 40, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: wa.chip }}>
+                <Text style={{ fontFamily: 'Manrope', fontSize: 13.5, color: wa.meta }}>Nenhuma mensagem nesta conversa.</Text>
+              </View>
+            )}
+            {messages.map((message, index) => {
+              const previous = messages[index - 1];
+              const newDay = !previous || !sameDay(previous.createdAtUtc, message.createdAtUtc);
+              const foreground = wa.ink;
+              const continuation = continuesMessage(previous, message);
+              const audioOnly = !!message.attachment?.contentType.startsWith('audio/') && !message.body;
+              const metadata = <MessageMeta createdAtUtc={message.createdAtUtc} mine={message.mine} read={message.readCount > 0} />;
+              const content = (
+                <>
+                  {!message.mine && !continuation && channel !== 'private' && <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 13.5, lineHeight: 19, color: senderTone(message.senderName, dark), marginBottom: 1 }}>{message.senderName}</Text>}
+                  {message.replyTo && <ReplyQuote mine={message.mine} sender={message.replySender || 'Mensagem'} body={message.replyBody || 'Anexo'} onPress={() => { if (message.replyTo) void locate(message.replyTo); }} />}
+                  {message.forwarded && <Text style={{ fontFamily: 'Manrope', fontStyle: 'italic', fontSize: 12.5, color: wa.meta, marginBottom: 3 }}>↪ Encaminhada</Text>}
+                  {message.attachment && (
+                    <ChatMedia
+                      attachment={message.attachment}
+                      foreground={foreground}
+                      metadata={audioOnly ? metadata : undefined}
+                      senderName={message.senderName}
+                      avatarUri={contacts.find((c) => c.motoboyId === message.motoboyId)?.avatar}
+                    />
+                  )}
+                  {!!message.body && <BubbleText body={message.body} foreground={foreground} metadata={metadata} />}
+                  {!message.body && !audioOnly && <View style={{ marginTop: 2, alignSelf: 'flex-end' }}>{metadata}</View>}
+                  {message.reactions.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                      {message.reactions.map((r) => {
+                        const Icon = reactionIcons[r.reaction as keyof typeof reactionIcons] || ThumbsUp;
+                        return (
+                          <Pressable
+                            key={r.reaction}
+                            accessibilityLabel={`${r.reaction}: ${r.count}`}
+                            onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
+                            delayLongPress={350}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 2, paddingHorizontal: 8, borderRadius: 12, backgroundColor: wa.dark ? '#ffffff14' : '#0000000d' }}
+                          >
+                            {reactionIcons[r.reaction as keyof typeof reactionIcons] ? <Icon size={12} color={wa.send} /> : <Text style={{ fontSize: 15 }}>{r.reaction}</Text>}
+                            <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 12, color: wa.ink }}>{r.count}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  )}
+                </>
+              );
+              return (
+                <React.Fragment key={message.id}>
+                  {newDay && <WaChip>{dayLabel(message.createdAtUtc)}</WaChip>}
+                  <SwipeReply onReply={() => setReply(message)}>
+                    <MessageBubble
+                      testID={`chat-bubble-${message.id}`}
+                      mine={message.mine}
+                      continuation={continuation}
+                      highlightColor={message.mentioned || highlighted === message.id ? colors.warning : undefined}
+                      onLayout={(event) => {
+                        if (highlighted === message.id)
+                          scroll.current?.scrollTo({ y: Math.max(0, event.nativeEvent.layout.y - 32), animated: !theme.reducedMotion });
+                      }}
+                      accessibilityLabel={`Mensagem de ${message.senderName}${message.mentioned ? ', mencionou voce' : ''}: ${message.body || 'anexo'}`}
+                      onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
+                    >
+                      {message.mentioned ? <MentionMark>{content}</MentionMark> : content}
+                    </MessageBubble>
+                  </SwipeReply>
+                </React.Fragment>
+              );
+            })}
+            {pending.map((entry) => (
+              <View key={entry.request.clientId} style={{ alignSelf: 'flex-end', marginTop: 8, marginHorizontal: 8, maxWidth: '84%', paddingHorizontal: 9, paddingVertical: 6, borderRadius: 10, borderTopRightRadius: 0, backgroundColor: wa.outgoing, borderWidth: entry.state === 'failed' ? 1.5 : 0, borderColor: colors.danger, boxShadow: '0 1px 0.5px #0000002b' }}>
+                <Text style={{ fontFamily: 'Manrope', fontSize: 16, lineHeight: 22, color: wa.ink }}>
+                  {entry.request.body || (entry.file?.contentType.startsWith('audio/') ? '🎤 Mensagem de voz' : '📷 Foto')}
                 </Text>
-              )}
-            </Pressable>
-          )}
-          {loading && <ActivityIndicator color={colors.accent} />}
-          {!loading && !messages.length && !pending.length && (
-            <Text
-              style={[
-                styles.small,
-                { color: colors.muted, alignSelf: 'center', marginTop: 35 },
-              ]}
-            >
-              Nenhuma mensagem nesta conversa.
-            </Text>
-          )}
-          {messages.map((message, index) => {
-            const foreground = message.mine && dark ? '#fff' : colors.ink;
-            const continuation = continuesMessage(messages[index - 1], message);
-            const audioOnly = !!message.attachment?.contentType.startsWith('audio/') && !message.body;
-            const metadata = <MessageMeta createdAtUtc={message.createdAtUtc} mine={message.mine} read={message.readCount > 0} />;
-            const content = (
-              <>
-                {!message.mine && !continuation && channel !== 'private' && <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, lineHeight: 18, color: colors.accent, marginBottom: 3 }}>{message.senderName}</Text>}
-                {message.replyTo && <ReplyQuote mine={message.mine} sender={message.replySender || 'Mensagem'} body={message.replyBody || 'Anexo'} onPress={() => { if (message.replyTo) void locate(message.replyTo); }} />}
-                {message.forwarded && <Text style={[styles.small, { color: colors.muted, marginBottom: 6 }]}>↪ Encaminhada</Text>}
-                {message.attachment && (
-                  <ChatMedia
-                    attachment={message.attachment}
-                    foreground={foreground}
-                    metadata={audioOnly ? metadata : undefined}
-                    senderName={message.senderName}
-                    avatarUri={contacts.find(c => c.motoboyId === message.motoboyId)?.avatar}
-                  />
-                )}
-                {!!message.body && <BubbleText body={message.body} foreground={foreground} metadata={metadata} />}
-                {!message.body && !audioOnly && <View style={{ marginTop: 4 }}>{metadata}</View>}
-                {message.reactions.length > 0 && (
-                  <View
-                    style={[styles.row, { marginTop: 8, flexWrap: 'wrap' }]}
-                  >
-                    {message.reactions.map((r) => {
-                      const Icon =
-                        reactionIcons[
-                          r.reaction as keyof typeof reactionIcons
-                        ] || ThumbsUp;
-                      return (
-                        <Pressable
-                          key={r.reaction}
-                          accessibilityLabel={`${r.reaction}: ${r.count}`}
-                          onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }} delayLongPress={350}
-                          style={[
-                            styles.row,
-                            {
-                              gap: 4,
-                              padding: 5,
-                              borderRadius: 8,
-                              backgroundColor: colors.soft,
-                            },
-                          ]}
-                        >
-                          {reactionIcons[r.reaction as keyof typeof reactionIcons] ? <Icon size={12} color={colors.accent} /> : <Text style={{ fontSize: 16 }}>{r.reaction}</Text>}
-                          <Text style={[styles.small, { color: colors.ink }]}>
-                            {r.count}
-                          </Text>
-                        </Pressable>
-                      );
-                    })}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                  <Clock size={12} color={entry.state === 'failed' ? colors.danger : wa.meta} />
+                  <Text style={{ fontFamily: 'Manrope', fontSize: 11.5, color: entry.state === 'failed' ? colors.danger : wa.meta }}>
+                    {entry.state === 'sending' ? 'Enviando…' : entry.state === 'queued' ? 'Aguardando envio' : entry.error || 'Envio nao confirmado'}
+                  </Text>
+                </View>
+                {entry.state !== 'sending' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
+                    <Pressable accessibilityLabel="Reenviar mensagem" onPress={() => void outbox.retry(entry.request.clientId).catch((e) => setError(String(e)))} style={{ minHeight: 40, paddingHorizontal: 8, justifyContent: 'center' }}>
+                      <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 13, color: wa.send }}>Reenviar</Text>
+                    </Pressable>
+                    <Pressable accessibilityLabel="Remover mensagem pendente" onPress={() => void outbox.remove(entry.request.clientId).catch((e) => setError(String(e)))} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+                      <Trash2 size={17} color={wa.meta} />
+                    </Pressable>
                   </View>
                 )}
-              </>
-            );
-            return (
-              <MessageBubble
-                key={message.id}
-                testID={`chat-bubble-${message.id}`}
-                mine={message.mine}
-                continuation={continuation}
-                highlightColor={message.mentioned || highlighted === message.id ? colors.warning : undefined}
-                onLayout={(event) => {
-                  if (highlighted === message.id)
-                    scroll.current?.scrollTo({
-                      y: Math.max(0, event.nativeEvent.layout.y - 32),
-                      animated: !theme.reducedMotion,
-                    });
-                }}
-                accessibilityLabel={`Mensagem de ${message.senderName}${message.mentioned ? ', mencionou voce' : ''}: ${message.body || 'anexo'}`}
-                onLongPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}); setSelected(message); }}
-              >
-                {message.mentioned ? (
-                  <MentionMark>{content}</MentionMark>
-                ) : (
-                  content
-                )}
-              </MessageBubble>
-            );
-          })}
-          {pending.map((entry) => (
-            <View
-              key={entry.request.clientId}
-              style={[
-                styles.bubble,
-                {
-                  alignSelf: 'flex-end',
-                  marginTop: 8,
-                  backgroundColor: colors.accentSoft,
-                  borderColor:
-                    entry.state === 'failed' ? colors.danger : colors.line,
-                },
-              ]}
-            >
-              <Text style={[styles.body, { color: colors.ink }]}>
-                {entry.request.body ||
-                  (entry.file?.contentType.startsWith('audio/')
-                    ? 'Audio'
-                    : 'Foto')}
-              </Text>
-              <Text
-                style={[
-                  styles.small,
-                  {
-                    color:
-                      entry.state === 'failed' ? colors.danger : colors.muted,
-                  },
-                ]}
-              >
-                {entry.state === 'sending'
-                  ? 'Enviando…'
-                  : entry.state === 'queued'
-                    ? 'Aguardando envio'
-                    : entry.error || 'Envio nao confirmado'}
-              </Text>
-              {entry.state !== 'sending' && (
-                <View style={styles.row}>
-                  <Pressable
-                    accessibilityLabel="Reenviar mensagem"
-                    onPress={() =>
-                      void outbox
-                        .retry(entry.request.clientId)
-                        .catch((e) => setError(String(e)))
-                    }
-                    style={{ padding: 8 }}
-                  >
-                    <Text style={[styles.small, { color: colors.accent }]}>
-                      Reenviar
-                    </Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityLabel="Remover mensagem pendente"
-                    onPress={() =>
-                      void outbox
-                        .remove(entry.request.clientId)
-                        .catch((e) => setError(String(e)))
-                    }
-                    style={styles.tool}
-                  >
-                    <Trash2 size={16} color={colors.muted} />
-                  </Pressable>
-                </View>
-              )}
-            </View>
-          ))}
-        </ScrollView>
+              </View>
+            ))}
+          </ScrollView>
+          <WaScrollFab visible={!atBottom} count={away} bottom={12} onPress={atEnd} />
+        </View>
         {forwarding && <ChatForwardSheet message={forwarding} outbox={outbox} onDismiss={() => setForwarding(null)} />}
         {selected && <ChatMessageActions onForward={() => { setForwarding(selected); setSelected(null); }} message={selected} senderName={selected.senderName} onDismiss={() => setSelected(null)} onReply={() => { setReply(selected); setSelected(null); }} onReact={emoji => void react(emoji)}
           onMention={channel === 'group' && selected.motoboyId && contacts.some(c => c.motoboyId === selected.motoboyId) ? () => { const person = contacts.find(c => c.motoboyId === selected.motoboyId)!; setDraft(text => text + '@' + person.nome + ' '); setMentions(current => [...current.filter(c => c.motoboyId !== person.motoboyId), person]); setSelected(null); } : undefined} />}
-        {reply && (
-          <View
-            style={[styles.row, { padding: 10, backgroundColor: colors.soft }]}
-          >
-            <Reply size={16} color={colors.accent} />
-            <Text
-              numberOfLines={2}
-              style={[styles.small, { color: colors.ink, flex: 1 }]}
-            >
-              Respondendo a {reply.senderName}: {reply.body || 'Anexo'}
-            </Text>
-            <Pressable
-              accessibilityLabel="Cancelar resposta"
-              onPress={() => setReply(null)}
-              style={styles.tool}
-            >
-              <X size={16} color={colors.muted} />
-            </Pressable>
-          </View>
-        )}
-        {!!candidates.length && (
-          <ScrollView
-            horizontal
-            contentContainerStyle={{ padding: 10, gap: 8 }}
-            keyboardShouldPersistTaps="handled"
-          >
-            {candidates.map((contact) => (
-              <Pressable
-                accessibilityLabel={`Mencionar ${contact.nome}`}
-                key={contact.motoboyId}
-                onPress={() => {
-                  setDraft((current) =>
-                    current.replace(/@([^@\n]*)$/, `@${contact.nome} `),
-                  );
-                  setMentions((current) => [
-                    ...current.filter((c) => c.motoboyId !== contact.motoboyId),
-                    contact,
-                  ]);
-                }}
-                style={[
-                  styles.chip,
-                  {
-                    backgroundColor: colors.warningSoft,
-                    borderColor: colors.warning,
-                  },
-                ]}
-              >
-                <Text style={[styles.small, { color: colors.warning }]}>
-                  @{contact.nome}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={{ flexGrow: 0, flexShrink: 0, height: 46 }}
-          contentContainerStyle={{
-            paddingHorizontal: 16,
-            gap: 7,
-            paddingBottom: 10,
-            alignItems: 'center',
-          }}
-        >
-          {(channel === 'store'
-            ? ['Estou saindo', 'Cheguei à loja', 'Preciso de ajuda']
-            : channel === 'group'
-              ? ['Boa noite, equipe!', 'Atenção no caminho']
-              : ['Como está o caminho?', 'Valeu!', 'Estou na loja']
-          ).map((text) => (
-            <Pressable
-              key={text}
-              disabled={!ready || busy}
-              onPress={() => setDraft(text)}
-              style={[
-                styles.chip,
-                { backgroundColor: colors.soft, borderColor: colors.line },
-              ]}
-            >
-              <Text
-                style={[styles.small, { fontSize: 9, color: colors.accent }]}
-              >
-                {text}
-              </Text>
-            </Pressable>
-          ))}
-        </ScrollView>
-        <View
-          style={[
-            styles.row,
-            {
-              paddingHorizontal: 12,
-              alignItems: 'flex-end',
-              gap: 6,
-              flexShrink: 0,
-              paddingBottom: keyboardVisible ? 8 : 10,
-            },
-          ]}
-        >
-          <View
-            style={[
-              styles.row,
-              {
-                flex: 1,
-                minHeight: 45,
-                maxHeight: 130,
-                paddingHorizontal: 4,
-                borderRadius: 19,
-                backgroundColor: colors.card,
-                borderWidth: 1,
-                borderColor: colors.line,
-                gap: 0,
-              },
-            ]}
-          >
-            <Pressable
-              accessibilityLabel="Anexar foto"
-              disabled={!ready || busy}
-              onPress={() => void attach()}
-              style={styles.tool}
-            >
-              <Paperclip color={colors.muted} size={19} />
-            </Pressable>
-            <TextInput
-              accessibilityLabel="Mensagem"
-              multiline
-              placeholder="Escreva uma mensagem…"
-              placeholderTextColor={colors.muted}
-              value={draft}
-              onChangeText={setDraft}
-              maxLength={500}
-              editable={ready && restored && !busy}
-              onFocus={() => { follow.current = true; scroll.current?.scrollToEnd({ animated: false }); }}
-              style={[
-                styles.body,
-                {
-                  flex: 1,
-                  color: colors.ink,
-                  maxHeight: 120,
-                  fontSize: 16,
-                  lineHeight: 22,
-                  paddingVertical: 10,
-                  paddingRight: 6,
-                },
-              ]}
-            />
-          </View>
-          <AudioComposer
-            disabled={!ready || busy}
-            send={(file) => send('', file)}
-            onError={setError}
-          />
-          <Pressable
-            accessibilityLabel="Enviar mensagem"
-            disabled={!ready || busy || !draft.trim()}
-            onPress={() => void send()}
-            style={[
-              styles.tool,
-              {
-                borderRadius: 16,
-                backgroundColor: '#2872e3',
-                opacity: !ready || busy || !draft.trim() ? 0.5 : 1,
-              },
-            ]}
-          >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Send color="#fff" size={19} />
+        <WaComposer
+          value={draft}
+          onChange={setDraft}
+          onSend={() => void send()}
+          onAttach={() => void attach()}
+          onFocus={() => { follow.current = true; scroll.current?.scrollToEnd({ animated: false }); }}
+          disabled={!ready || busy}
+          busy={busy}
+          editable={ready && restored && !busy}
+          placeholder="Mensagem"
+          keyboardVisible={keyboardVisible}
+          audio={<AudioComposer disabled={!ready || busy} send={(file) => send('', file)} onError={setError} />}
+          top={<>
+            {reply && <WaReplyBar sender={reply.senderName} body={reply.body || 'Anexo'} onCancel={() => setReply(null)} />}
+            {!!candidates.length && (
+              <ScrollView horizontal contentContainerStyle={{ padding: 10, gap: 8 }} keyboardShouldPersistTaps="handled">
+                {candidates.map((contact) => (
+                  <Pressable
+                    accessibilityLabel={`Mencionar ${contact.nome}`}
+                    key={contact.motoboyId}
+                    onPress={() => {
+                      setDraft((current) => current.replace(/@([^@\n]*)$/, `@${contact.nome} `));
+                      setMentions((current) => [...current.filter((c) => c.motoboyId !== contact.motoboyId), contact]);
+                    }}
+                    style={{ paddingVertical: 8, paddingHorizontal: 14, borderRadius: 18, backgroundColor: wa.header, borderWidth: 1, borderColor: colors.warning }}
+                  >
+                    <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 13.5, color: colors.warning }}>@{contact.nome}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
             )}
-          </Pressable>
-        </View>
-        {!keyboardVisible && <View style={{ flexShrink: 0, paddingHorizontal: 16, paddingTop: 4, paddingBottom: Math.max(insets.bottom, 10) }}><AppNav active="chats" /></View>}
+          </>}
+          accessory={!draft ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0, flexShrink: 0 }} contentContainerStyle={{ paddingHorizontal: 10, paddingTop: 6, gap: 7, alignItems: 'center' }}>
+              {(channel === 'store' ? ['Estou saindo', 'Cheguei à loja', 'Preciso de ajuda'] : channel === 'group' ? ['Boa noite, equipe!', 'Atenção no caminho'] : ['Como está o caminho?', 'Valeu!', 'Estou na loja']).map((text) => (
+                <Pressable key={text} disabled={!ready || busy} onPress={() => setDraft(text)} style={{ paddingVertical: 7, paddingHorizontal: 13, borderRadius: 16, backgroundColor: wa.chip, borderWidth: StyleSheet.hairlineWidth, borderColor: wa.divider }}>
+                  <Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 13, color: wa.send }}>{text}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          ) : undefined}
+        />
       </View>
     </KeyboardAvoidingView>
   );
 }
+
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: {

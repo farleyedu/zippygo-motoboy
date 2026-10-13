@@ -6,7 +6,7 @@ param(
 # Read-only snapshot; never clears logcat, restarts the app or changes log levels.
 $ErrorActionPreference = 'Stop'
 if (-not (Test-Path -LiteralPath $AdbPath)) { throw 'ADB não encontrado. Informe -AdbPath.' }
-$appProcess = ((& $AdbPath -s $Serial shell pidof com.farleyedu.zippygomotoboy) -join '').Trim()
+$appProcess = ((& $AdbPath -s $Serial shell pidof com.zippy.zippyboy) -join '').Trim()
 if (-not $appProcess) { throw 'Abra o app antes de capturar os logs.' }
 $appProcess = ($appProcess -split '\s+')[0]
 Write-Output 'Diagnóstico nativo: últimas mensagens do processo atual; nenhum resultado não prova ausência de falha.'
