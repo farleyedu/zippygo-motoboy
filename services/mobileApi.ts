@@ -226,12 +226,14 @@ export async function sendClientMessage(pedidoId: number, mensagem: string): Pro
 export class MobileApiError extends Error {
   status: number;
   code?: string;
+  details?: { sessionId?: string };
 
-  constructor(message: string, status: number, code?: string) {
+  constructor(message: string, status: number, code?: string, details?: { sessionId?: string }) {
     super(message);
     this.name = 'MobileApiError';
     this.status = status;
     this.code = code;
+    this.details = details;
   }
 }
 
@@ -252,7 +254,7 @@ function errorMessage(payload: any): string {
 export function unwrap<T>(response: AxiosResponse<any>): T {
   const payload = response.data;
   if (response.status >= 400 || payload?.success === false) {
-    throw new MobileApiError(errorMessage(payload), response.status, payload?.code ?? payload?.error?.code);
+    throw new MobileApiError(errorMessage(payload), response.status, payload?.code ?? payload?.error?.code, payload?.details ?? payload?.error?.details);
   }
 
   return (payload && Object.prototype.hasOwnProperty.call(payload, 'data') ? payload.data : payload) as T;
@@ -318,6 +320,22 @@ export async function startOperationalSession(options: { attemptId?: string; per
     clientInstanceId: await getClientInstanceId(),
     clientPlatform: options.clientPlatform ?? 'native',
     resumeSessionId: options.resumeSessionId,
+  });
+  const data = unwrap<OperationalTokenResponse>(response);
+  if (options.persist !== false) await saveOperationalSession(data);
+  return data;
+}
+
+// Confirma a troca de turno quando o servidor acusa uma sessão ativa em outro
+// aparelho (SESSION_CONFLICT): encerra a sessão antiga e assume esta.
+export async function switchOperationalSession(options: { attemptId: string; expectedSessionId: string; targetEstablishmentId: string; persist?: boolean; clientPlatform?: 'web' | 'native' }): Promise<OperationalTokenResponse> {
+  const response = await apiClient.post(API_CONFIG.ENDPOINTS.OPERATIONAL_SWITCH, {
+    attemptId: options.attemptId,
+    clientInstanceId: await getClientInstanceId(),
+    clientPlatform: options.clientPlatform ?? 'native',
+    expectedSessionId: options.expectedSessionId,
+    targetEstablishmentId: options.targetEstablishmentId,
+    confirm: true,
   });
   const data = unwrap<OperationalTokenResponse>(response);
   if (options.persist !== false) await saveOperationalSession(data);

@@ -63,6 +63,7 @@ export const API_CONFIG = {
     MOTOBOY_REJECT_INVITE: (id: string) => `/motoboys/me/vinculos/convites/${id}/recusar`,
 
     OPERATIONAL_START: '/v2/motoboys/me/session/start',
+    OPERATIONAL_SWITCH: '/v2/motoboys/me/session/switch',
     OPERATIONAL_SESSION: '/v2/motoboys/me/session',
     OPERATIONAL_QUEUE: '/v2/motoboys/me/session/queue',
     OPERATIONAL_HEARTBEAT: '/v2/motoboys/me/session/heartbeat',

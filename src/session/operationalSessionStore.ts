@@ -7,6 +7,7 @@ export type OperationalPhase = 'restoring' | 'offline' | 'starting' | 'online' |
 export type OperationalState = {
   phase: OperationalPhase; session: OperationalSession | null; queue: MotoboyQueue | null;
   permissions: OperationalPermissions | null; error: string | null;
+  conflict: { sessionId: string } | null;
 };
 export type OperationalPorts = {
   stored: () => Promise<Stored | null>;
@@ -14,6 +15,7 @@ export type OperationalPorts = {
   clearAttempt: () => Promise<void>;
   start: (attemptId: string) => Promise<OperationalTokenResponse>;
   recover?: (attemptId: string, sessionId: string) => Promise<OperationalTokenResponse>;
+  switchSession?: (attemptId: string, expectedSessionId: string, establishmentId: string) => Promise<OperationalTokenResponse>;
   current: () => Promise<OperationalSession | null>;
   heartbeat: (force?: boolean) => Promise<OperationalHeartbeatResponse>;
   queue: () => Promise<MotoboyQueue>;
@@ -25,13 +27,13 @@ export type OperationalPorts = {
   stopMonitor: () => Promise<void>;
   locationOptional?: boolean;
 };
-export function operationalError(error: unknown): { message: string; status?: number; code?: string } {
-  const value = error as { message?: string; status?: number; code?: string; response?: { status?: number; data?: { code?: string; error?: string } } };
+export function operationalError(error: unknown): { message: string; status?: number; code?: string; details?: { sessionId?: string } } {
+  const value = error as { message?: string; status?: number; code?: string; details?: { sessionId?: string }; response?: { status?: number; data?: { code?: string; error?: string; details?: { sessionId?: string } } } };
   const rawMessage = value?.response?.data?.error || value?.message;
   const message = value?.code === 'ERR_NETWORK' || rawMessage && /^(Failed to fetch|Network request failed|Network Error)$/i.test(rawMessage)
     ? 'Não foi possível conectar. Reconecte e tente novamente; seus dados foram preservados.'
     : rawMessage || 'Não foi possível atualizar o turno. Tente novamente.';
-  return { message, status: value?.status ?? value?.response?.status, code: value?.code ?? value?.response?.data?.code };
+  return { message, status: value?.status ?? value?.response?.status, code: value?.code ?? value?.response?.data?.code, details: value?.details ?? value?.response?.data?.details };
 }
 export function queueTrackingMode(queue: MotoboyQueue): 'online_idle' | 'active_route' {
   return queue.current || ['retornando', 'returning'].includes(queue.routeState) ? 'active_route' : 'online_idle';
@@ -42,7 +44,7 @@ export function hasOperationalWork(queue: MotoboyQueue): boolean {
 
 // Máquina compartilhada de sessão. Os ports permitem verificar concorrência sem GPS/API reais.
 export function createOperationalSessionStore(ports: OperationalPorts) {
-  const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null });
+  const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null, conflict: null });
   let state = initial(), identity: Identity | null = null, epoch = 0;
   let operation: Promise<boolean> | null = null, queueOperation: Promise<boolean> | null = null, monitorMode: string | null = null;
   const listeners = new Set<() => void>();
@@ -53,7 +55,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
   async function invalidate(message: string, version = epoch) {
     if (!matches(version)) return;
     ++epoch; const nextVersion = epoch;
-    update({ phase: 'expired', error: message, session: null, queue: null });
+    update({ phase: 'expired', error: message, session: null, queue: null, conflict: null });
     await ports.stopMonitor();
     if (!matches(nextVersion)) return;
     monitorMode = null;
@@ -70,6 +72,10 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     }
     if (failure.status === 401 || failure.code === 'SESSION_CHANGED' || failure.code === 'LINK_FORBIDDEN') {
       await invalidate(failure.message, version);
+      return;
+    }
+    if (failure.code === 'SESSION_CONFLICT' && failure.details?.sessionId) {
+      update({ phase: 'error', error: failure.message, conflict: { sessionId: failure.details.sessionId } });
       return;
     }
     const phase = !state.session ? 'error'
@@ -204,7 +210,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       return permissions;
     },
     start: () => run(async (version, owner) => {
-      update({ phase: 'starting', error: null });
+      update({ phase: 'starting', error: null, conflict: null });
       const permissions = await ports.permissions(); assertCurrent(version); update({ permissions });
       if (!permissions.ready) { update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
         ? 'Revise o uso da localização antes de iniciar o turno.'
@@ -212,7 +218,17 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       if (await ports.stored()) { assertCurrent(version); return restore(version, owner); }
       assertCurrent(version);
       const attemptId = await ports.attempt(owner); assertCurrent(version);
-      const data = await ports.start(attemptId); assertCurrent(version);
+      let data: OperationalTokenResponse;
+      try {
+        data = await ports.start(attemptId);
+      } catch (error) {
+        assertCurrent(version);
+        // Uma resposta do servidor encerra esta tentativa (sucesso, recusa ou conflito);
+        // só a ausência de resposta (falha de rede) justifica repetir com o mesmo id depois.
+        if (operationalError(error).status !== undefined) await ports.clearAttempt();
+        throw error;
+      }
+      assertCurrent(version);
       if (!data.accessToken || data.establishmentId !== owner.establishmentId || data.session?.isEnded || !data.session?.sessionId) throw new Error('O servidor não confirmou o turno neste estabelecimento.');
       await ports.save(data, owner); assertCurrent(version);
       update({ session: data.session });
@@ -220,6 +236,28 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       const queue = await ports.queue(); assertCurrent(version); update({ queue });
       return enableMonitoring(queue, version);
     }),
+    confirmSwitch: () => run(async (version, owner) => {
+      const sessionId = state.conflict?.sessionId;
+      if (!sessionId || !ports.switchSession) return false;
+      update({ phase: 'starting', error: null });
+      const attemptId = await ports.attempt(owner); assertCurrent(version);
+      let data: OperationalTokenResponse;
+      try {
+        data = await ports.switchSession(attemptId, sessionId, owner.establishmentId);
+      } catch (error) {
+        assertCurrent(version);
+        if (operationalError(error).status !== undefined) await ports.clearAttempt();
+        throw error;
+      }
+      assertCurrent(version);
+      if (!data.accessToken || data.establishmentId !== owner.establishmentId || data.session?.isEnded || !data.session?.sessionId) throw new Error('O servidor não confirmou a troca de turno.');
+      await ports.save(data, owner); assertCurrent(version);
+      update({ session: data.session, conflict: null });
+      await ports.clearAttempt(); assertCurrent(version);
+      const queue = await ports.queue(); assertCurrent(version); update({ queue });
+      return enableMonitoring(queue, version);
+    }),
+    cancelConflict: () => { update({ conflict: null, error: null }); void ports.clearAttempt(); },
     tick: () => run(async (version, owner) => {
       if (!state.session || state.phase === 'expired') return false;
       const reconcileQueue = !state.queue || state.phase === 'reconnecting';

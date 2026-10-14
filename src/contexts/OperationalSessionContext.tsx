@@ -3,7 +3,7 @@ import { AppState, Platform } from 'react-native';
 import { jwtDecode } from 'jwt-decode';
 import { useAuth } from './AuthContext';
 import { createOperationalSessionStore, OperationalPorts } from '../session/operationalSessionStore';
-import { clearOperationalSession, createIdentifier, endOperationalSession, getOperationalQueue, getOperationalSession, heartbeatOperationalSession, saveOperationalSession, startOperationalSession } from '../../services/mobileApi';
+import { clearOperationalSession, createIdentifier, endOperationalSession, getOperationalQueue, getOperationalSession, heartbeatOperationalSession, saveOperationalSession, startOperationalSession, switchOperationalSession } from '../../services/mobileApi';
 import { readOperationalPermissions } from '../../services/operationalPermissions';
 import { registerOperationalLogoutGuard, subscribeOperationalFailures } from '../../services/sessionEvents';
 import { clearCurrentTrackingData, clearTrackingMode, flushLocationQueue } from '../../services/trackingService';
@@ -42,6 +42,7 @@ function createPorts(): OperationalPorts {
     clearAttempt: () => deleteSecureItem(ATTEMPT_KEY),
     start: attemptId => startOperationalSession({ attemptId, persist: false, clientPlatform: Platform.OS === 'web' ? 'web' : 'native' }),
     recover: (attemptId, resumeSessionId) => startOperationalSession({ attemptId, resumeSessionId, persist: false, clientPlatform: Platform.OS === 'web' ? 'web' : 'native' }),
+    switchSession: (attemptId, expectedSessionId, establishmentId) => switchOperationalSession({ attemptId, expectedSessionId, targetEstablishmentId: establishmentId, persist: false, clientPlatform: Platform.OS === 'web' ? 'web' : 'native' }),
     current: getOperationalSession,
     heartbeat: force => heartbeatOperationalSession({ persist: false, force }),
     queue: getOperationalQueue,
@@ -174,7 +175,9 @@ export function OperationalSessionProvider({ children }: { children: React.React
     await store.whenIdle();
     const saved = await stored();
     if (!saved) {
-      if (await getSecureItem(ATTEMPT_KEY)) throw new Error('Há um início de turno pendente. Reconecte e recupere o turno antes de sair.');
+      // Sem sessão salva não há turno em andamento (a checagem de fase acima cobre o
+      // caso em que ele está em andamento agora); uma tentativa residual é descartável.
+      await deleteSecureItem(ATTEMPT_KEY);
       await pararMonitoramentoLocalizacao();
       await clearTrackingMode();
       return;

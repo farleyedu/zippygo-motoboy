@@ -24,6 +24,7 @@ import { BrowserTestBanner } from '@/src/ui/BrowserTestBanner';
 import { WebViewport } from '@/src/ui/WebViewport';
 import { NativeNavigationProvider } from '@/src/delivery/NativeNavigationProvider';
 import { OfferPrompt } from '@/src/ui/OfferPrompt';
+import { OperationalConflictDialog } from '@/src/ui/OperationalConflictDialog';
 import { configureChatChannels } from '@/src/chat/push';
 import { operationalDestination, operationalPageRedirect } from '@/src/delivery/operationalDestination';
 
@@ -72,7 +73,7 @@ export default function RootLayout() {
       <GestureHandlerRootView style={{ flex: 1 }}>
         <BrowserTestBanner />
         <WebViewport />
-        <NativeNavigationProvider><View style={{ flex: 1 }}><RootLayoutNav /><ChatNotices /><OfferPrompt /></View></NativeNavigationProvider>
+        <NativeNavigationProvider><View style={{ flex: 1 }}><RootLayoutNav /><ChatNotices /><OfferPrompt /><OperationalConflictDialog /></View></NativeNavigationProvider>
       </GestureHandlerRootView>
       </DeliveryCompletionProvider>
       </OperationalSessionProvider>
