@@ -1,7 +1,7 @@
 import React,{createContext,useContext,useEffect,useRef,useState} from 'react';
 import { AppState,Platform } from 'react-native';
 import { createIdentifier,getOperationalQueue,MobileApiError } from '../../services/mobileApi';
-import { checkDeliveryCode,completeDelivery,CompletionContext,CompletionRequest,DeliveryReceipt,findDeliveryReceipt,getCompletionContext,PaymentPart,uploadDeliveryProof } from '../../services/completionApi';
+import { checkDeliveryCode,completeDelivery,completeIfoodDelivery,findIfoodCompletion,CompletionContext,CompletionRequest,DeliveryReceipt,IfoodCompletionOperation,findDeliveryReceipt,getCompletionContext,PaymentPart,uploadDeliveryProof } from '../../services/completionApi';
 import { secureStorage } from '../../utils/secureStorage';
 import { registerLogoutPrecondition } from '../../services/sessionEvents';
 import { readyToComplete } from '../delivery/completionRules';
@@ -10,8 +10,10 @@ import { useOperationalSession } from './OperationalSessionContext';
 import { assertRealProof } from '../../services/browserNativeTest';
 import { checklistReady, type ChecklistConfirmation } from '../delivery/checklistRules';
 import { canConcludeOperationalOrder } from '../delivery/operationalDestination';
+import { assertOfficialOperation, bindIfoodContext, officialCompletion, officialOperationMessage, officialPaymentsMatch, preparedOfficialCode } from '../delivery/ifoodRules';
+import { deleteCompletionRecord, readCompletionRecord, writeCompletionRecord } from '../delivery/completionStorage';
 
-export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt};
+export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt;externalOperation?:IfoodCompletionOperation};
 type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;notice:DeliveryReceipt|null;clearNotice:()=>void;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<boolean>;preparePayment:(parts:PaymentPart[])=>Promise<void>;confirmItems:(confirmation:ChecklistConfirmation)=>Promise<boolean>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
 const Context=createContext<Value|null>(null);
 export function DeliveryCompletionProvider({children}:{children:React.ReactNode}) {
@@ -27,8 +29,10 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
       const next=typeof update==='function'?update(current.current):update;
       if(owner.current!==expectedOwner || owner.current!==next.userId) throw new Error('Seu acesso mudou. Recupere a conta desta entrega.');
       // Web conserva rascunhos na sessão do navegador; Android usa SecureStore.
-      if(Platform.OS==='web') sessionStorage.setItem(key(next.userId),JSON.stringify(next));
-      else await secureStorage.setItemAsync(key(next.userId),JSON.stringify(next));
+      const saved = officialCompletion(next.context) && (Platform.OS === 'web' || next.phase !== 'draft')
+        ? {...next,request:{...next.request,codigo:undefined}} : next;
+      if(Platform.OS==='web') sessionStorage.setItem(key(next.userId),JSON.stringify(saved));
+      else await writeCompletionRecord(secureStorage,key(next.userId),JSON.stringify(saved),createIdentifier());
       if(owner.current!==next.userId) return;
       current.current=next;setDraft(next);
     });
@@ -39,10 +43,15 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     if(!user){restoredOwner.current=user;setLoading(false);return;}
     (async()=>{
       try{
-        const raw=Platform.OS==='web'?sessionStorage.getItem(key(user)):await secureStorage.getItemAsync(key(user));
+        const raw=Platform.OS==='web'?sessionStorage.getItem(key(user)):await readCompletionRecord(secureStorage,key(user));
         if(epoch!==generation.current) return;
         if(raw){const saved=JSON.parse(raw) as CompletionDraft;if(saved.userId!==user || !saved.request?.operationId || !saved.context?.pedidoId)throw new Error('O registro salvo precisa de revisão.');
-          if(saved.phase==='sending')saved.phase='pending';current.current=saved;setDraft(saved);
+          if(saved.phase==='sending')saved.phase='pending';
+          if(officialCompletion(saved.context)) {
+            saved.codeChecked=false;
+            if(saved.phase==='completed') { saved.phase='pending'; saved.receipt=undefined; }
+          }
+          current.current=saved;setDraft(saved);
         }
         restoredOwner.current=user;
       }catch{if(epoch===generation.current)setError('Não foi possível recuperar a conferência salva. Não conclua de novo antes de consultar a loja.');}
@@ -71,25 +80,38 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     if(!s || !user)throw new Error('Recupere o turno para conferir a entrega.');
     assertCompletionStage(id);
     if(restoredOwner.current!==user)throw new Error('A conferência salva não pôde ser verificada. Não sobrescreva esse registro; peça orientação à loja.');
-    if(old && ['pending','sending'].includes(old.phase))throw new Error('Existe uma conclusão aguardando confirmação. Consulte o resultado antes de continuar.');
+    const rejected=old?.externalOperation?.state==='rejected';
+    if(old && ['pending','sending'].includes(old.phase) && !rejected)throw new Error('Existe uma conclusão aguardando confirmação. Consulte o resultado antes de continuar.');
     if(old?.phase==='draft' && old.context.pedidoId!==id)throw new Error('Há uma conferência de outro pedido. Confira a rota e peça orientação à loja.');
-    const context=await getCompletionContext(id);
+    const context=bindIfoodContext(await getCompletionContext(id),turn.store.getSnapshot().queue?.current?.pedido);
     if(owner.current!==user || turn.store.getSnapshot().session?.sessionId!==s.sessionId)throw new Error('Seu acesso mudou.');
     assertCompletionStage(id);
     const preserve=old?.phase==='draft' && scope(old) && old.context.pedidoId===id && old.context.version===context.version;
     const storeId=turn.store.getSnapshot().queue?.estabelecimentoId;if(!storeId)throw new Error('Atualize a fila antes de conferir a entrega.');
     const next:CompletionDraft=preserve?{...old!,context}:{userId:user,storeId,sessionId:s.sessionId,epoch:s.epoch,phase:'draft',context,request:{operationId:createIdentifier(),expectedPedidoId:id,expectedVersion:context.version,payments:[]},codeChecked:false};
-    await persist(latest=>preserve && latest?.request.operationId===old?.request.operationId && latest.phase==='draft' && scope(latest)?{...latest,context}:next);
+    if(officialCompletion(context))next.codeChecked=false;
+    if(rejected && old && officialPaymentsMatch(context,old.request.payments)) { next.request.payments=old.request.payments; next.externalOperation=old.externalOperation; }
+    if(officialCompletion(context) && context.externalOperation && context.externalOperation.state!=='rejected') {
+      next.phase='pending'; next.request={...next.request,operationId:context.externalOperation.operationId,codigo:undefined}; next.externalOperation=context.externalOperation; next.codeChecked=false;
+    }
+    await persist(latest=>preserve && next.phase==='draft' && latest?.request.operationId===old?.request.operationId && latest.phase==='draft' && scope(latest)?{...latest,context,codeChecked:officialCompletion(context)?false:latest.codeChecked}:next);
   });};
   const validateCode=async(code:string)=>!!await run(async()=>{
     const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
     assertCompletionStage(d.context.pedidoId);
+    if(officialCompletion(d.context)) {
+      if(code==='') { await patchDraft(d,{codigo:undefined},false); return false; }
+      if(!preparedOfficialCode(code)) throw new Error('Informe o código do cliente, com até 32 caracteres.');
+      await patchDraft(d,{codigo:code},false); return true;
+    }
     if(!await checkDeliveryCode(d.context.pedidoId,code))throw new Error('O código não foi confirmado.');
     if(!scope(d))throw new Error('O turno mudou durante a conferência.');
     await patchDraft(d,{codigo:code},true);
     return true;
   });
-  const preparePayment=async(parts:PaymentPart[])=>{const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');await patchDraft(d,{payments:parts});};
+  const preparePayment=async(parts:PaymentPart[])=>{const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
+    if(officialCompletion(d.context) && parts.length && !officialPaymentsMatch(d.context,parts))throw new Error('Confira o recebimento conforme os meios e valores oficiais do iFood.');
+    await patchDraft(d,{payments:parts});};
   const uploadProof=async(base64:string)=>!!await run(async()=>{
     const d=current.current;if(!d || d.phase!=='draft' || !scope(d))throw new Error('Confira sua entrega atual.');
     assertCompletionStage(d.context.pedidoId);
@@ -108,40 +130,71 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     const d=current.current;
     if(!d || d.phase!=='draft') throw new Error('Uma conclusão enviada precisa ser consultada; não pode ser descartada.');
     // Conferir novamente no serviço impede descartar um envio com recibo existente.
-    try { await findDeliveryReceipt(d.request.operationId); throw new Error('Há um recibo desta conclusão. Consulte o resultado.'); }
+    try { if(officialCompletion(d.context))await findIfoodCompletion(d.request.operationId);else await findDeliveryReceipt(d.request.operationId); throw new Error('Há um registro desta conclusão. Consulte o resultado.'); }
     catch(e) { if(!(e instanceof MobileApiError) || e.status!==404) throw e; }
     const write=writes.current.catch(()=>{}).then(async()=>{
-      if(Platform.OS==='web') sessionStorage.removeItem(key(d.userId)); else await secureStorage.deleteItemAsync(key(d.userId));
+      if(Platform.OS==='web') sessionStorage.removeItem(key(d.userId)); else await deleteCompletionRecord(secureStorage,key(d.userId));
       if(owner.current===d.userId){current.current=null;setDraft(null);}
     });writes.current=write;await write;return true;
   });
   const acknowledge=async(d:CompletionDraft,receipt:DeliveryReceipt)=>{
     if(receipt.operationId!==d.request.operationId || receipt.pedidoId!==d.context.pedidoId)throw new Error('Resposta de conclusão incompatível. Consulte a loja.');
-    await persist({...d,phase:'completed',receipt,request:{...d.request,codigo:undefined}});
+    await persist({...d,phase:'completed',receipt,codeChecked:receipt.codeChecked,request:{...d.request,codigo:undefined}});
     if(owner.current===d.userId && current.current?.request.operationId===d.request.operationId)setNotice(receipt);
     return receipt;
   };
+  const acceptOfficial=async(d:CompletionDraft,operation:IfoodCompletionOperation)=>{
+    assertOfficialOperation(operation,d.request.operationId,d.context.pedidoId);
+    const next={...d,externalOperation:operation};
+    if(operation.state==='succeeded')return acknowledge(next,operation.receipt!);
+    await persist({...next,phase:'pending',codeChecked:false,request:{...d.request,codigo:undefined}});
+    setError(officialOperationMessage(operation)); return null;
+  };
+  const refreshQueue=async(d:CompletionDraft)=>{if(scope(d))try{const queue=await getOperationalQueue();if(scope(d))turn.store.updateQueue(queue,d.sessionId);}catch{/* O recibo é confirmado; a fila pode ser atualizada depois. */}};
   const send=async(d:CompletionDraft)=>{
     assertRealProof(d.request.proofId);
     if(!scope(d))throw new Error('A sessão desta conferência mudou. Consulte o recibo; recupere o turno antes de reenviar.');
     if(d.phase==='draft')assertCompletionStage(d.context.pedidoId);
     if(turn.store.getSnapshot().queue?.current?.pedidoId!==d.context.pedidoId)throw new Error('Este pedido não é mais sua entrega atual. Consulte o resultado antes de seguir.');
     const sending={...d,phase:'sending' as const};await persist(sending);
-    try{const result=await completeDelivery(sending.request);if(!scope(d))throw new Error('Seu acesso mudou após o envio. Consulte o resultado ao recuperar essa conta.');
+    const requestGeneration=generation.current;
+    try{
+      if(officialCompletion(d.context)) {
+        const operation=await completeIfoodDelivery(sending.request);
+        if(owner.current!==d.userId || requestGeneration!==generation.current)throw new Error('Seu acesso mudou. Consulte a confirmação ao recuperar essa conta.');
+        const receipt=await acceptOfficial(d,operation); if(receipt)await refreshQueue(d); return receipt;
+      }
+      const result=await completeDelivery(sending.request);if(!scope(d))throw new Error('Seu acesso mudou após o envio. Consulte o resultado ao recuperar essa conta.');
       const receipt=await acknowledge(d,result.receipt);turn.store.updateQueue(result.queue,d.sessionId);return receipt;
     }catch(e){
       const status=e instanceof MobileApiError?e.status:0;
       const uncertain=e instanceof MobileApiError && ['COMPLETION_CONFLICT','IDEMPOTENCY_CONFLICT'].includes(e.code||'');
-      if(owner.current===d.userId)await persist({...d,phase:!uncertain&&(status===422 || status===409)?'draft':'pending',codeChecked:e instanceof MobileApiError && e.code==='DELIVERY_CODE_INVALID'?false:d.codeChecked});
+      if(owner.current===d.userId && requestGeneration===generation.current) {
+        const official=officialCompletion(d.context);
+        // Resposta incerta, conflito ou ausência de registro nunca cria um novo POST oficial automático.
+        await persist({...d,phase:!official&&!uncertain&&(status===422 || status===409)?'draft':'pending',request:official?{...d.request,codigo:undefined}:d.request,codeChecked:official||e instanceof MobileApiError && e.code==='DELIVERY_CODE_INVALID'?false:d.codeChecked});
+      }
       throw e;
     }
   };
   const submit=()=>run(async()=>{
-    const d=current.current;if(!d || d.phase!=='draft' || !readyToComplete(d.context,d.codeChecked,d.request.payments,d.request.proofId,d.request.checklist))throw new Error('Conclua as conferências antes de arrastar.');
+    await writes.current;
+    const d=current.current;if(!d || d.phase!=='draft' || !readyToComplete(d.context,d.codeChecked,d.request.payments,d.request.proofId,d.request.checklist,d.request.codigo))throw new Error('Conclua as conferências antes de arrastar.');
     return send(d);
   });
   const recover=(retry=false)=>run(async()=>{
     const d=current.current;if(!d)return null;if(d.phase==='completed')return d.receipt!;
+    if(officialCompletion(d.context)) {
+      const requestGeneration=generation.current;
+      try {
+        const operation=await findIfoodCompletion(d.request.operationId);
+        if(owner.current!==d.userId || requestGeneration!==generation.current) return null;
+        const receipt=await acceptOfficial(d,operation); if(receipt)await refreshQueue(d); return receipt;
+      } catch(e) {
+        if(e instanceof MobileApiError && e.status===404)throw new Error('A operação iFood não foi localizada. Não reenvie nem cobre de novo; peça à loja para conferir.');
+        throw e;
+      }
+    }
     try{
       const receipt=await acknowledge(d,await findDeliveryReceipt(d.request.operationId));
       if(scope(d))try{const queue=await getOperationalQueue();if(scope(d))turn.store.updateQueue(queue,d.sessionId);}catch{/* O recibo é confirmado; a fila pode ser atualizada depois. */}
@@ -158,7 +211,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     const retry=async()=>{
       if(!alive || current.current?.phase!=='pending')return;
       if(AppState.currentState==='active')await recover(true);
-      if(alive && current.current?.phase==='pending')timer=setTimeout(()=>void retry(),Math.min(60000,15000*2**Math.min(attempt++,2)));
+      if(alive && current.current?.phase==='pending' && !['rejected','review'].includes(current.current.externalOperation?.state || ''))timer=setTimeout(()=>void retry(),Math.min(60000,15000*2**Math.min(attempt++,2)));
     };
     timer=setTimeout(()=>void retry(),15000);
     return()=>{alive=false;clearTimeout(timer);};

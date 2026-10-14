@@ -7,9 +7,16 @@ import { AccountNotice } from './AccountKit';
 import { Button,Header,type } from './Kit';
 import { CompletionScreen } from './CompletionKit';
 import { useZippyTheme } from './theme';
+import { officialCompletion,orderLabel } from '../delivery/ifoodRules';
+import { OfficialDeliveryCode } from './OfficialDeliveryCode';
 export default function DeliveryCodeScreen(){
   const completion=useDeliveryCompletion(),router=useRouter(),{colors,dark}=useZippyTheme(),d=completion.draft,[digits,setDigits]=useState(['','','','']),refs=useRef<(TextInput|null)[]>([]);
   const checked=!!d?.codeChecked, digitWidth=Math.min(63,(useWindowDimensions().width-71)/4);
+  if(d && officialCompletion(d.context))return <CompletionScreen><Header title="Código de entrega" subtitle={orderLabel(d.context,d.context.pedidoId)} onBack={()=>router.back()}/>
+    <View style={{alignItems:'center',marginVertical:26}}><ShieldCheck size={42} color={colors.accent}/></View>
+    <Text style={{fontFamily:'ManropeExtraBold',fontSize:28,lineHeight:32,color:colors.ink,textAlign:'center'}}>O código fecha{ '\n' }a última etapa.</Text>
+    <OfficialDeliveryCode/><View style={{gap:10,marginTop:22}}><Button secondary onPress={()=>router.back()}>Voltar à conferência</Button><Button secondary icon={HelpCircle} onPress={()=>router.push('/ocorrencia')}>Cliente não tem o código</Button></View>
+  </CompletionScreen>;
   return <CompletionScreen><Header title="Código de entrega" subtitle={`Pedido #${d?.context.pedidoId||''}`} onBack={()=>router.back()}/>
     <View style={{width:75,height:75,borderRadius:25,backgroundColor:colors.accentSoft,borderWidth:1,borderColor:colors.line,boxShadow:'0 7px 0 #83a2cb55, 0 14px 24px #607a9d17',alignSelf:'center',alignItems:'center',justifyContent:'center',marginVertical:26}}><ShieldCheck size={32} color={colors.accent}/></View>
     <Text style={[type.eyebrow,{color:colors.muted,textAlign:'center'}]}>ENTREGA CONFERIDA</Text><Text style={{fontFamily:'ManropeExtraBold',fontSize:28,lineHeight:32,letterSpacing:-1,color:colors.ink,textAlign:'center',marginTop:12,marginBottom:15}}>O código fecha{ '\n' }a última etapa.</Text><Text style={[type.body,{fontSize:13,color:colors.muted,textAlign:'center'}]}>Peça os 4 dígitos ao cliente{ '\n' }no momento da entrega.</Text>

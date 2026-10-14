@@ -7,6 +7,7 @@ import { AccountNotice } from './AccountKit';
 import { SectionTitle, money, type } from './Kit';
 import { WorkPair } from './WorkKit';
 import { useZippyTheme } from './theme';
+import { orderLabel } from '../delivery/ifoodRules';
 
 export function OfferEarnings({ stops }: { stops: RouteStop[] }) {
   const { colors } = useZippyTheme();

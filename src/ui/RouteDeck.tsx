@@ -9,6 +9,7 @@ import { offerTotal, stopAddress } from '../delivery/offerDetails';
 import { Button, Entrance, money, Pill, Surface, type } from './Kit';
 import { useZippyTheme } from './theme';
 import { OperationalNotice } from './OperationalNotice';
+import { amountToCollect,enrichIfoodDetail,isIfood,orderLabel } from '../delivery/ifoodRules';
 
 type Props = { open: boolean; height: number; bottom: number; stops: RouteStop[]; selectedId: number; busy: boolean; actionError: string; onSelect(id: number): void; onClose(): void; onOverview(): void; onOrder(id: number): void };
 type Cached = { version: number; detail: OperationalOrderDetail };
@@ -34,7 +35,10 @@ export function RouteDeck(props: Props) {
 
   // Pedido já visto abre na hora (cache); a atualização acontece em segundo plano, sem piscar.
   const load = useCallback((id: number, signal: AbortSignal, silent: boolean) => getOperationalOrder(id, signal).then(value => {
-    cache.set(id, { version, detail: value }); return value;
+    const queue=turn.store.getSnapshot().queue;
+    const source=[queue?.current,...(queue?.next||[]),...(queue?.offer?.stops||[])].find(s=>s?.pedidoId===id)?.pedido;
+    const enriched=enrichIfoodDetail(value,source,queue?.version);
+    cache.set(id, { version, detail: enriched }); return enriched;
   }).catch(failure => { if (!silent && !signal.aborted) throw failure; return null; }), [cache, version]);
   useEffect(() => {
     setError('');
@@ -66,7 +70,7 @@ export function RouteDeck(props: Props) {
           ? <Pressable accessibilityRole="button" accessibilityLabel="Voltar à sequência da rota" onPress={props.onOverview} style={({ pressed }) => ({ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.soft, opacity: pressed ? .7 : 1 })}><ArrowLeft size={20} color={colors.accent} /></Pressable>
           : <View style={{ width: 44, height: 44, borderRadius: 15, backgroundColor: colors.accent, alignItems: 'center', justifyContent: 'center' }}><Route size={22} color="#fff" /></View>}
         <View style={{ flex: 1 }}>
-          <Text accessibilityRole="header" numberOfLines={1} style={[type.title, { color: colors.ink, fontSize: 19 }]}>{selected ? `Pedido #${selected.pedidoId}` : 'Sua rota, de perto'}</Text>
+          <Text accessibilityRole="header" numberOfLines={1} style={[type.title, { color: colors.ink, fontSize: 19 }]}>{selected ? `Pedido ${orderLabel(selected.pedido,selected.pedidoId)}` : 'Sua rota, de perto'}</Text>
           <Text numberOfLines={1} style={[type.small, { color: colors.muted, marginTop: 2 }]}>{subtitle}</Text>
         </View>
         <Pressable accessibilityRole="button" accessibilityLabel="Fechar detalhes da rota" onPress={props.onClose} style={({ pressed }) => ({ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', opacity: pressed ? .6 : 1 })}><ChevronDown color={colors.muted} size={22} /></Pressable>
@@ -97,16 +101,16 @@ export function RouteDeck(props: Props) {
 
 const StopCard = memo(function StopCard({ stop, index, onPress }: { stop: RouteStop; index: number; onPress: (id: number) => void }) {
   const { colors, dark, reducedMotion } = useZippyTheme(), first = index === 0, order = stop.pedido;
-  const collect = order?.value != null && !paidOnline(order.statusPagamento), gain = stop.earnings?.amount;
+  const due=order?amountToCollect(order):null,collect=due!=null&&due>0,gain=stop.earnings?.amount;
   return <Pressable accessibilityRole="button" accessibilityLabel={`Ver pedido ${stop.pedidoId}, parada ${index + 1}`} onPress={() => onPress(stop.pedidoId)}
     style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 13, padding: 14, borderRadius: 20, backgroundColor: first ? colors.accentSoft : colors.card, borderWidth: 1, borderColor: first ? colors.accent + '70' : colors.line, boxShadow: dark ? undefined : '0 4px 12px #19365912', transform: [{ scale: pressed && !reducedMotion ? .98 : 1 }] })}>
     <View style={{ width: 40, height: 46, borderRadius: 14, backgroundColor: first ? colors.accent : colors.soft, borderWidth: 1, borderColor: first ? colors.accent : colors.line, alignItems: 'center', justifyContent: 'center' }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 19, color: first ? '#fff' : colors.accent }}>{index + 1}</Text></View>
     <View style={{ flex: 1, gap: 4 }}>
-      <Text numberOfLines={1} style={{ fontFamily: 'ManropeExtraBold', fontSize: 13, color: colors.ink }}>#{stop.pedidoId} · {order?.nomeCliente || 'Cliente'}</Text>
+      <Text numberOfLines={1} style={{ fontFamily: 'ManropeExtraBold', fontSize: 13, color: colors.ink }}>{orderLabel(order,stop.pedidoId)} · {order?.nomeCliente || 'Cliente'}</Text>
       <Text numberOfLines={2} style={[type.small, { color: colors.muted }]}>{stopAddress(stop)}</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 3 }}>
         <Text style={[type.small, { fontSize: 11, fontWeight: '800', color: first ? colors.accent : colors.muted }]}>{stageLabel(stop, index)}</Text>
-        {order?.value != null && <Pill tone={collect ? 'warning' : 'accent'} icon={collect ? Wallet : CircleCheck}>{collect ? `Receber ${money(order.value)}` : 'Pago online'}</Pill>}
+        {due != null ? <Pill tone={collect ? 'warning' : 'accent'} icon={collect ? Wallet : CircleCheck}>{collect ? `Receber ${money(due)}` : isIfood(order)?'Pago pelo iFood':'Pago online'}</Pill> : isIfood(order)&&<Pill tone="warning">Conferir com a loja</Pill>}
       </View>
     </View>
     <View style={{ alignItems: 'flex-end', gap: 6 }}>{gain != null && <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.success }}>+ {money(gain)}</Text>}<ChevronRight color={colors.accent} size={20} /></View>
@@ -115,7 +119,7 @@ const StopCard = memo(function StopCard({ stop, index, onPress }: { stop: RouteS
 
 function OrderHero({ stop, index, detail, total }: { stop: RouteStop; index: number; detail: OperationalOrderDetail | null; total: number }) {
   const { colors } = useZippyTheme(), order = stop.pedido;
-  const value = detail?.total ?? order?.value, pending = !paidOnline(detail?.statusPagamento ?? order?.statusPagamento) && value != null;
+  const value = isIfood(order)?order?amountToCollect(order):null:detail?.total ?? order?.value, pending = isIfood(order)?value!=null&&value>0:!paidOnline(detail?.statusPagamento ?? order?.statusPagamento) && value != null;
   const status = stop.status === 'en_route' ? 'em andamento' : 'na sequência';
   return <Surface hero style={{ padding: 18, borderRadius: 23 }}>
     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>

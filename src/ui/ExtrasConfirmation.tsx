@@ -2,6 +2,7 @@ import React from 'react';
 import { Modal, ScrollView, Text, View } from 'react-native';
 import { Check, Package } from 'lucide-react-native';
 import { checklistItems, type ChecklistOrder } from '../delivery/checklistRules';
+import { orderLabel } from '../delivery/ifoodRules';
 import { Button, Feedback, type } from './Kit';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useZippyTheme } from './theme';
@@ -16,7 +17,7 @@ export function ExtrasConfirmation({ visible, orders, stage, busy, error, onCanc
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}><Package color={colors.accent} size={24} /><Text accessibilityRole="header" style={[type.title, { color: colors.ink, flex: 1 }]}>{stage === 'pickup' ? 'Confira antes de sair' : 'Entregou estes itens também?'}</Text></View>
         <Text style={[type.body, { color: colors.muted, marginBottom: 14 }]}>{stage === 'pickup' ? 'A loja destacou estes itens. Confira as quantidades de cada pedido e confirme que tudo está na bag.' : 'Confira as quantidades destacadas pela loja antes de concluir.'}</Text>
         <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 12 }}>
-          {orders.map(order => { const items = checklistItems(order.checklist).filter(item => item.extra); return items.length ? <View key={order.id} style={{ padding: 14, borderRadius: 14, backgroundColor: colors.soft }}><Text style={[type.body, { fontWeight: '800', color: colors.ink, marginBottom: 8 }]}>Pedido #{order.id}{order.nomeCliente ? ' · ' + order.nomeCliente : ''}</Text>{items.map(item => <Text key={item.key} style={[type.body, { color: colors.ink, marginVertical: 3 }]}>{item.quantity}× {item.name}{item.parentName ? ' · ' + item.parentName : ''}</Text>)}</View> : null; })}
+          {orders.map(order => { const items = checklistItems(order.checklist).filter(item => item.extra); return items.length ? <View key={order.id} style={{ padding: 14, borderRadius: 14, backgroundColor: colors.soft }}><Text style={[type.body, { fontWeight: '800', color: colors.ink, marginBottom: 8 }]}>Pedido {orderLabel(order,order.id)}{order.nomeCliente ? ' · ' + order.nomeCliente : ''}</Text>{items.map(item => <Text key={item.key} style={[type.body, { color: colors.ink, marginVertical: 3 }]}>{item.quantity}× {item.name}{item.parentName ? ' · ' + item.parentName : ''}</Text>)}</View> : null; })}
           {!!error && <Feedback title="Confira antes de continuar" message={error} />}
         </ScrollView>
         <View style={{ gap: 9, marginTop: 18 }}><Button icon={Check} loading={busy} onPress={onConfirm}>{stage === 'pickup' ? 'Tudo na bag · estou saindo' : 'Confirmar itens entregues'}</Button><Button secondary disabled={busy} onPress={onCancel}>Voltar e conferir</Button></View>

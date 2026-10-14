@@ -1,5 +1,6 @@
 import type { CompletionContext, PaymentPart } from '../../services/completionApi';
 import { checklistReady, type ChecklistConfirmation } from './checklistRules';
+import { officialCompletion, officialPaymentsMatch, preparedOfficialCode } from './ifoodRules';
 export function parseCents(text: string): number | null {
   const value=text.trim().replace(/\s/g,'');
   if(!/^\d+(?:[.,]\d{1,2})?$/.test(value)) return null;
@@ -17,6 +18,8 @@ export function paymentError(total: number | undefined,parts: PaymentPart[]): st
   }
   return null;
 }
-export function readyToComplete(context: CompletionContext,codeChecked: boolean,payments: PaymentPart[],proofId?: string,checklist?: ChecklistConfirmation) {
-  return (!context.checklist || checklistReady(context.checklist,checklist)) && (!context.requiresCode || codeChecked) && (!context.requiresPayment || !paymentError(context.total,payments)) && (!context.requiresProof || !!proofId);
+export function readyToComplete(context: CompletionContext,codeChecked: boolean,payments: PaymentPart[],proofId?: string,checklist?: ChecklistConfirmation,codigo?:string) {
+  const official = officialCompletion(context);
+  return (!official || context.requiresOfficialConfirmation === true && !context.completionBlockedCode && preparedOfficialCode(codigo) && officialPaymentsMatch(context,payments)) &&
+    (!context.checklist || checklistReady(context.checklist,checklist)) && (!context.requiresCode || (official ? preparedOfficialCode(codigo) : codeChecked)) && (!context.requiresPayment || !paymentError(context.total,payments)) && (!context.requiresProof || !!proofId);
 }

@@ -16,6 +16,7 @@ import { OrderChecklistCard } from './OrderChecklistCard';
 import { DeliveryCodePanel, DeliveryPaymentPanel, DeliveryProofPanel } from './DeliveryPanels';
 import { FinishHero, type FinishStep } from './FinishKit';
 import { useZippyTheme } from './theme';
+import { officialCompletion,orderLabel,preparedOfficialCode } from '../delivery/ifoodRules';
 
 export default function FinishScreen() {
   const completion = useDeliveryCompletion(), turn = useOperationalSession(), router = useRouter();
@@ -31,16 +32,17 @@ export default function FinishScreen() {
   }, [pedido, turn.session?.sessionId, turn.queue?.estabelecimentoId, turn.queue?.version, turn.busy, completion.loading]));
   const d = completion.draft, c = d?.context, matching = c?.pedidoId === pedido;
   useEffect(() => { setPaymentEditing(false); setShowPayment(panel === 'payment' || panel === 'split' || !!d?.request.payments.length); setShowProof(panel === 'proof'); }, [d?.request.operationId, panel]);
-  const orders = matching && c?.checklist ? [{ id: pedido, nomeCliente: c.nomeCliente, checklist: c.checklist }] : [];
+  const orders = matching && c?.checklist ? [{ id: pedido, nomeCliente: c.nomeCliente, checklist: c.checklist,origin:c.origin,identidadeExterna:c.identidadeExterna }] : [];
   const checks = useOrderChecklists(orders, 'delivery');
   const extraKeys = c?.checklist ? checklistItems(c.checklist).filter(item => item.extra).map(item => item.key) : [];
   // Apenas antecipa a elegibilidade; a confirmação dos destaques é gravada após o gesto.
   const candidate = checks.confirmations[0] ? { ...checks.confirmations[0], recheckedExtraKeys: extraKeys } : undefined;
-  const codeReady = !!c && (!c.requiresCode || !!d?.codeChecked);
+  const official = !!c && officialCompletion(c);
+  const codeReady = !!c && (!c.requiresCode || (official ? preparedOfficialCode(d?.request.codigo) : !!d?.codeChecked));
   const paymentReady = !!c && (!c.requiresPayment || !paymentEditing && !!d?.request.payments.length);
   const proofReady = !!c && (!c.requiresProof || !!d?.request.proofId);
-  const missing = !checks.primaryReady ? 'Confira a sacola e os itens destacados.' : !codeReady ? 'Falta validar o código do cliente.' : !paymentReady ? 'Falta confirmar o recebimento.' : !proofReady ? 'Falta anexar o comprovante.' : 'Aguarde a confirmação do servidor.';
-  const can = canConcludeOperationalOrder(turn.queue, pedido) && !!c?.checklist && checks.primaryReady && !paymentEditing && !!d && matching && d.phase === 'draft' && readyToComplete(d.context, d.codeChecked, d.request.payments, d.request.proofId, candidate);
+  const missing = c?.completionBlockedCode ? 'A confirmação iFood está indisponível. Atualize a entrega ou consulte a loja.' : !checks.primaryReady ? 'Confira a sacola e os itens destacados.' : !codeReady ? official ? 'Falta informar o código do cliente.' : 'Falta validar o código do cliente.' : !paymentReady ? 'Falta confirmar o recebimento.' : !proofReady ? 'Falta anexar o comprovante.' : 'Aguarde a confirmação do servidor.';
+  const can = canConcludeOperationalOrder(turn.queue, pedido) && !!c?.checklist && checks.primaryReady && !paymentEditing && !!d && matching && d.phase === 'draft' && readyToComplete(d.context, d.codeChecked, d.request.payments, d.request.proofId, candidate,d.request.codigo);
   const finish = async () => {
     if (!can || saving.current) return;
     saving.current = true; setSavingItems(true);
@@ -54,27 +56,28 @@ export default function FinishScreen() {
   const showProofStep = !!c && (c.requiresProof || !!d?.request.proofId || showProof);
   const steps: FinishStep[] = c ? [
     { key: 'bag', label: 'Sacola', done: checks.primaryReady, icon: Package },
-    ...(c.requiresCode ? [{ key: 'code', label: 'Código', done: codeReady, icon: Lock }] : []),
+    ...(c.requiresCode ? [{ key: 'code', label: official ? 'Código informado' : 'Código', done: codeReady, icon: Lock }] : []),
     ...(c.requiresPayment ? [{ key: 'payment', label: 'Recebimento', done: paymentReady, icon: Wallet }] : []),
     ...(showProofStep ? [{ key: 'proof', label: 'Comprovante', done: proofReady, icon: Camera }] : []),
   ] : [];
   const footer = matching && d && c ? <View style={{ gap: 4 }}>
     <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4, marginBottom: 6 }}><ShieldCheck size={15} color={can ? colors.success : colors.accent} /><Text style={[type.small, { flex: 1, fontSize: 10, lineHeight: 15, color: colors.muted }]}>{can ? extraKeys.length ? 'Ao arrastar, você confirma também a entrega dos itens destacados acima.' : 'Tudo conferido. O arraste registra a conclusão.' : missing}</Text></View>
     <SlideConfirm enabled={can && !completion.busy && !savingItems} busy={completion.busy || savingItems} onConfirm={() => void finish()} />
-    <Text style={{ fontFamily: 'Manrope', fontSize: 9, color: colors.muted, textAlign: 'center', marginTop: 6 }}>Um gesto. Entrega e recebimento registrados juntos.</Text>
+    <Text style={{ fontFamily: 'Manrope', fontSize: 9, color: colors.muted, textAlign: 'center', marginTop: 6 }}>{official?'O arraste solicita a confirmação oficial. Aguarde o recibo.':'Um gesto. Entrega e recebimento registrados juntos.'}</Text>
   </View> : undefined;
   return <CompletionScreen footer={footer}>
-    <Header title="Conferir & concluir" subtitle={'#' + pedido + ' · ' + (c?.nomeCliente || 'Sua entrega')} onBack={() => router.canGoBack() ? router.back() : router.replace('/mapa')} />
+    <Header title="Conferir & concluir" subtitle={orderLabel(c,pedido) + ' · ' + (c?.nomeCliente || 'Sua entrega')} onBack={() => router.canGoBack() ? router.back() : router.replace('/mapa')} />
     {!matching || !d || !c ? <>
       <Feedback title="Conferindo o pedido" loading={completion.busy || !completion.error} onRetry={completion.error ? () => void completion.prepare(pedido) : undefined} />
       {d?.phase === 'draft' && !matching && <Button secondary loading={completion.busy} onPress={async () => { if (await completion.discardUnsent()) await completion.prepare(pedido); }}>Descartar conferência anterior e revisar este pedido</Button>}
     </> : <>
-      <FinishHero pedido={pedido} name={c.nomeCliente} steps={steps} receive={c.requiresPayment ? { amount: c.total, confirmed: paymentReady } : undefined} />
+      <FinishHero pedido={pedido} label={orderLabel(c,pedido)} name={c.nomeCliente} steps={steps} receive={c.requiresPayment ? { amount: c.total, confirmed: paymentReady } : undefined} />
+      {official && <AccountNotice icon={ShieldCheck}>{c.completionBlockedCode?'A confirmação oficial está bloqueada. Confira com a loja antes de concluir.':'Código preparado não significa código validado. Aguarde a confirmação do iFood após o arraste.'}</AccountNotice>}
       {orders.map((order, i) => <OrderChecklistCard key={order.id} stage="delivery" order={order} confirmation={checks.confirmations[i]} disabled={checks.loading || completion.busy || savingItems || d.phase !== 'draft'} onToggle={key => void checks.toggle(order, key)} onToggleBag={() => void checks.toggleBag(order)} />)}
       {!c.checklist && <Feedback title="Conferência indisponível" message="Não foi possível carregar os itens desta entrega." />}
       {!!checks.error && <Feedback title="Confira os itens" message={checks.error} />}
       <View style={{ height: 18 }} />
-      {c.requiresCode && <StepCard index={1} icon={codeReady ? ShieldCheck : Lock} verified={codeReady} code title="Código do cliente" description={codeReady ? 'Validado. Este código fica visível.' : 'Peça o código quando entregar o pedido.'}>
+      {c.requiresCode && <StepCard index={1} icon={d.codeChecked ? ShieldCheck : Lock} verified={official?d.codeChecked:codeReady} code title="Código do cliente" description={official?codeReady?'Código informado. Aguarda confirmação oficial.':'Informe o código quando entregar o pedido.':codeReady ? 'Validado. Este código fica visível.' : 'Peça o código quando entregar o pedido.'}>
         <DeliveryCodePanel key={d.request.operationId} />
       </StepCard>}
       {c.requiresPayment ? <StepCard index={c.requiresCode ? 2 : 1} icon={Wallet} verified={paymentReady} title={money(c.total) + ' · receber'} description={paymentReady ? 'Recebimento conferido. Registra ao concluir.' : 'Confira valor, método e troco com o cliente.'}>
@@ -83,7 +86,7 @@ export default function FinishScreen() {
       {showProofStep && <StepCard index={(c.requiresCode ? 1 : 0) + (c.requiresPayment ? 1 : 0) + 1} icon={Camera} verified={proofReady} title={c.requiresProof ? 'Comprovante obrigatório' : 'Comprovante da entrega'} description="Fotografe o volume. Evite rostos e dados pessoais.">
         <DeliveryProofPanel key={d.request.operationId} />
       </StepCard>}
-      {!!completion.error && d.phase === 'draft' && <Button secondary disabled={completion.busy || savingItems} onPress={() => void completion.prepare(pedido)}>Atualizar conferência do pedido</Button>}
+      {(!!completion.error || !!c.completionBlockedCode) && d.phase === 'draft' && <Button secondary disabled={completion.busy || savingItems} onPress={() => void completion.prepare(pedido)}>Atualizar conferência do pedido</Button>}
       {!c.requiresProof && !d.request.proofId && !showProof && <TextAction onPress={() => setShowProof(true)}>Adicionar foto, se necessário</TextAction>}
       <Text style={[type.eyebrow, { color: colors.muted, marginTop: 18, marginBottom: 10 }]}>PRECISA DE AJUDA?</Text>
       <View style={{ flexDirection: 'row', gap: 10 }}>

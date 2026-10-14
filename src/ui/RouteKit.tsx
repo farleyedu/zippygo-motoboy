@@ -10,6 +10,7 @@ import { AccountScreen } from './AccountKit';
 import { Button, Feedback, Gradient, Pill, Surface, type } from './Kit';
 import { useZippyTheme } from './theme';
 import Mapa from '../../components/Mapa';
+import { orderLabel } from '../delivery/ifoodRules';
 
 export function activeStops(queue?: MotoboyQueue | null) { return queue ? [...(queue.current ? [queue.current] : []), ...queue.next] : []; }
 
@@ -46,7 +47,7 @@ export function StopRow({ stop, index, checked, onCheck, right, onPress }: { sto
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 11, paddingVertical: 15, borderBottomWidth: 1, borderColor: colors.line }}>
     <Pressable accessibilityRole={onCheck ? 'checkbox' : 'button'} accessibilityLabel={onCheck ? `Conferir pedido ${stop.pedidoId}` : `Detalhes do pedido ${stop.pedidoId}`} accessibilityState={{ checked: !!checked }} onPress={onCheck || onPress || (() => router.push({ pathname: '/pedido/[id]', params: { id: String(stop.pedidoId) } }))} style={{ flexDirection: 'row', gap: 11, flex: 1, minHeight: 44, alignItems: 'center' }}>
       <View style={{ width: 32, height: 32, borderRadius: onCheck ? 10 : 11, borderWidth: 1, borderColor: checked ? colors.accent : colors.line, backgroundColor: checked ? colors.accent : colors.soft, alignItems: 'center', justifyContent: 'center' }}>{onCheck && checked ? <Check size={17} color={colors.paper} /> : <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.accent }}>{index + 1}</Text>}</View>
-      <View style={{ flex: 1 }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.ink }}>#{stop.pedidoId} · {stop.pedido?.nomeCliente || 'Cliente'}</Text><Text numberOfLines={2} style={{ fontFamily: 'Manrope', fontSize: 10, lineHeight: 16, color: colors.muted, marginTop: 4 }}>{onCheck ? stop.pickedUpAtUtc ? 'Retirada confirmada' : 'Confira o pedido e a embalagem' : stop.pedido?.enderecoEntrega || [stop.pedido?.rua, stop.pedido?.numero, stop.pedido?.bairro].filter(Boolean).join(' · ') || 'Confira o endereço com a loja'}</Text></View>
+      <View style={{ flex: 1 }}><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.ink }}>{orderLabel(stop.pedido,stop.pedidoId)} · {stop.pedido?.nomeCliente || 'Cliente'}</Text><Text numberOfLines={2} style={{ fontFamily: 'Manrope', fontSize: 10, lineHeight: 16, color: colors.muted, marginTop: 4 }}>{onCheck ? stop.pickedUpAtUtc ? 'Retirada confirmada' : 'Confira o pedido e a embalagem' : stop.pedido?.enderecoEntrega || [stop.pedido?.rua, stop.pedido?.numero, stop.pedido?.bairro].filter(Boolean).join(' · ') || 'Confira o endereço com a loja'}</Text></View>
     </Pressable>
     {right || (stop.locked ? <Lock size={16} color={colors.muted} /> : onCheck ? <Package size={18} color={colors.accent} /> : <ChevronRight size={15} color={colors.muted} />)}
   </View>;

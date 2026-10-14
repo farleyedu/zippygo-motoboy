@@ -11,8 +11,14 @@ import { methodNames, money } from './CompletionKit';
 import { AccountNotice } from './AccountKit';
 import { ChangeCard, methodIcon, MethodGrid, MoneyInput, moneyText, QuickCash, useChargeTone } from './ChargeKit';
 import { useZippyTheme } from './theme';
+import { officialCompletion,officialPaymentPlan } from '../delivery/ifoodRules';
+import { OfficialDeliveryCode } from './OfficialDeliveryCode';
 
 export function DeliveryCodePanel() {
+  const completion=useDeliveryCompletion();
+  return completion.draft && officialCompletion(completion.draft.context) ? <OfficialDeliveryCode/> : <LocalDeliveryCodePanel/>;
+}
+function LocalDeliveryCodePanel() {
   const completion = useDeliveryCompletion(), { colors, dark } = useZippyTheme(), d = completion.draft;
   const [digits, setDigits] = useState(['', '', '', '']), refs = useRef<(TextInput | null)[]>([]);
   return <View style={{ marginTop: 13 }}>
@@ -26,6 +32,40 @@ export function DeliveryCodePanel() {
 }
 
 export function DeliveryPaymentPanel({ initiallySplit = false, onEditingChange }: { initiallySplit?: boolean; onEditingChange: (editing: boolean) => void }) {
+  const completion=useDeliveryCompletion();
+  return completion.draft && officialCompletion(completion.draft.context) ? <OfficialPaymentPanel onEditingChange={onEditingChange}/> : <LocalDeliveryPaymentPanel initiallySplit={initiallySplit} onEditingChange={onEditingChange}/>;
+}
+function OfficialPaymentPanel({onEditingChange}:{onEditingChange:(editing:boolean)=>void}) {
+  const completion=useDeliveryCompletion(),d=completion.draft,{colors}=useChargeTone();
+  const plan=d ? officialPaymentPlan(d.context) : {parts:[],error:'Confira sua entrega atual.'};
+  const [cash,setCash]=useState<string[]>(()=>plan.parts.map(p=>{const existing=d?.request.payments.find(a=>a.method===p.method);return existing?.cashReceived==null?'':moneyText(existing.cashReceived);}));
+  const [error,setError]=useState(''),[saving,setSaving]=useState(false);
+  const parts:PaymentPart[]=plan.parts.map((p,i)=>({method:p.method,amount:p.amount,receivedConfirmed:true,cashReceived:p.method==='dinheiro'?(parseCents(cash[i] || '') ?? -1)/100:undefined}));
+  const prepared=!!d?.request.payments.length,locked=d?.phase!=='draft'||completion.busy||saving;
+  const validation=plan.error || paymentError(d?.context.total,parts);
+  const save=async()=>{if(locked||validation)return;setSaving(true);try{await completion.preparePayment(parts);onEditingChange(false);setError('');}catch(e){setError(e instanceof Error?e.message:'Confira o recebimento.');}finally{setSaving(false);}};
+  const edit=async()=>{if(locked)return;setSaving(true);try{await completion.preparePayment([]);onEditingChange(true);}catch(e){setError(e instanceof Error?e.message:'Não foi possível revisar o recebimento.');}finally{setSaving(false);}};
+  return <View style={{gap:12,marginTop:13}}>
+    <Text style={[type.small,{color:colors.muted}]}>Receba somente o saldo e os meios informados pelo iFood.</Text>
+    {plan.error ? <Text style={[type.small,{color:colors.danger}]}>{plan.error}</Text> : prepared ? <>
+      {d!.request.payments.map((part,i)=><PreparedPart key={i} part={part}/>)}
+      <AccountNotice icon={ShieldCheck}>Recebimento conferido. Não cobre novamente enquanto aguarda a confirmação.</AccountNotice>
+      <Button secondary icon={Pencil} disabled={locked} onPress={()=>void edit()}>Revisar recebimento</Button>
+    </> : <>
+      {plan.parts.map((part,i)=><View key={part.method} style={{gap:10}}>
+        <Text style={{fontFamily:'ManropeExtraBold',fontSize:14,color:colors.ink}}>{methodNames[part.method]} · {money(part.amount)}</Text>
+        {part.method==='dinheiro' ? <>
+          {part.changeFor!=null && <Text style={[type.small,{color:colors.muted}]}>Troco solicitado para {money(part.changeFor)}. Confira o dinheiro recebido.</Text>}
+          <MoneyInput label="Dinheiro recebido" value={cash[i] || ''} editable={!locked} onChange={text=>{setCash(old=>{const next=[...old];next[i]=text;return next;});onEditingChange(true);}}/>
+          <ChangeCard received={parseCents(cash[i] || '')==null?null:parseCents(cash[i])!/100} due={part.amount}/>
+        </> : <AccountNotice icon={ShieldCheck} warning>{part.method==='pix'?'Confira o crédito na conta da loja.':'Confira a aprovação na maquininha.'}</AccountNotice>}
+      </View>)}
+      <Button icon={Check} loading={saving} disabled={locked||!!validation} onPress={()=>void save()}>Confirmar que recebi o saldo</Button>
+    </>}
+    {!!error&&<Text accessibilityLiveRegion="polite" style={[type.small,{color:colors.danger}]}>{error}</Text>}
+  </View>;
+}
+function LocalDeliveryPaymentPanel({ initiallySplit = false, onEditingChange }: { initiallySplit?: boolean; onEditingChange: (editing: boolean) => void }) {
   const completion = useDeliveryCompletion(), d = completion.draft, c = d?.context, tone = useChargeTone(), { colors } = tone;
   const existing = d?.request.payments || [], [split, setSplit] = useState(initiallySplit || existing.length === 2);
   const [methods, setMethods] = useState<PaymentMethod[]>([existing[0]?.method || 'dinheiro', existing[1]?.method || 'pix']);

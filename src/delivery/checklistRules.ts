@@ -1,7 +1,7 @@
 export type ChecklistItem = { key: string; name: string; parentName?: string | null; quantity: number; imageUrl?: string | null; note?: string | null; extra: boolean };
 export type OrderChecklist = { version: string; detailsUnavailable: boolean; items: ChecklistItem[] };
 export type ChecklistConfirmation = { pedidoId: number; version: string; confirmedKeys: string[]; recheckedExtraKeys: string[] };
-export type ChecklistOrder = { id: number; nomeCliente?: string | null; checklist: OrderChecklist };
+export type ChecklistOrder = import('./ifoodContracts').IfoodOrderSource & { id: number; nomeCliente?: string | null; checklist: OrderChecklist };
 export function checklistItems(checklist: OrderChecklist): ChecklistItem[] {
   return checklist.detailsUnavailable ? [{ key: 'manual', name: 'Conteúdo e volumes conferidos com a loja', quantity: 1, extra: false, note: 'Este pedido não tem itens detalhados. Confira o conteúdo e as sacolas com a loja.' }] : checklist.items;
 }

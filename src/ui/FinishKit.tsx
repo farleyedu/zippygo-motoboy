@@ -16,13 +16,13 @@ function Segment({ done }: { done: boolean }) {
   </View>;
 }
 
-export function FinishHero({ pedido, name, steps, receive }: { pedido: number; name?: string; steps: FinishStep[]; receive?: { amount?: number; confirmed: boolean } }) {
+export function FinishHero({ pedido, label, name, steps, receive }: { pedido: number; label?:string; name?: string; steps: FinishStep[]; receive?: { amount?: number; confirmed: boolean } }) {
   const { colors } = useZippyTheme(), done = steps.filter(step => step.done).length, all = done === steps.length;
   return <Surface hero style={{ padding: 18, borderRadius: 23, marginBottom: 14 }}>
     <Text style={[type.eyebrow, { color: colors.heroMuted }]}>O ÚLTIMO DETALHE IMPORTA.</Text>
     <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12, marginTop: 8 }}>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 26, letterSpacing: -1, color: colors.heroInk }}>Entregar #{pedido}</Text>
+        <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 26, letterSpacing: -1, color: colors.heroInk }}>Entregar {label || `#${pedido}`}</Text>
         {!!name && <Text numberOfLines={1} style={[type.small, { color: colors.heroMuted, marginTop: 2 }]}>{name}</Text>}
       </View>
       {receive?.amount != null && <View style={{ alignItems: 'flex-end' }}>

@@ -8,6 +8,7 @@ import { operationalDestination } from '../delivery/operationalDestination';
 import { useZippyTheme } from './theme';
 import { offerTotal } from '../delivery/offerDetails';
 import { money } from './Kit';
+import { orderLabel,receiptLabel } from '../delivery/ifoodRules';
 
 export function OperationalNotice({ onInspectRoute }: { onInspectRoute?: () => void }) {
   const completion = useDeliveryCompletion(), turn = useOperationalSession(), router = useRouter(), segments = useSegments();
@@ -23,8 +24,8 @@ export function OperationalNotice({ onInspectRoute }: { onInspectRoute?: () => v
   </View>;
   return <>
     {!!offer?.offerId && turn.deferredOfferId === offer.offerId && seconds > 0 && row(`Nova oferta · ${gain == null ? `${offer.stops.length} pedidos` : money(gain)} · responder em ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`, turn.showOffer)}
-    {pending && String(segments[0]) !== 'entregaPendente' && row(`Pedido #${completion.draft?.context.pedidoId} · ${completion.busy ? 'sincronizando' : 'conclusão aguardando confirmação'}`, () => router.push('/entregaPendente'))}
-    {completion.notice && row(`Pedido #${completion.notice.pedidoId} · entrega concluída`, () => router.push({ pathname: '/entregaConcluida', params: { operation: completion.notice!.operationId } }), completion.clearNotice, true)}
+    {pending && completion.draft && String(segments[0]) !== 'entregaPendente' && row(`Pedido ${orderLabel(completion.draft.context, completion.draft.context.pedidoId)} · ${completion.busy ? 'sincronizando' : 'conclusão aguardando confirmação'}`, () => router.push('/entregaPendente'))}
+    {completion.notice && row(`Pedido ${receiptLabel(completion.notice)} · entrega concluída`, () => router.push({ pathname: '/entregaConcluida', params: { operation: completion.notice!.operationId } }), completion.clearNotice, true)}
     {turn.routeNotice && row(turn.routeNotice.kind === 'cancelled' ? 'A loja cancelou um pedido · confira a fila atual' : 'Sua rota foi atualizada · confira a sequência', () => { turn.clearRouteNotice(); if (onInspectRoute) onInspectRoute(); else router.navigate(operationalDestination(turn.store.getSnapshot().queue, Platform.OS)); }, turn.clearRouteNotice)}
     {turn.transferNotice && row(`Pedido #${turn.transferNotice.pedidoId} · ${turn.transferNotice.status === 'pending_approval' ? 'transferência aguardando a loja' : turn.transferNotice.status === 'completed' ? 'transferência confirmada' : turn.transferNotice.status === 'rejected' ? 'transferência recusada' : 'transferência cancelada'}`, () => router.push({ pathname: '/acompanharTransferencia', params: { id: String(turn.transferNotice!.id) } }), turn.transferNotice.status === 'pending_approval' ? undefined : () => turn.setTransferNotice(null), turn.transferNotice.status === 'completed')}
   </>;

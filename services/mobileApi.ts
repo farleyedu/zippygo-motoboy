@@ -85,7 +85,7 @@ export type OperationalHeartbeatResponse = {
   session: OperationalSession;
 };
 
-export type DeliveryOrder = {
+export type DeliveryOrder = import('../src/delivery/ifoodContracts').IfoodOrderSource & {
   id: number;
   nomeCliente?: string | null;
   telefoneCliente?: string | null;
@@ -164,6 +164,7 @@ export type OperationalLocationAck = {
 };
 
 export type OrderItemDetail = {
+  official?: boolean;
   itemId?: string | null;
   produtoId?: string | null;
   nome: string;
@@ -175,7 +176,7 @@ export type OrderItemDetail = {
   imagemUrl?: string | null;
 };
 
-export type OperationalOrderDetail = {
+export type OperationalOrderDetail = import('../src/delivery/ifoodContracts').IfoodOrderSource & {
   checklist: OrderChecklist;
   id: number; queueVersion: number; position: number; stopStatus: string;
   isCurrent: boolean; isOffer: boolean; locked: boolean;

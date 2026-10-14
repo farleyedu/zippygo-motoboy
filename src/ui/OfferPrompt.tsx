@@ -14,6 +14,7 @@ import { getStoreDestination, type StoreDestination } from '../../services/route
 import { distanceMeters } from '../delivery/externalRoute';
 import { offerTotal, stopAddress, stopEarnings } from '../delivery/offerDetails';
 import { operationalDestination } from '../delivery/operationalDestination';
+import { orderLabel } from '../delivery/ifoodRules';
 
 // O mapa da oferta não usa o motor de navegação da rota em andamento.
 export function OfferPrompt() {
@@ -140,7 +141,7 @@ export function OfferPrompt() {
                 <View style={[styles.stop, { backgroundColor: focusedId === stop.pedidoId ? colors.accentSoft : colors.paper, borderColor: focusedId === stop.pedidoId ? colors.accent : colors.line, opacity: on ? 1 : .55 }]}>
                   <Pressable accessibilityRole="button" accessibilityLabel={'Ver pedido #' + stop.pedidoId + ' no mapa'} onPress={() => setFocusedId(stop.pedidoId)} style={{ flex: 1, paddingVertical: 12, paddingLeft: 12, gap: 5 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'ManropeExtraBold', fontSize: 13.5, color: colors.ink }}>#{stop.pedidoId} · {stop.pedido?.nomeCliente || 'Entrega'}</Text>
+                      <Text numberOfLines={1} style={{ flex: 1, fontFamily: 'ManropeExtraBold', fontSize: 13.5, color: colors.ink }}>{orderLabel(stop.pedido,stop.pedidoId)} · {stop.pedido?.nomeCliente || 'Entrega'}</Text>
                       <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 14, color: colors.success }}>{gain != null && ['delivery', 'distance'].includes(stop.earnings?.mode || '') ? money(gain) : stopEarnings(stop, money)}</Text>
                     </View>
                     <Text numberOfLines={2} style={[type.small, { color: colors.muted }]}>{stopAddress(stop)}</Text>

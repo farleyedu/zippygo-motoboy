@@ -4,6 +4,7 @@ import { Check, Package, ShieldCheck } from 'lucide-react-native';
 import { checklistItems, type ChecklistConfirmation, type ChecklistOrder } from '../delivery/checklistRules';
 import { Pill, Surface, type } from './Kit';
 import { useZippyTheme } from './theme';
+import { orderLabel } from '../delivery/ifoodRules';
 
 export function OrderChecklistCard({ order, confirmation, onToggle, onToggleBag, stage = 'pickup', extrasOnly = false, disabled = false }: {
   order: ChecklistOrder; confirmation?: ChecklistConfirmation; onToggle: (key: string) => void; onToggleBag?: () => void; stage?: 'pickup' | 'delivery'; extrasOnly?: boolean; disabled?: boolean;
@@ -16,7 +17,7 @@ export function OrderChecklistCard({ order, confirmation, onToggle, onToggleBag,
   return <Surface style={{ padding: 16, marginBottom: 14 }}>
     <View style={styles.heading}><View style={{ flex: 1 }}>
       <Text style={[type.eyebrow, { color: colors.muted }]}>{extrasOnly ? 'ANTES DE CONTINUAR' : 'IDENTIFIQUE NA BAG'}</Text>
-      <Text style={[styles.number, { color: colors.ink }]}>Pedido #{order.id}</Text>
+      <Text style={[styles.number, { color: colors.ink }]}>Pedido {orderLabel(order,order.id)}</Text>
       {!!order.nomeCliente && <Text numberOfLines={2} style={[type.small, { color: colors.muted }]}>{order.nomeCliente}</Text>}
     </View><Pill icon={extrasOnly ? ShieldCheck : Package}>{String(items.filter(i => checkedKeys?.includes(i.key)).length) + '/' + items.length}</Pill></View>
     {ordinary.length > 0 && onToggleBag && <>
