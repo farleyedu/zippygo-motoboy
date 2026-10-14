@@ -43,6 +43,7 @@ export default ({ config }: ConfigContext): ExpoConfig => {
         'FOREGROUND_SERVICE_LOCATION',
         'RECORD_AUDIO'
       ],
+      blockedPermissions: ['android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK'],
       package: 'com.zippy.zippyboy',
       softwareKeyboardLayoutMode: 'resize',
       ...(existsSync(firebaseFile) ? { googleServicesFile: firebaseFile } : {}),
