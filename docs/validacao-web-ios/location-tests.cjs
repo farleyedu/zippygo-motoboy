@@ -57,6 +57,8 @@ test('permissão web de GPS não exige background, enquanto nativo continua exig
     getForegroundPermissionsAsync: async () => ({ granted: true, canAskAgain: true }), hasServicesEnabledAsync: async () => true,
     getBackgroundPermissionsAsync: async () => ({ granted: false, canAskAgain: true }),
   }, 'expo-notifications': { getPermissionsAsync: async () => ({ granted: false, canAskAgain: true }) },
+  './locationDisclosureConsent': { hasLocationDisclosureConsent: async () => true },
+  './webOfferPush': { webNotificationPermission: () => ({ granted: false, canAskAgain: false, supported: false }) },
   './browserNativeTest': { browserNativeTest: false }, './expoGo': { expoGo: false },
   './webLocationPermission': { readWebLocationPermission: async () => ({ granted: true, supported: true }), webLocationAvailable: () => true }, });
   const web = await load('services/operationalPermissions.ts', mocks('web')).readOperationalPermissions();

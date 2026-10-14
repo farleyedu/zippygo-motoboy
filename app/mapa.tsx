@@ -16,6 +16,7 @@ import { distanceMeters, type ExternalStop } from '../src/delivery/externalRoute
 import { nativeNavigationAvailable } from '../services/nativeNavigation';
 import { navigationSdkEnabled } from '../services/navigationFlag';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
+import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
 import { AppNav } from '../src/ui/AccountKit';
 import { Button, Pill, Surface, type } from '../src/ui/Kit';
 import { activeStops, StopRow } from '../src/ui/RouteKit';
@@ -119,7 +120,7 @@ export default function MapScreen() {
   onReturn.current = async () => {
     const lat = Number(current?.pedido?.latitude), lng = Number(current?.pedido?.longitude);
     const target = collecting ? collection : Number.isFinite(lat) && Number.isFinite(lng) ? { lat, lng } : undefined;
-    if (!target) return;
+    if (!target || !(await hasLocationDisclosureConsent())) return;
     try { const here = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); if (distanceMeters({ lat: here.coords.latitude, lng: here.coords.longitude }, target) > ARRIVAL_RADIUS_M) return; } catch { return; }
     sentOut.current = false;
     if (collecting) router.push(queue?.routeState === 'returning' ? '/retornoLoja' : '/retirada');

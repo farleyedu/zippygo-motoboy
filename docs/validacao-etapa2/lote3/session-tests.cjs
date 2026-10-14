@@ -201,6 +201,7 @@ test('radar atualiza ofertas sem renovar heartbeat a cada consulta', async () =>
 
 function trackingFixture(options = {}) {
   const secure = new Map([['operationalAccessToken', 'token-qa'], ['operationalSession', JSON.stringify(session)], ['operationalUserId', owner.userId], ['operationalEstablishmentId', owner.establishmentId], ['zippygo.user', JSON.stringify({ id: owner.userId })], ['zippygo.estabelecimentoAtual', JSON.stringify({ id: owner.establishmentId })]]), queues = new Map(), sent = [], lifecycle = [];
+  secure.set('zippyboy.locationDisclosureConsent', JSON.stringify({ version: 1, userId: owner.userId, acceptedAtUtc: new Date().toISOString() }));
   let failure = false; const requests = [];
   const storage = { getSecureItem: async k => secure.get(k) ?? null, setSecureItem: async (k, v) => secure.set(k, v), deleteSecureItem: async k => secure.delete(k) };
   const api = load('services/mobileApi.ts', {

@@ -7,6 +7,8 @@ import { SvgXml } from 'react-native-svg';
 import { Pedido } from '../types/pedido';
 import { useZippyTheme } from '../src/ui/theme';
 import { mapPinSvg } from '../src/delivery/mapPin';
+import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
+import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
 
 import { MapaProps } from './mapTypes';
 
@@ -36,6 +38,7 @@ const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: num
 export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress, view3D = false, onMapPress, pathSegments, path, historical, selectedPedidoId }: Props) {
   const { dark, reducedMotion } = useZippyTheme();
   const focused = useIsFocused();
+  const locationConsentGranted = useOperationalSession().permissions?.locationConsentGranted === true;
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationAuthorized, setLocationAuthorized] = useState(false);
   const mapRef = useRef<MapView>(null);
@@ -93,7 +96,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
   // Cada toque centraliza uma vez; atualizacoes do GPS nao prendem o mapa livre.
   useEffect(() => {
     if (!focused || !recenterToken || historical) return;
-    if (!locationAuthorized) return;
+    if (!locationAuthorized || !locationConsentGranted) return;
     if (lastRecenterTokenRef.current === recenterToken) return;
     lastRecenterTokenRef.current = recenterToken;
     let alive = true;
@@ -102,6 +105,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
     } else {
       (async () => {
         try {
+          if (!(await hasLocationDisclosureConsent())) return;
           const loc = await Location.getCurrentPositionAsync({});
           if (!alive) return;
           setUserLocation(loc.coords);
@@ -112,7 +116,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
       })();
     }
     return () => { alive = false; };
-  }, [focused, recenterToken, userLocation, locationAuthorized, centerTo, historical]);
+  }, [focused, recenterToken, userLocation, locationAuthorized, locationConsentGranted, centerTo, historical]);
 
   useEffect(() => {
     // Ao organizar rota (não emEntrega), enquadra todos os pedidos no mapa
@@ -153,11 +157,11 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
   }, [pedidos, emEntrega, historical]);
 
   useEffect(() => {
-    if (!focused || historical) return;
+    if (!focused || historical || !locationConsentGranted) { setLocationAuthorized(false); return; }
     let alive = true;
     (async () => {
       try {
-        const allowed = (await Location.getForegroundPermissionsAsync()).granted;
+        const allowed = await hasLocationDisclosureConsent() && (await Location.getForegroundPermissionsAsync()).granted;
         if (!alive) return;
         setLocationAuthorized(allowed);
         if (allowed) {
@@ -175,7 +179,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
       }
     })();
     return () => { alive = false; };
-  }, [centerTo, focused, historical]);
+  }, [centerTo, focused, historical, locationConsentGranted]);
 
   // Memoize os marcadores para evitar re-renders desnecessários
   const markers = useMemo(() => {
@@ -228,7 +232,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
       onMapReady={async () => {
         if (historical) { fitHistory(); return; }
         try {
-          if (!locationAuthorized) return;
+          if (!locationAuthorized || !(await hasLocationDisclosureConsent())) return;
           if (userLocation) {
             centerTo(userLocation);
           } else {
@@ -246,7 +250,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
         latitudeDelta: 0.005,
         longitudeDelta: 0.005,
       }}
-      showsUserLocation={!historical && locationAuthorized && focused}
+      showsUserLocation={!historical && locationAuthorized && locationConsentGranted && focused}
       onUserLocationChange={handleUserLocationChange}
     >
       {(pathSegments || (path?.length ? [path] : [])).filter(segment => segment.length > 1).map((segment, i) => <Polyline key={i} coordinates={segment.map(p => ({ latitude: p.lat, longitude: p.lng }))} strokeColor="#4c91f6" strokeWidth={5} />)}

@@ -5,11 +5,21 @@ const ts = require('typescript'), React = require('react'), renderer = require('
 global.IS_REACT_ACT_ENVIRONMENT = true;
 const root = path.resolve(__dirname, '../..');
 function load(file, mocks) {
+  mocks = {
+    '../src/contexts/OperationalSessionContext': { useOperationalSession: () => ({ permissions: { foreground: { granted: true }, locationConsentGranted: true } }) },
+    '../services/locationDisclosureConsent': { hasLocationDisclosureConsent: async () => true },
+    ...mocks,
+  };
   const compiled = ts.transpileModule(fs.readFileSync(path.join(root, file), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.React, esModuleInterop: true, target: ts.ScriptTarget.ES2022 },
   }).outputText;
   const exports = {};
-  vm.runInNewContext(compiled, { exports, require: name => name in mocks ? mocks[name] : require(name), console, setTimeout, clearTimeout, Promise, Date, Error, __DEV__: false });
+  vm.runInNewContext(compiled, { exports, require: name => {
+    if (name in mocks) return mocks[name];
+    const local = path.resolve(path.dirname(path.join(root, file)), name + '.ts');
+    if (name.startsWith('.') && fs.existsSync(local)) return load(path.relative(root, local), mocks);
+    return require(name);
+  }, console, setTimeout, clearTimeout, Promise, Date, Error, __DEV__: false });
   return exports;
 }
 const theme = { useZippyTheme: () => ({ dark: true, sound: true }) };
@@ -45,6 +55,7 @@ test('Rodapé reserva a altura física no Android e pontos no iOS, inclusive ap�
 
 test('GPS nativo é iniciado após init; GPS bruto desbloqueia o cálculo mesmo parado', async () => {
   const calls = [], states = [], listeners = {};
+  let consentGranted = true;
   const engine = {
     areTermsAccepted: async () => true,
     init: async () => { calls.push('init'); return 'OK'; },
@@ -69,6 +80,7 @@ test('GPS nativo é iniciado após init; GPS bruto desbloqueia o cálculo mesmo 
     '../src/delivery/NativeNavigationProvider': { waitForNavigationReset: async () => {}, waitForNavigationStop: () => {} },
     '../src/delivery/navigationJourney': journey,
     '../src/delivery/navigationDiagnostics': load('src/delivery/navigationDiagnostics.ts', {}),
+    '../services/locationDisclosureConsent': { hasLocationDisclosureConsent: async () => consentGranted },
   });
   const props = { navigationEnabled: true, routeMode: true, pedidos: [{ id: 87, enderecoEntrega: 'Rua A, 10', coordinates: { lat: -18.9, lng: -48.2 } }], onNavigationState: state => states.push(state) };
   const view = { setNavigationUIEnabled: async () => {}, setFollowingPerspective: async () => calls.push('follow'), showRouteOverview: async () => {} };
@@ -91,6 +103,11 @@ test('GPS nativo é iniciado após init; GPS bruto desbloqueia o cálculo mesmo 
   assert.equal(states.at(-1).status, 'error');
   assert.ok(states.at(-1).message.includes('conexão'));
   assert.equal(calls.filter(c => c === 'guide').length, 1, 'Falha da nova rota não inicia guidance');
+  consentGranted = false;
+  const initializations = calls.filter(c => c === 'init').length;
+  await renderer.act(async () => tree.update(React.createElement(Map, { ...props, retryToken: 2 })));
+  assert.equal(calls.filter(c => c === 'init').length, initializations, 'Sem consentimento, SDK não inicia novamente');
+  assert.equal(states.at(-1).status, 'error'); assert.match(states.at(-1).message, /localização/);
   await renderer.act(async () => tree.unmount());
   assert.ok(calls.includes('gps:stop'));
   assert.equal(listeners.raw, null);

@@ -3,6 +3,7 @@ import { Alert, Linking, Platform } from 'react-native';
 import { getSecureItem } from '../utils/secureStorage';
 import { browserNativeTest, reportBrowserMock } from '../services/browserNativeTest';
 import { expoGo } from '../services/expoGo';
+import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
 import { restartBackgroundLocation, stopBackgroundLocation } from '../services/backgroundLocationLifecycle';
 import { createWebForegroundLocation, subscribeWebForeground } from '../services/webForegroundLocation';
 import { readWebLocationPermission, rememberWebLocationPermission, requestWebLocationPermission } from '../services/webLocationPermission';
@@ -50,6 +51,7 @@ export async function requestForegroundLocationPermission(): Promise<boolean> {
   if (Platform.OS === 'web') {
     try { await requestWebLocationPermission(); return true; } catch { return false; }
   }
+  if (!(await hasLocationDisclosureConsent())) return false;
   const current = await Location.getForegroundPermissionsAsync();
   if (current.status === 'granted') return true;
 
@@ -93,6 +95,8 @@ export async function iniciarMonitoramentoLocalizacao(mode: TrackingMode = 'onli
       return true;
     }
     if (expoGo) return await iniciarAcompanhamentoExpoGo(mode);
+
+    if (!(await hasLocationDisclosureConsent())) { await stopBackgroundLocation(); return false; }
 
     // A preparação solicita permissões. Restaurar sessão não abre diálogos do sistema.
     const foreground = await Location.getForegroundPermissionsAsync();

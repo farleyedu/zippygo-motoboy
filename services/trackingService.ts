@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
 import { stopBackgroundLocation } from './backgroundLocationLifecycle';
 import { browserNativeTest } from './browserNativeTest';
+import { hasLocationDisclosureConsent } from './locationDisclosureConsent';
 import { getSecureItem, setSecureItem, deleteSecureItem } from '../utils/secureStorage';
 import { createIdentifier, heartbeatOperationalSession, OperationalLocationPayload, sendOperationalLocations } from './mobileApi';
 
@@ -23,6 +24,7 @@ function serialize<T>(work: () => Promise<T>): Promise<T> {
   return next;
 }
 async function scope(): Promise<TrackingScope | null> {
+  if (!(await hasLocationDisclosureConsent())) return null;
   const [token, raw, ownerId, establishmentId, rawUser, rawStore] = await Promise.all(['operationalAccessToken', 'operationalSession', 'operationalUserId', 'operationalEstablishmentId', 'zippygo.user', 'zippygo.estabelecimentoAtual'].map(getSecureItem));
   if (!token || !raw) return null;
   try {

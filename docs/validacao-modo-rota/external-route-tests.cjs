@@ -33,16 +33,23 @@ test('Endereço com caracteres especiais é codificado e o separador é %7C', ()
   assert.ok(route.url.includes('waypoints=Rua%20A%2C%2010%20%26%20Cia'));
   assert.equal(new URL(route.url).searchParams.get('destination'), 'Av. B, 20');
 });
-test('Paradas sem endereço ficam de fora e são contadas', () => {
+test('Parada sem endereço interrompe o percurso para não saltar uma entrega', () => {
   const route = googleMapsRoute([stop(1), {}, stop(2)]);
-  assert.deepEqual([route.sent, route.skipped], [2, 1]);
+  assert.deepEqual([route.sent, route.skipped, route.remaining], [1, 1, 2]);
+  assert.equal(new URL(route.url).searchParams.get('destination'), stopPlace(stop(1)));
   assert.equal(googleMapsRoute([{}, { address: '' }]), null);
 });
 test('Acima do limite do Maps, envia só as primeiras e informa as restantes', () => {
-  const route = googleMapsRoute(Array.from({ length: 13 }, (_, i) => stop(i + 1)));
+  const route = googleMapsRoute(Array.from({ length: 13 }, (_, i) => stop(i + 1)), GOOGLE_MAPS_MAX_STOPS);
   assert.equal(GOOGLE_MAPS_MAX_STOPS, 10);
   assert.deepEqual([route.sent, route.remaining], [10, 3]);
   assert.equal(new URL(route.url).searchParams.get('waypoints').split('|').length, 9);
+});
+
+test('Link para navegador móvel respeita quatro paradas por padrão', () => {
+  const route = googleMapsRoute(Array.from({ length: 13 }, (_, i) => stop(i + 1)));
+  assert.deepEqual([route.sent, route.remaining], [4, 9]);
+  assert.equal(new URL(route.url).searchParams.get('waypoints').split('|').length, 3);
 });
 test('Distância entre pontos: mesma posição é zero e ~111 m por 0,001 grau de latitude', () => {
   assert.equal(distanceMeters({ lat: -18.9, lng: -48.2 }, { lat: -18.9, lng: -48.2 }), 0);

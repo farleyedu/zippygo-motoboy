@@ -39,6 +39,7 @@ function fixture(options = {}) {
     'expo-location': {},
     './browserNativeTest': { browserNativeTest: !!options.browserMock, reportBrowserMock: () => calls.push('mock') },
     './expoGo': { expoGo: false },
+    './locationDisclosureConsent': { hasLocationDisclosureConsent: async () => true },
   };
   const webPush = {
     registerWebOfferPush: async () => calls.push('web-register'),

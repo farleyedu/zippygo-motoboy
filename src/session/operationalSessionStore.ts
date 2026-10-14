@@ -121,7 +121,9 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
         update({ phase: 'online', error: 'GPS indisponível. Sua entrega continua; a loja vê a última posição confirmada. Revise a permissão de localização.' });
         return true;
       }
-      update({ phase: 'permission-required', error: 'Permita a localização e confira o GPS para acompanhar seu turno.' });
+      update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
+        ? 'Revise o uso da localização para acompanhar seu turno.'
+        : 'Permita a localização e confira o GPS para acompanhar seu turno.' });
       return false;
     }
     const mode = queueTrackingMode(queue);
@@ -204,7 +206,9 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     start: () => run(async (version, owner) => {
       update({ phase: 'starting', error: null });
       const permissions = await ports.permissions(); assertCurrent(version); update({ permissions });
-      if (!permissions.ready) { update({ phase: 'permission-required', error: ports.locationOptional ? 'Permita a localização com o app aberto para iniciar o turno.' : 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
+      if (!permissions.ready) { update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
+        ? 'Revise o uso da localização antes de iniciar o turno.'
+        : ports.locationOptional ? 'Permita a localização com o app aberto para iniciar o turno.' : 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
       if (await ports.stored()) { assertCurrent(version); return restore(version, owner); }
       assertCurrent(version);
       const attemptId = await ports.attempt(owner); assertCurrent(version);

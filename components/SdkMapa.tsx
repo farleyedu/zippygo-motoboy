@@ -10,6 +10,8 @@ import { NavigationJourney } from '../src/delivery/navigationJourney';
 import { NavigationDiagnostics, diagnoseNavigationConnection } from '../src/delivery/navigationDiagnostics';
 import type { MapaProps, MapCoordinate } from './mapTypes';
 import { uniqueNavigationStops } from '../src/delivery/externalRoute';
+import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
+import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
 
 const coordinate = (value: MapCoordinate | undefined): value is MapCoordinate => !!value && Number.isFinite(value.lat) && Number.isFinite(value.lng) && Math.abs(value.lat) <= 90 && Math.abs(value.lng) <= 180;
 const center = (points: MapCoordinate[]) => ({ lat: points.reduce((s, p) => s + p.lat, 0) / points.length, lng: points.reduce((s, p) => s + p.lng, 0) / points.length });
@@ -52,6 +54,8 @@ function useMarkers(controller: MapViewController | null, props: MapaProps, read
 
 function OverviewMap(props: MapaProps) {
   const { dark } = useZippyTheme(), focused = useIsFocused();
+  const turn = useOperationalSession();
+  const locationAllowed = !!turn.permissions?.foreground.granted && !!turn.permissions.locationConsentGranted;
   const [controller, setController] = useState<MapViewController | null>(null), [ready, setReady] = useState(false);
   const location = useRef<MapCoordinate | null>(null);
   const segments = props.pathSegments || (props.path?.length ? [props.path] : []);
@@ -64,16 +68,16 @@ function OverviewMap(props: MapaProps) {
     if (points.length) {
       const spread = Math.max(...points.map(p => p.lat)) - Math.min(...points.map(p => p.lat)) + Math.max(...points.map(p => p.lng)) - Math.min(...points.map(p => p.lng));
       controller.moveCamera({ target: center(points), zoom: spread > .2 ? 10 : spread > .05 ? 12 : 14, tilt: props.view3D ? 45 : 0 });
-    } else if (!props.historical) void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(p => { if (alive) { location.current = { lat: p.coords.latitude, lng: p.coords.longitude }; controller.moveCamera({ target: location.current, zoom: 15 }); } }).catch(() => {});
+    } else if (!props.historical && locationAllowed) void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(p => { if (alive) { location.current = { lat: p.coords.latitude, lng: p.coords.longitude }; controller.moveCamera({ target: location.current, zoom: 15 }); } }).catch(() => {});
     return () => { alive = false; };
-  }, [controller, ready, focused, pointKey, props.view3D]);
+  }, [controller, ready, focused, pointKey, props.view3D, locationAllowed]);
   useEffect(() => {
-    if (!controller || !ready || !props.recenterToken) return;
+    if (!controller || !ready || !props.recenterToken || !locationAllowed) return;
     let alive = true; void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(p => { if (alive) controller.moveCamera({ target: { lat: p.coords.latitude, lng: p.coords.longitude }, zoom: 16, tilt: props.view3D ? 45 : 0 }); }).catch(() => {});
     return () => { alive = false; };
-  }, [controller, ready, props.recenterToken]);
+  }, [controller, ready, props.recenterToken, locationAllowed]);
   useEffect(() => { if (!controller || !ready) return; segments.forEach((points, i) => { if (points.length > 1) void controller.addPolyline({ id: 'recorded-path-' + i, points, color: '#2872e3', width: 7 }); }); return () => segments.forEach((_, i) => controller.removePolyline('recorded-path-' + i)); }, [controller, ready, pointKey]);
-  return <MapView style={StyleSheet.absoluteFill} onMapViewControllerCreated={setController} onMapReady={() => setReady(true)} mapColorScheme={dark ? MapColorScheme.DARK : MapColorScheme.LIGHT} myLocationEnabled={!props.historical} myLocationButtonEnabled={false} mapToolbarEnabled={false} zoomControlsEnabled={false} onMapClick={props.onMapPress} onMarkerClick={marker => { const id = Number(marker.id.split(':')[1]); if (Number.isSafeInteger(id) && id > 0) props.onOrderPress?.(id); }} />;
+  return <MapView style={StyleSheet.absoluteFill} onMapViewControllerCreated={setController} onMapReady={() => setReady(true)} mapColorScheme={dark ? MapColorScheme.DARK : MapColorScheme.LIGHT} myLocationEnabled={!props.historical && locationAllowed} myLocationButtonEnabled={false} mapToolbarEnabled={false} zoomControlsEnabled={false} onMapClick={props.onMapPress} onMarkerClick={marker => { const id = Number(marker.id.split(':')[1]); if (Number.isSafeInteger(id) && id > 0) props.onOrderPress?.(id); }} />;
 }
 
 function RouteMap(props: MapaProps) {
@@ -135,6 +139,8 @@ function RouteMap(props: MapaProps) {
       const resetFinished = log.operation('reset.wait');
       await waitForNavigationReset(); resetFinished(); if (!alive) return;
       log.event('reset.finished');
+      if (!(await hasLocationDisclosureConsent())) throw new Error('Revise o uso da localização na preparação do turno antes de iniciar a navegação.');
+      if (!alive) return;
       const accepted = await engine.areTermsAccepted() || await engine.showTermsAndConditionsDialog();
       log.event('terms.result', { accepted });
       if (!alive) return;

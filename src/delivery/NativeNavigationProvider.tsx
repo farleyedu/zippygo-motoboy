@@ -14,7 +14,7 @@ function NavigationLifecycle() {
   useEffect(() => {
     // A próxima inicialização espera o descarte do navegador da sessão anterior.
     queueNavigationReset(async () => { await engine.stopGuidance().catch(() => {}); await engine.clearDestinations().catch(() => {}); await engine.cleanup().catch(() => {}); });
-  }, [turn.session?.sessionId, engine]);
+  }, [turn.session?.sessionId, turn.permissions?.locationConsentGranted, engine]);
   return null;
 }
 

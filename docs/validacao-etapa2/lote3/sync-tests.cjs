@@ -184,6 +184,7 @@ test('fix de GPS atrasado não envia amostra de outro turno', async () => {
 test('iniciar monitoramento confirma serviço sem esperar primeira posição e HTTP', async () => {
   const wait = deferred(); let running = false, firstPosition = 0;
   const setup = load('components/locationSetup.ts', {
+    '../services/locationDisclosureConsent': { hasLocationDisclosureConsent: async () => true },
     'react-native': { Platform: { OS: 'android' } },
     'expo-location': { Accuracy: { Balanced: 3 }, getForegroundPermissionsAsync: async () => ({ granted: true }), getBackgroundPermissionsAsync: async () => ({ granted: true }), hasServicesEnabledAsync: async () => true, hasStartedLocationUpdatesAsync: async () => running, startLocationUpdatesAsync: async () => { running = true; } },
     '../utils/secureStorage': { getSecureItem: async key => key === 'operationalSession' ? JSON.stringify(session) : 'token-qa' },
@@ -195,6 +196,8 @@ test('iniciar monitoramento confirma serviço sem esperar primeira posição e H
 test('tarefa nativa envia GPS enquanto heartbeat lento permanece em andamento', async () => {
   const wait = deferred(); let task, sent = 0;
   load('components/locationTask.ts', {
+    '../services/locationDisclosureConsent': { hasLocationDisclosureConsent: async () => true },
+    '../services/backgroundLocationLifecycle': { stopBackgroundLocation: async () => {} },
     'expo-task-manager': { defineTask: (_name, handler) => { task = handler; } },
     '../services/trackingService': { getTrackingMode: async () => 'active_route', maintainOperationalPresence: () => wait.promise, sendLocation: async () => { sent++; } },
   });

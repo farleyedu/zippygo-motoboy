@@ -1,12 +1,17 @@
 import * as TaskManager from 'expo-task-manager';
 import * as Location from 'expo-location';
 import { getTrackingMode, maintainOperationalPresence, sendLocation } from '../services/trackingService';
+import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
+import { stopBackgroundLocation } from '../services/backgroundLocationLifecycle';
 
 const LOCATION_TASK_NAME = 'background-location-task';
 
 TaskManager.defineTask(
   LOCATION_TASK_NAME,
   async ({ data, error }: TaskManager.TaskManagerTaskBody<{ locations: Location.LocationObject[] }>) => {
+    // Uma tarefa restaurada pelo Android após atualizar o app também precisa
+    // conferir a versão e o dono do consentimento antes de transmitir dados.
+    if (!(await hasLocationDisclosureConsent())) { await stopBackgroundLocation(); return; }
     if (error) {
       console.error('[TASK] Erro:', error);
       return;
