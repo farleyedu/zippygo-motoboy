@@ -61,11 +61,17 @@ export function enrichIfoodDetail(detail:OperationalOrderDetail,source:IfoodOrde
   return {...detail,origem:'ifood',identidadeExterna:identity,pedidoIfood:compatible?order:undefined,
     total:compatible?order.amountToCollect:null,formaPagamento:compatible?order.payments.filter(p=>p.type==='OFFLINE').map(p=>p.method).join(' + '):null,
     requerCodigoEntrega:true,itens:compatible?order.items.map((item,index)=>({itemId:`ifood-${index}`,nome:item.name,quantidade:item.quantity,precoUnitario:item.unitPrice,total:item.totalPrice,observacao:item.observations,official:true,
-      adicionais:Array.isArray(item.options)?item.options.flatMap((raw:unknown)=>{
-        if(!raw||typeof raw!=='object')return [];
-        const p=raw as Record<string,unknown>;
-        return typeof p.name==='string'?[{nome:p.name,preco:typeof p.price==='number'?p.price:0,quantidade:typeof p.quantity==='number'?p.quantity:undefined}]:[];
-      }):[]})):[]};
+      adicionais:officialAdditions(item.options)})):[]};
+}
+// O iFood aninha o terceiro nível em `customizations` (e outros em `options`); todos entram na conferência.
+function officialAdditions(raw:unknown,depth=0):{nome:string;preco:number;quantidade?:number}[] {
+  if(!Array.isArray(raw)||depth>5)return [];
+  return raw.flatMap((value:unknown)=>{
+    if(!value||typeof value!=='object')return [];
+    const p=value as Record<string,unknown>;
+    return [...(typeof p.name==='string'?[{nome:p.name,preco:typeof p.price==='number'?p.price:0,quantidade:typeof p.quantity==='number'?p.quantity:undefined}]:[]),
+      ...officialAdditions(p.options,depth+1),...officialAdditions(p.customizations,depth+1)];
+  });
 }
 export const officialUnitPrice=(value:number)=>value.toLocaleString('pt-BR',{style:'currency',currency:'BRL',minimumFractionDigits:2,maximumFractionDigits:6});
 export function officialOperationMessage(operation?: IfoodCompletionOperation | null): string {
