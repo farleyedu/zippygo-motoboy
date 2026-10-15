@@ -1,3 +1,4 @@
+import { routeNoticeKind } from '../delivery/routeNotice';
 import React, { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, Platform } from 'react-native';
 import { jwtDecode } from 'jwt-decode';
@@ -142,8 +143,8 @@ export function OperationalSessionProvider({ children }: { children: React.React
     const sessionId = state.session.sessionId, sessionEpoch = state.session.epoch;
     return startOperationalRealtime({
       onRouteEvent: event => {
-        if (['canceled', 'auto_closed'].includes(event.action || '')) setRouteNotice({ kind: 'cancelled', pedidoId: event.pedidoId, version: event.version });
-        else if (['assigned', 'reordered', 'transferred', 'transfer_completed'].includes(event.action || '')) setRouteNotice({ kind: 'changed', pedidoId: event.pedidoId, version: event.version });
+        const kind = routeNoticeKind(event.action);
+        if (kind) setRouteNotice({ kind, pedidoId: event.pedidoId, version: event.version });
       },
       token: async () => {
         const saved = await stored();

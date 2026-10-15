@@ -81,3 +81,37 @@ export function officialOperationMessage(operation?: IfoodCompletionOperation | 
   if (operation?.state === 'uncertain') return 'O resultado ainda não foi confirmado. Consulte a operação; não cobre novamente.';
   return 'Confirmação iFood pendente. Aguarde o resultado antes de seguir.';
 }
+
+// Motivos devolvidos pelo backend em `departureBlockedCode`/`deliveryBlockedCode` (ifood_delivery_blocked_code).
+const DELIVERY_BLOCKED: Record<string, string> = {
+  IFOOD_DELIVERY_DISABLED: 'A entrega deste pedido ainda não foi liberada para a Zippy.',
+  IFOOD_DELIVERY_NOT_CONFIRMED: 'O pedido ainda não foi confirmado no iFood.',
+  IFOOD_DELIVERY_NOT_READY: 'O pedido ainda não está pronto. Aguarde a loja.',
+  IFOOD_DELIVERY_DISPATCH_PENDING: 'Aguarde o iFood confirmar o despacho do pedido pela loja.',
+  IFOOD_DELIVERY_BEFORE_WINDOW: 'Este pedido é agendado e ainda não está na janela de entrega.',
+  IFOOD_DELIVERY_CANCELLATION_PENDING: 'Há um cancelamento em andamento neste pedido. Aguarde a loja.',
+  IFOOD_DELIVERY_REVIEW_REQUIRED: 'O pedido precisa de revisão pela loja.',
+  IFOOD_DELIVERY_CONTEXT_UNAVAILABLE: 'Os dados do pedido estão desatualizados. Atualize a rota.',
+  IFOOD_DELIVERY_LOCATION_REQUIRED: 'O pedido está sem localização de entrega. Fale com a loja.',
+  IFOOD_DELIVERY_SCHEDULE_REQUIRED: 'Os horários do pedido agendado precisam de revisão pela loja.',
+  IFOOD_DELIVERY_TENANT_CHANGE: 'O pedido pertence a outra loja. Atualize a rota.',
+  IFOOD_DELIVERY_NOT_APPLICABLE: 'Este pedido não é uma entrega da loja.',
+  IFOOD_ORDER_TERMINAL: 'O pedido já foi encerrado no iFood.',
+  IFOOD_ORDER_MANAGED_EXTERNALLY: 'A entrega deste pedido é feita pelo iFood.',
+  IFOOD_MERCHANT_NOT_AUTHORIZED: 'A loja precisa de autorização iFood.',
+  IFOOD_COMMAND_ACTIVE_OPERATION: 'Há uma solicitação pendente deste pedido no iFood. Aguarde.',
+};
+export const ifoodBlockedMessage = (code?: string | null): string =>
+  code ? DELIVERY_BLOCKED[code] ?? 'Aguarde a liberação do pedido pelo iFood.' : '';
+
+// Primeiro motivo que impede a saída: o pedido iFood só sai depois do despacho oficial. Pedido próprio nunca é bloqueado aqui.
+export function departureBlock(stops: { pedidoId: number; pedido?: IfoodOrderSource | null }[]): string | null {
+  for (const stop of stops) {
+    if (!isIfood(stop.pedido)) continue;
+    const identity = stop.pedido?.identidadeExterna;
+    if (identity?.canDepartDelivery === true) continue;
+    const reason = identity ? ifoodBlockedMessage(identity.departureBlockedCode) || 'Aguarde a liberação do pedido pelo iFood.' : 'Os dados do pedido iFood não estão disponíveis. Atualize a rota.';
+    return `${orderLabel(stop.pedido, stop.pedidoId)}: ${reason}`;
+  }
+  return null;
+}

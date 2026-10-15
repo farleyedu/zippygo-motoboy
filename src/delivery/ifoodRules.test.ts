@@ -1,6 +1,6 @@
 import { describe, expect, it } from '@jest/globals';
 import {
-  amountToCollect, assertOfficialOperation, bindIfoodContext, enrichIfoodDetail, isIfood, officialCompletion,
+  amountToCollect, assertOfficialOperation, bindIfoodContext, departureBlock, enrichIfoodDetail, ifoodBlockedMessage, isIfood, officialCompletion,
   officialOperationMessage, officialPaymentPlan, officialPaymentsMatch, orderLabel, preparedOfficialCode, receiptLabel,
 } from './ifoodRules';
 import { readyToComplete } from './completionRules';
@@ -236,5 +236,32 @@ describe('prontidão para concluir (iFood)', () => {
   });
   it('o código preenchido não basta como "conferido": o servidor é quem confirma', () => {
     expect(readyToComplete(ctx(), true, [], undefined, undefined, undefined)).toBe(false);
+  });
+});
+
+describe('bloqueio de saída do pedido iFood', () => {
+  const stop = (identity: Record<string, unknown> | null, id = 104) => ({ pedidoId: id, pedido: identity === null ? ({ origem: 'ifood' } as any) : source({ identidadeExterna: identity }) });
+  it('pedido próprio nunca é bloqueado', () => {
+    expect(departureBlock([{ pedidoId: 9, pedido: { origem: 'cardapio_web' } as any }, { pedidoId: 10 }])).toBeNull();
+  });
+  it('libera quando o backend diz que pode sair', () => {
+    expect(departureBlock([stop(identity({ canDepartDelivery: true }))])).toBeNull();
+  });
+  it('explica o motivo e mostra o número oficial', () => {
+    const message = departureBlock([stop(identity({ canDepartDelivery: false, departureBlockedCode: 'IFOOD_DELIVERY_DISPATCH_PENDING' }))]);
+    expect(message).toContain('iFood #7183');
+    expect(message).toContain('despacho');
+  });
+  it('sem a decisão do backend não presume que pode sair', () => {
+    expect(departureBlock([stop(identity({ canDepartDelivery: undefined }))])).not.toBeNull();
+    expect(departureBlock([stop(null)])).toContain('Atualize a rota');
+  });
+  it('um pedido iFood bloqueado segura a saída mesmo com outros liberados', () => {
+    const blocked = stop(identity({ canDepartDelivery: false, departureBlockedCode: 'IFOOD_DELIVERY_NOT_READY' }), 105);
+    expect(departureBlock([stop(identity({ canDepartDelivery: true })), blocked])).toContain('pronto');
+  });
+  it('código desconhecido não inventa motivo', () => {
+    expect(ifoodBlockedMessage('CODIGO_NOVO')).toContain('Aguarde a liberação');
+    expect(ifoodBlockedMessage(null)).toBe('');
   });
 });

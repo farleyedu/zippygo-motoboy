@@ -15,12 +15,14 @@ import { useRouteAction } from '../src/hooks/useRouteAction';
 import { checklistItems } from '../src/delivery/checklistRules';
 import { ExtrasConfirmation } from '../src/ui/ExtrasConfirmation';
 import { operationalStage } from '../src/delivery/operationalDestination';
+import { departureBlock } from '../src/delivery/ifoodRules';
 
 export default function PickupScreen() {
   const turn = useOperationalSession(), router = useRouter(), { colors } = useZippyTheme();
   const stops = activeStops(turn.queue), data = useChecklistOrders(stops.map(s => s.pedidoId)), checks = useOrderChecklists(data.orders, 'pickup');
   const ready = operationalStage(turn.queue) === 'pickup' && !data.loading && !data.error && data.orders.length === stops.length && checks.primaryReady;
   const action = useRouteAction(), [showExtras, setShowExtras] = useState(false), [confirming, setConfirming] = useState(false), pending = useRef(false);
+  const departBlocked = departureBlock(stops);
   const hasExtras = data.orders.some(order => checklistItems(order.checklist).some(item => item.extra));
   const activation = useRef('');
   useEffect(() => { const queue = turn.queue; if (!turn.session || !['online', 'reconnecting'].includes(turn.phase) || !queue || queue.current || !queue.next.length || action.busy || action.error) return; const key = `${turn.session.sessionId}:${queue.version}`; if (activation.current === key) return; activation.current = key; void action.run(resumeQueue); }, [turn.queue?.version, turn.session?.sessionId, turn.phase, action.error]);
@@ -37,11 +39,12 @@ export default function PickupScreen() {
     } finally { pending.current = false; setConfirming(false); }
   };
   return <><RouteScreen footer={<View style={{ gap: 8 }}>
-    <Button icon={ShieldCheck} loading={confirming || action.busy} disabled={!ready || !turn.queue?.current} onPress={() => hasExtras ? setShowExtras(true) : void confirm()}>Estou saindo do estabelecimento</Button>
+    <Button icon={ShieldCheck} loading={confirming || action.busy} disabled={!ready || !turn.queue?.current || !!departBlocked} onPress={() => hasExtras ? setShowExtras(true) : void confirm()}>Estou saindo do estabelecimento</Button>
     <Text style={[type.small, { fontSize: 10, textAlign: 'center', color: colors.muted, minHeight: 32 }]}>{ready ? hasExtras ? 'Confira o resumo dos itens destacados antes de sair.' : 'Itens conferidos. Pode confirmar a saída.' : 'Confira a sacola e os destaques de cada pedido.'}</Text>
   </View>}>
     <Header title="Tudo certo na sua bag?" subtitle="Confira um pedido de cada vez" onBack={() => router.back()} />
     <StoreCover count={stops.length} /><SectionTitle>Confira antes de sair</SectionTitle>
+    {!!departBlocked && <AccountNotice icon={ShieldCheck} warning>{departBlocked}</AccountNotice>}
     <AccountNotice icon={ShieldCheck}>O número identifica a sacola. Confira os produtos, adicionais e quantidades de cada pedido.</AccountNotice>
     {data.loading && <Feedback title="Buscando os itens da retirada" loading />}
     {!!data.error && <Feedback title="A retirada precisa de atenção" message={data.error} onRetry={data.reload} />}
