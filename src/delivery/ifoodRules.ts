@@ -61,8 +61,10 @@ export function enrichIfoodDetail(detail:OperationalOrderDetail,source:IfoodOrde
   return {...detail,origem:'ifood',identidadeExterna:identity,pedidoIfood:compatible?order:undefined,
     total:compatible?order.amountToCollect:null,formaPagamento:compatible?order.payments.filter(p=>p.type==='OFFLINE').map(p=>p.method).join(' + '):null,
     requerCodigoEntrega:true,itens:compatible?order.items.map((item,index)=>({itemId:`ifood-${index}`,nome:item.name,quantidade:item.quantity,precoUnitario:item.unitPrice,total:item.totalPrice,observacao:item.observations,official:true,
-      adicionais:officialAdditions(item.options)})):[]};
+      produtoId:text(item.produtoId),imagemUrl:text(item.imagemUrl),adicionais:officialAdditions(item.options)})):[]};
 }
+// Vínculo com o cardápio só para exibir (foto); valor fora do formato vira null.
+const text=(value:unknown):string|null=>typeof value==='string'&&value.trim()?value.trim():null;
 // O iFood aninha o terceiro nível em `customizations` (e outros em `options`); todos entram na conferência.
 function officialAdditions(raw:unknown,depth=0):{nome:string;preco:number;quantidade?:number}[] {
   if(!Array.isArray(raw)||depth>5)return [];

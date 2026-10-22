@@ -220,6 +220,27 @@ describe('detalhe do pedido iFood na rota', () => {
     const own = detail({ origem: 'cardapio_web' });
     expect(enrichIfoodDetail(own, null, 3)).toBe(own);
   });
+  const withItem = (over: Record<string, unknown>) => source({ pedidoIfood: order({ items: [{ ...order().items[0], ...over }] }) });
+  it('item vinculado ao cardápio traz produto e foto sem mudar chave, preço nem quantidade', () => {
+    const result = enrichIfoodDetail(detail(), withItem({ produtoId: 'p-9', imagemUrl: 'https://img/p9.jpg', vinculado: true, categoriaNome: 'Combos', atencaoMotoboy: true, externalCode: '7993' }), 3);
+    expect(result.itens[0]).toMatchObject({ itemId: 'ifood-0', produtoId: 'p-9', imagemUrl: 'https://img/p9.jpg', quantidade: 1, precoUnitario: 5, total: 16 });
+    expect(result.total).toBe(27);
+  });
+  it('item sem vínculo ainda mostra a foto do iFood e nada mais muda', () => {
+    const result = enrichIfoodDetail(detail(), withItem({ produtoId: null, vinculado: false, imagemUrl: 'https://ifood/foto.jpg' }), 3);
+    expect(result.itens[0]).toMatchObject({ itemId: 'ifood-0', produtoId: null, imagemUrl: 'https://ifood/foto.jpg', total: 16 });
+  });
+  it('contrato antigo, sem os campos novos, segue como antes', () => {
+    const result = enrichIfoodDetail(detail(), source(), 3);
+    expect(result.itens[0].produtoId).toBeNull();
+    expect(result.itens[0].imagemUrl).toBeNull();
+    expect(result.itens[0].itemId).toBe('ifood-0');
+  });
+  it('campos novos não liberam detalhe de versão diferente', () => {
+    const result = enrichIfoodDetail(detail(), withItem({ produtoId: 'p-9', imagemUrl: 'https://img/p9.jpg', vinculado: true }), 99);
+    expect(result.itens).toEqual([]);
+    expect(result.total).toBeNull();
+  });
 });
 
 describe('prontidão para concluir (iFood)', () => {
