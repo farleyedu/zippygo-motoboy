@@ -42,11 +42,19 @@ export function hasOperationalWork(queue: MotoboyQueue): boolean {
   return !!queue.current || !!queue.next?.length || ['retornando', 'returning'].includes(queue.routeState);
 }
 
+// Chamadas nativas (GPS, permissões) não têm tempo limite próprio; sem isso uma delas travada prende o turno inteiro.
+const PERMISSIONS_TIMEOUT_MS = 10000, MONITOR_TIMEOUT_MS = 15000, IDLE_WAIT_MS = 25000;
+function bounded<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout>;
+  const limit = new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message)), ms); });
+  return Promise.race([promise, limit]).finally(() => clearTimeout(timer));
+}
+
 // Máquina compartilhada de sessão. Os ports permitem verificar concorrência sem GPS/API reais.
 export function createOperationalSessionStore(ports: OperationalPorts) {
   const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null, conflict: null });
   let state = initial(), identity: Identity | null = null, epoch = 0;
-  let operation: Promise<boolean> | null = null, queueOperation: Promise<boolean> | null = null, monitorMode: string | null = null;
+  let operation: Promise<boolean> | null = null, operationKind = '', queueOperation: Promise<boolean> | null = null, monitorMode: string | null = null;
   const listeners = new Set<() => void>();
   const update = (patch: Partial<OperationalState>) => { state = { ...state, ...patch }; listeners.forEach(listener => listener()); };
   const matches = (version: number) => version === epoch && identity !== null;
@@ -84,7 +92,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       : 'reconnecting';
     update({ phase, error: failure.message });
   }
-  function run(action: (version: number, owner: Identity) => Promise<boolean>): Promise<boolean> {
+  function run(action: (version: number, owner: Identity) => Promise<boolean>, kind = ''): Promise<boolean> {
     if (operation) return Promise.resolve(false);
     if (!identity) return Promise.resolve(false);
     const version = epoch, owner = identity;
@@ -92,10 +100,21 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       try { return await action(version, owner); }
       catch (error) { await handleError(error, version); return false; }
     })();
-    operation = pending;
-    const release = () => { if (operation === pending) operation = null; };
+    operation = pending; operationKind = kind;
+    const release = () => { if (operation === pending) { operation = null; operationKind = ''; } };
     void pending.then(release, release);
     return pending;
+  }
+  // Ações pedidas pela pessoa ou pela retomada não podem sumir em silêncio só porque o batimento está em andamento:
+  // reaproveita a mesma ação se já estiver rodando; senão espera (com limite) a operação atual acabar.
+  function runAfterIdle(action: (version: number, owner: Identity) => Promise<boolean>, kind: string): Promise<boolean> {
+    if (!operation) return run(action, kind);
+    if (operationKind === kind) return operation;
+    const version = epoch, previous = operation;
+    let timer: ReturnType<typeof setTimeout>;
+    const limit = new Promise<void>(resolve => { timer = setTimeout(resolve, IDLE_WAIT_MS); });
+    return Promise.race([previous.then(() => undefined, () => undefined), limit]).finally(() => clearTimeout(timer))
+      .then(() => version === epoch ? run(action, kind) : false);
   }
   function refreshQueue(): Promise<boolean> {
     if (queueOperation) return queueOperation;
@@ -118,8 +137,9 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     void pending.then(release, release);
     return pending;
   }
-  async function enableMonitoring(queue: MotoboyQueue, version: number): Promise<boolean> {
-    const permissions = await ports.permissions(); assertCurrent(version);
+  const readPermissions = () => bounded(ports.permissions(), PERMISSIONS_TIMEOUT_MS, 'Não foi possível conferir as permissões agora.');
+  async function enableMonitoring(queue: MotoboyQueue, version: number, known?: OperationalPermissions): Promise<boolean> {
+    const permissions = known ?? await readPermissions(); assertCurrent(version);
     update({ permissions });
     if (!permissions.ready) {
       await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
@@ -134,7 +154,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     }
     const mode = queueTrackingMode(queue);
     if (monitorMode !== mode) {
-      const started = await ports.monitor(mode); assertCurrent(version);
+      const started = await bounded(ports.monitor(mode), MONITOR_TIMEOUT_MS, 'O GPS demorou para iniciar. Tentaremos novamente; sua rota foi preservada.'); assertCurrent(version);
       if (!started) { update({ phase: 'reconnecting', error: 'O GPS ainda não iniciou. Tentaremos novamente; sua rota foi preservada.' }); return false; }
       monitorMode = mode;
     }
@@ -145,7 +165,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     const saved = await ports.stored(); assertCurrent(version);
     if (!saved) {
       await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
-      const permissions = await ports.permissions(); assertCurrent(version);
+      const permissions = await readPermissions(); assertCurrent(version);
       update({ ...initial(), permissions }); return false;
     }
     if (saved.userId !== owner.userId || saved.establishmentId !== owner.establishmentId) {
@@ -155,6 +175,8 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     }
     const warm = state.session?.sessionId === saved.session?.sessionId && !!state.queue;
     update({ session: saved.session, phase: warm ? state.phase : 'restoring', error: null });
+    // Permissões são locais e não dependem da rede: lidas junto com o GET da sessão em vez de depois da fila.
+    const permissionsRead = readPermissions().catch(() => null);
     let session: OperationalSession | null;
     try { session = await ports.current(); }
     catch (error) {
@@ -176,8 +198,11 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     }
     await ports.save({ ...heartbeat, establishmentId: owner.establishmentId, motoboy: {} }, owner); assertCurrent(version);
     update({ session: heartbeat.session });
-    const queue = await ports.queue(); assertCurrent(version); update({ queue });
-    return enableMonitoring(queue, version);
+    const queue = await ports.queue(); assertCurrent(version);
+    const permissions = await permissionsRead; assertCurrent(version);
+    // Libera o app assim que a fila chega; o GPS inicia em seguida sem segurar a navegação.
+    update(permissions?.ready ? { queue, permissions, phase: 'online', error: null } : { queue });
+    return enableMonitoring(queue, version, permissions ?? undefined);
   }
   async function recoverSaved(sessionId: string, version: number, owner: Identity): Promise<boolean> {
     assertCurrent(version);
@@ -201,7 +226,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       update({ ...initial(), phase: next ? 'restoring' : 'offline' });
       if (!next) void ports.stopMonitor();
     },
-    restore: () => run(restore),
+    restore: () => runAfterIdle(restore, 'restore'),
     whenIdle: () => Promise.all([operation, queueOperation]).then(results => results.some(Boolean)),
     refreshQueue,
     refreshPermissions: async () => {
@@ -209,9 +234,9 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       if (matches(version)) update({ permissions });
       return permissions;
     },
-    start: () => run(async (version, owner) => {
+    start: () => runAfterIdle(async (version, owner) => {
       update({ phase: 'starting', error: null, conflict: null });
-      const permissions = await ports.permissions(); assertCurrent(version); update({ permissions });
+      const permissions = await readPermissions(); assertCurrent(version); update({ permissions });
       if (!permissions.ready) { update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
         ? 'Revise o uso da localização antes de iniciar o turno.'
         : ports.locationOptional ? 'Permita a localização com o app aberto para iniciar o turno.' : 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
@@ -235,8 +260,8 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       await ports.clearAttempt(); assertCurrent(version);
       const queue = await ports.queue(); assertCurrent(version); update({ queue });
       return enableMonitoring(queue, version);
-    }),
-    confirmSwitch: () => run(async (version, owner) => {
+    }, 'start'),
+    confirmSwitch: () => runAfterIdle(async (version, owner) => {
       const sessionId = state.conflict?.sessionId;
       if (!sessionId || !ports.switchSession) return false;
       update({ phase: 'starting', error: null });
@@ -256,7 +281,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       await ports.clearAttempt(); assertCurrent(version);
       const queue = await ports.queue(); assertCurrent(version); update({ queue });
       return enableMonitoring(queue, version);
-    }),
+    }, 'switch'),
     cancelConflict: () => { update({ conflict: null, error: null }); void ports.clearAttempt(); },
     tick: () => run(async (version, owner) => {
       if (!state.session || state.phase === 'expired') return false;
@@ -272,8 +297,8 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
         if (!state.queue || queue.version >= state.queue.version) update({ queue });
       }
       return enableMonitoring(state.queue!, version);
-    }),
-    end: (reason = 'motoboy_offline') => run(async (version) => {
+    }, 'tick'),
+    end: (reason = 'motoboy_offline') => runAfterIdle(async (version) => {
       const saved = await ports.stored(); assertCurrent(version);
       if (!saved) { update(initial()); return true; }
       if (saved.userId !== identity?.userId || saved.establishmentId !== identity?.establishmentId) throw new Error('Recupere o acesso do turno salvo antes de encerrá-lo.');
@@ -285,7 +310,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       await ports.clear(); assertCurrent(version);
       await ports.clearAttempt(); assertCurrent(version);
       update({ ...initial(), permissions: state.permissions }); return true;
-    }),
+    }, 'end'),
     updateQueue(queue: MotoboyQueue, expectedSessionId: string) {
       if (state.session?.sessionId === expectedSessionId && (!state.queue || queue.version >= state.queue.version)) update({ queue });
     },

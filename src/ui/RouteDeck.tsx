@@ -9,7 +9,7 @@ import { offerTotal, stopAddress } from '../delivery/offerDetails';
 import { Button, Entrance, money, Pill, Surface, type } from './Kit';
 import { useZippyTheme } from './theme';
 import { OperationalNotice } from './OperationalNotice';
-import { amountToCollect,enrichIfoodDetail,isIfood,orderLabel } from '../delivery/ifoodRules';
+import { amountToCollect,enrichIfoodDetail,IFOOD_DETAIL_STALE_MESSAGE,ifoodDetailUnavailable,isIfood,orderLabel } from '../delivery/ifoodRules';
 
 type Props = { open: boolean; height: number; bottom: number; stops: RouteStop[]; selectedId: number; busy: boolean; actionError: string; onSelect(id: number): void; onClose(): void; onOverview(): void; onOrder(id: number): void };
 type Cached = { version: number; detail: OperationalOrderDetail };
@@ -34,12 +34,24 @@ export function RouteDeck(props: Props) {
   }, [props.open, progress, reducedMotion]);
 
   // Pedido já visto abre na hora (cache); a atualização acontece em segundo plano, sem piscar.
-  const load = useCallback((id: number, signal: AbortSignal, silent: boolean) => getOperationalOrder(id, signal).then(value => {
-    const queue=turn.store.getSnapshot().queue;
-    const source=[queue?.current,...(queue?.next||[]),...(queue?.offer?.stops||[])].find(s=>s?.pedidoId===id)?.pedido;
-    const enriched=enrichIfoodDetail(value,source,queue?.version);
-    cache.set(id, { version, detail: enriched }); return enriched;
-  }).catch(failure => { if (!silent && !signal.aborted) throw failure; return null; }), [cache, version]);
+  const fetchEnriched = useCallback(async (id: number, signal: AbortSignal) => {
+    const value = await getOperationalOrder(id, signal);
+    const queue = turn.store.getSnapshot().queue;
+    const source = [queue?.current, ...(queue?.next || []), ...(queue?.offer?.stops || [])].find(s => s?.pedidoId === id)?.pedido;
+    return enrichIfoodDetail(value, source, queue?.version);
+  }, []);
+  const load = useCallback(async (id: number, signal: AbortSignal, silent: boolean) => {
+    try {
+      let enriched = await fetchEnriched(id, signal);
+      // Fila local atrasada em relação ao servidor: atualiza uma vez e confere de novo antes de desistir.
+      if (ifoodDetailUnavailable(enriched) && !signal.aborted) {
+        await turn.store.refreshQueue();
+        if (!signal.aborted) enriched = await fetchEnriched(id, signal);
+      }
+      if (ifoodDetailUnavailable(enriched)) throw new Error(IFOOD_DETAIL_STALE_MESSAGE);
+      cache.set(id, { version, detail: enriched }); return enriched;
+    } catch (failure) { if (!silent && !signal.aborted) throw failure; return null; }
+  }, [cache, version, fetchEnriched]);
   useEffect(() => {
     setError('');
     if (!props.open || !sessionId) { setDetail(null); return; }

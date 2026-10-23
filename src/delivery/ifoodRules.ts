@@ -65,6 +65,9 @@ export function enrichIfoodDetail(detail:OperationalOrderDetail,source:IfoodOrde
 }
 // Vínculo com o cardápio só para exibir (foto); valor fora do formato vira null.
 const text=(value:unknown):string|null=>typeof value==='string'&&value.trim()?value.trim():null;
+// Pedido iFood cujo detalhe não pôde ser vinculado à fila atual (versão ou revisão diferentes): sem itens nem valores oficiais.
+export const ifoodDetailUnavailable = (detail: OperationalOrderDetail): boolean => isIfood(detail) && !detail.pedidoIfood;
+export const IFOOD_DETAIL_STALE_MESSAGE = 'Os itens do iFood estão desatualizados. Carregue novamente antes de conferir a bag.';
 // O iFood aninha o terceiro nível em `customizations` (e outros em `options`); todos entram na conferência.
 function officialAdditions(raw:unknown,depth=0):{nome:string;preco:number;quantidade?:number}[] {
   if(!Array.isArray(raw)||depth>5)return [];

@@ -83,7 +83,10 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     const rejected=old?.externalOperation?.state==='rejected';
     if(old && ['pending','sending'].includes(old.phase) && !rejected)throw new Error('Existe uma conclusão aguardando confirmação. Consulte o resultado antes de continuar.');
     if(old?.phase==='draft' && old.context.pedidoId!==id)throw new Error('Há uma conferência de outro pedido. Confira a rota e peça orientação à loja.');
-    const context=bindIfoodContext(await getCompletionContext(id),turn.store.getSnapshot().queue?.current?.pedido);
+    const bind=async()=>bindIfoodContext(await getCompletionContext(id),turn.store.getSnapshot().queue?.current?.pedido);
+    let context=await bind();
+    // O bind compara com a fila local; se ela estiver atrasada, o servidor está certo. Atualiza e confere uma vez de novo.
+    if(context.completionBlockedCode==='IFOOD_COMPLETION_CONTEXT_UNAVAILABLE'){await turn.store.refreshQueue();context=await bind();}
     if(owner.current!==user || turn.store.getSnapshot().session?.sessionId!==s.sessionId)throw new Error('Seu acesso mudou.');
     assertCompletionStage(id);
     const preserve=old?.phase==='draft' && scope(old) && old.context.pedidoId===id && old.context.version===context.version;
