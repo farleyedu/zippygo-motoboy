@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useSyncExternalStore } from 'react';
 import { Platform, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Bell, Check, LocateFixed, Pause, Wifi, WifiOff } from 'lucide-react-native';
@@ -7,7 +7,7 @@ import { Button, Pill, Surface, type } from './Kit';
 import { useZippyTheme } from './theme';
 import { useOnline } from '../hooks/useOnline';
 import { ensureChatNotificationPermission, registerChatPush } from '../chat/push';
-import { webPushGuidanceNow } from '../../services/webOfferPush';
+import { registrationFor, subscribeWebPushRegistration, webPushGuidanceNow, webPushRegistration } from '../../services/webOfferPush';
 import { executionMode } from '../../services/executionMode';
 import { pushGuidance, type PushGuidance } from '../../services/webPushGuidance';
 
@@ -23,20 +23,24 @@ export function OperationalStatus() {
   const [busy, setBusy] = useState(false), [failure, setFailure] = useState(''), [, refresh] = useState(0);
   const hasSession = !!turn.session, paused = !!turn.queue?.paused, web = Platform.OS === 'web';
   const reconnecting = turn.phase === 'reconnecting' || !connected;
-  const push: PushGuidance = web ? webPushGuidanceNow()
+  // Re-renderiza quando a inscrição no servidor muda (registro automático, troca de sessão, encerramento).
+  useSyncExternalStore(subscribeWebPushRegistration, webPushRegistration, webPushRegistration);
+  const pushContext = { sessionId: turn.session?.sessionId, establishmentId: turn.queue?.estabelecimentoId ?? null };
+  const push: PushGuidance = web ? webPushGuidanceNow(pushContext)
     : pushGuidance({ mode: 'native', ios: false, supported: true, permission: turn.permissions?.notifications.granted ? 'granted' : 'denied' });
   const enablePush = async () => {
     if (busy) return;
     setBusy(true); setFailure('');
     try {
-      // A solicitação precisa partir diretamente do toque.
+      // A solicitação precisa partir diretamente do toque; com a permissão já concedida, só refaz o registro.
       const access = await ensureChatNotificationPermission(true);
       await turn.store.refreshPermissions();
       if (access === 'granted' && turn.session) await registerChatPush(turn.session.sessionId, { sound, vibration, muted: false, mentionAlerts: true });
-      else if (access !== 'granted') setFailure(webPushGuidanceNow().message);
+      else if (access !== 'granted') setFailure(webPushGuidanceNow(pushContext).message);
     } catch (error) { setFailure(error instanceof Error ? error.message : 'Não foi possível ativar os avisos agora.'); }
     finally { refresh(v => v + 1); setBusy(false); }
   };
+  const pushActionLabel = push.status === 'unregistered' ? (registrationFor(pushContext.sessionId, pushContext.establishmentId) === 'failed' ? 'Tentar registrar de novo' : 'Registrar avisos') : 'Ativar notificações';
   const gpsReady = !!turn.permissions?.ready;
   const gps: Row = hasSession
     ? turn.locationLimited || (!gpsReady && web)
@@ -51,8 +55,8 @@ export function OperationalStatus() {
   const rows: Row[] = [
     { key: 'turn', icon: paused ? Pause : Check, label: 'Turno', pill: hasSession ? paused ? 'Online · chamados pausados' : 'Online' : 'Offline', tone: hasSession ? 'accent' : 'warning' },
     gps,
-    { key: 'push', icon: Bell, label: 'Notificações', pill: push.label, tone: push.status === 'active' ? 'accent' : 'warning', message: push.status === 'active' ? undefined : push.message,
-      action: push.canRequest ? { label: 'Ativar notificações', run: () => void enablePush(), loading: busy } : undefined },
+    { key: 'push', icon: Bell, label: 'Notificações', pill: push.label, tone: push.status === 'active' || push.status === 'permitted' ? 'accent' : 'warning', message: push.status === 'active' ? undefined : push.message,
+      action: push.canRequest ? { label: pushActionLabel, run: () => void enablePush(), loading: busy } : undefined },
     { key: 'net', icon: reconnecting ? WifiOff : Wifi, label: 'Conexão', pill: reconnecting ? 'Sem conexão' : 'Conectada', tone: reconnecting ? 'warning' : 'accent',
       message: reconnecting ? 'Seus dados estão salvos neste aparelho. Uma ação só vale depois que o servidor confirmar; nada é dado como feito antes disso.' : undefined },
   ];

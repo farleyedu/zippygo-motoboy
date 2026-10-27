@@ -58,7 +58,7 @@ function createPorts(): OperationalPorts {
       await setSecureItem('operationalUserId', identity.userId);
     },
     clear: async () => { if (Platform.OS === 'web') await clearWebOfferPushContext(); await clearCurrentTrackingData(); await clearOperationalSession(); await clearTrackingMode(); },
-    end: reason => endOperationalSession(reason, { clear: false }),
+    end: (reason, confirmPendingWork) => endOperationalSession(reason, { clear: false, confirmPendingWork }),
     permissions: readOperationalPermissions,
     monitor: iniciarMonitoramentoLocalizacao,
     stopMonitor: pararMonitoramentoLocalizacao,
@@ -128,8 +128,9 @@ export function OperationalSessionProvider({ children }: { children: React.React
       if (Platform.OS === 'web') return document.visibilityState === 'visible' && navigator.onLine !== false;
       return AppState.currentState === 'active';
     },
+    sessionId: () => store.getSnapshot().session?.sessionId ?? null,
     send: reportOperationalActivity,
-    onSession: session => store.updateSession(session),
+    onAck: (ack, sessionId) => store.applyActivity(ack, sessionId),
   }), [store]);
   useEffect(() => {
     if (Platform.OS !== 'web') return;

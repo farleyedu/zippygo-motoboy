@@ -63,8 +63,10 @@ export type OperationalSession = {
   nextLocationSequence?: number;
   endedAtUtc?: string | null;
   endReason?: string | null;
-  // Fornecido pelo servidor quando ele conta a inatividade humana; o app só exibe, nunca calcula.
+  // Fornecidos pelo servidor (heartbeat, sessão ou POST /activity); o app só exibe, nunca calcula.
+  lastHumanActivityAtUtc?: string | null;
   inactivityExpiresAtUtc?: string | null;
+  inactivityRemainingSeconds?: number | null;
 };
 
 export type OperationalTokenResponse = {
@@ -380,18 +382,45 @@ export async function heartbeatOperationalSession(options: { persist?: boolean; 
   return data;
 }
 
+/**
+ * Resposta de POST /session/activity (OperationalActivityResponse). Não traz a sessão inteira:
+ * só o prazo de inatividade que o servidor passou a considerar. `recorded=false` significa que o limite
+ * de frequência ignorou o toque, mas o prazo devolvido continua sendo o vigente no servidor.
+ */
+export type OperationalActivityAck = {
+  recorded: boolean;
+  serverTimeUtc: string;
+  lastHumanActivityAtUtc: string;
+  inactivityExpiresAtUtc: string;
+  inactivityRemainingSeconds: number;
+};
+
 /** Registra uma interação humana efetiva. Quem chama limita a frequência; aqui é só o contrato HTTP. */
-export async function reportOperationalActivity(): Promise<OperationalSession | null> {
+export async function reportOperationalActivity(): Promise<OperationalActivityAck | null> {
   const response = await apiClient.post(`${operationalPath}/activity`, undefined, { timeout: API_CONFIG.OPERATIONAL_SYNC_TIMEOUT });
-  const data = unwrap<{ session?: OperationalSession } | OperationalSession | null>(response);
-  const session = data && 'session' in data ? data.session : data;
-  return session && 'sessionId' in session ? session : null;
+  const data = unwrap<Partial<OperationalActivityAck> | null>(response);
+  // Sem prazo legível o app não inventa um: a resposta é descartada.
+  if (!data || typeof data.inactivityExpiresAtUtc !== 'string' || !Number.isFinite(Date.parse(data.inactivityExpiresAtUtc))) return null;
+  return {
+    recorded: data.recorded === true,
+    serverTimeUtc: data.serverTimeUtc ?? '',
+    lastHumanActivityAtUtc: data.lastHumanActivityAtUtc ?? '',
+    inactivityExpiresAtUtc: data.inactivityExpiresAtUtc,
+    inactivityRemainingSeconds: Math.max(0, Number(data.inactivityRemainingSeconds) || 0),
+  };
 }
 
-export async function endOperationalSession(reason = 'client_end', options: { clear?: boolean } = {}): Promise<void> {
+export const PENDING_WORK_CODE = 'MOTOBOY_HAS_PENDING_WORK';
+
+/**
+ * DELETE /session. Com pedidos ativos o servidor responde 409 MOTOBOY_HAS_PENDING_WORK; só depois de a pessoa
+ * confirmar é que o app repete com confirmPendingWork=true e a loja assume os pedidos como incidente.
+ */
+export async function endOperationalSession(reason = 'client_end', options: { clear?: boolean; confirmPendingWork?: boolean } = {}): Promise<void> {
   const token = await getSecureItem('operationalAccessToken');
   if (token) {
-    const response = await apiClient.delete(API_CONFIG.ENDPOINTS.OPERATIONAL_SESSION, { params: { reason } });
+    const params = options.confirmPendingWork ? { reason, confirmPendingWork: true } : { reason };
+    const response = await apiClient.delete(API_CONFIG.ENDPOINTS.OPERATIONAL_SESSION, { params });
     unwrap(response);
   }
   if (options.clear !== false) await clearOperationalSession();

@@ -1,4 +1,4 @@
-import type { MotoboyQueue, OperationalHeartbeatResponse, OperationalSession, OperationalTokenResponse } from '../../services/mobileApi';
+import type { MotoboyQueue, OperationalActivityAck, OperationalHeartbeatResponse, OperationalSession, OperationalTokenResponse } from '../../services/mobileApi';
 import type { OperationalPermissions } from '../../services/operationalPermissions';
 
 type Identity = { userId: string; establishmentId: string };
@@ -12,6 +12,8 @@ export type OperationalState = {
   endReason: string | null;
   // Turno aberto sem GPS (navegador sem permissão, página oculta). Não é erro: a operação segue.
   locationLimited: boolean;
+  // O servidor recusou o encerramento por haver pedidos (409 MOTOBOY_HAS_PENDING_WORK); só repetir com confirmação explícita.
+  pendingWorkEnd: boolean;
 };
 export type OperationalPorts = {
   stored: () => Promise<Stored | null>;
@@ -25,7 +27,7 @@ export type OperationalPorts = {
   queue: () => Promise<MotoboyQueue>;
   save: (data: OperationalTokenResponse, identity: Identity) => Promise<void>;
   clear: () => Promise<void>;
-  end: (reason: string) => Promise<void>;
+  end: (reason: string, confirmPendingWork: boolean) => Promise<void>;
   permissions: () => Promise<OperationalPermissions>;
   monitor: (mode: 'online_idle' | 'active_route') => Promise<boolean>;
   stopMonitor: () => Promise<void>;
@@ -47,6 +49,17 @@ export const INACTIVITY_END_MESSAGE = 'Seu turno foi encerrado por inatividade (
 export function endedMessage(reason: string | null | undefined, fallback: string): string {
   return isInactivityEnd(reason) ? INACTIVITY_END_MESSAGE : fallback;
 }
+export const PENDING_WORK_END_MESSAGE = 'Você ainda tem pedidos com você. Se confirmar o encerramento, eles ficam sob responsabilidade operacional do estabelecimento e saem da sua rota.';
+export function isPendingWorkRefusal(error: unknown): boolean {
+  return operationalError(error).code === 'MOTOBOY_HAS_PENDING_WORK';
+}
+const instant = (value?: string | null) => { const parsed = value ? Date.parse(value) : NaN; return Number.isFinite(parsed) ? parsed : -Infinity; };
+/** Uma resposta mais antiga (ex.: heartbeat iniciado antes do toque) não pode recuar o prazo de inatividade já confirmado. */
+export function keepLatestActivity(incoming: OperationalSession, current: OperationalSession | null): OperationalSession {
+  if (!current || current.sessionId !== incoming.sessionId || current.epoch !== incoming.epoch) return incoming;
+  if (instant(current.lastHumanActivityAtUtc) <= instant(incoming.lastHumanActivityAtUtc)) return incoming;
+  return { ...incoming, lastHumanActivityAtUtc: current.lastHumanActivityAtUtc, inactivityExpiresAtUtc: current.inactivityExpiresAtUtc, inactivityRemainingSeconds: current.inactivityRemainingSeconds };
+}
 export function queueTrackingMode(queue: MotoboyQueue): 'online_idle' | 'active_route' {
   return queue.current || ['retornando', 'returning'].includes(queue.routeState) ? 'active_route' : 'online_idle';
 }
@@ -64,7 +77,7 @@ function bounded<T>(promise: Promise<T>, ms: number, message: string): Promise<T
 
 // Máquina compartilhada de sessão. Os ports permitem verificar concorrência sem GPS/API reais.
 export function createOperationalSessionStore(ports: OperationalPorts) {
-  const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null, conflict: null, endReason: null, locationLimited: false });
+  const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null, conflict: null, endReason: null, locationLimited: false, pendingWorkEnd: false });
   let state = initial(), identity: Identity | null = null, epoch = 0;
   let operation: Promise<boolean> | null = null, operationKind = '', queueOperation: Promise<boolean> | null = null, monitorMode: string | null = null;
   const listeners = new Set<() => void>();
@@ -210,7 +223,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       await invalidate('A sessão do turno mudou.', version, heartbeat.session.isEnded ? heartbeat.session.endReason ?? null : null); return false;
     }
     await ports.save({ ...heartbeat, establishmentId: owner.establishmentId, motoboy: {} }, owner); assertCurrent(version);
-    update({ session: heartbeat.session });
+    update({ session: keepLatestActivity(heartbeat.session, state.session) });
     const queue = await ports.queue(); assertCurrent(version);
     const permissions = await permissionsRead; assertCurrent(version);
     // Libera o app assim que a fila chega; o GPS inicia em seguida sem segurar a navegação.
@@ -248,7 +261,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       return permissions;
     },
     start: () => runAfterIdle(async (version, owner) => {
-      update({ phase: 'starting', error: null, conflict: null });
+      update({ phase: 'starting', error: null, conflict: null, pendingWorkEnd: false });
       const permissions = await readPermissions(); assertCurrent(version); update({ permissions });
       // Na Web o turno começa sem GPS (a limitação é informada); no app nativo a permissão continua obrigatória.
       if (!permissions.ready && !ports.locationOptional) { update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
@@ -305,25 +318,44 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
         await invalidate('Seu turno foi encerrado ou mudou em outro aparelho.', version, heartbeat.session.isEnded ? heartbeat.session.endReason ?? null : null); return false;
       }
       await ports.save({ ...heartbeat, establishmentId: owner.establishmentId, motoboy: {} }, owner); assertCurrent(version);
-      if (heartbeat.session.version >= state.session.version) update({ session: heartbeat.session });
+      if (heartbeat.session.version >= state.session.version) update({ session: keepLatestActivity(heartbeat.session, state.session) });
       if (reconcileQueue) {
         const queue = await ports.queue(); assertCurrent(version);
         if (!state.queue || queue.version >= state.queue.version) update({ queue });
       }
       return enableMonitoring(state.queue!, version);
     }, 'tick'),
-    end: (reason = 'motoboy_offline') => runAfterIdle(async (version) => {
+    // Um único encerramento por vez: um segundo toque reaproveita a solicitação em andamento.
+    end: (reason = 'motoboy_offline', options: { confirmPendingWork?: boolean } = {}) => runAfterIdle(async (version) => {
       const saved = await ports.stored(); assertCurrent(version);
       if (!saved) { update(initial()); return true; }
       if (saved.userId !== identity?.userId || saved.establishmentId !== identity?.establishmentId) throw new Error('Recupere o acesso do turno salvo antes de encerrá-lo.');
       update({ phase: 'ending', error: null });
       // O servidor decide se o turno pode acabar com pedidos em andamento; nada local é limpo antes da resposta dele.
-      await ports.end(reason); assertCurrent(version);
+      try { await ports.end(reason, options.confirmPendingWork === true); }
+      catch (error) {
+        assertCurrent(version);
+        if (!isPendingWorkRefusal(error)) throw error;
+        // Recusa esperada: turno, fila e dados locais seguem intactos até a pessoa confirmar explicitamente.
+        update({ phase: 'online', error: PENDING_WORK_END_MESSAGE, pendingWorkEnd: true });
+        void refreshQueue();
+        return false;
+      }
+      assertCurrent(version);
       await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
       await ports.clear(); assertCurrent(version);
       await ports.clearAttempt(); assertCurrent(version);
       update({ ...initial(), permissions: state.permissions }); return true;
     }, 'end'),
+    cancelEnd: () => { if (state.pendingWorkEnd) update({ pendingWorkEnd: false, error: null }); },
+    /** Aplica o prazo confirmado por POST /activity sem trocar o resto da sessão (identidade, versão, token, fila). */
+    applyActivity(ack: OperationalActivityAck, expectedSessionId: string) {
+      const current = state.session;
+      if (!current || current.isEnded || current.sessionId !== expectedSessionId || ['expired', 'ending'].includes(state.phase)) return;
+      if (instant(ack.lastHumanActivityAtUtc) < instant(current.lastHumanActivityAtUtc)) return;
+      update({ session: { ...current, lastHumanActivityAtUtc: ack.lastHumanActivityAtUtc || current.lastHumanActivityAtUtc,
+        inactivityExpiresAtUtc: ack.inactivityExpiresAtUtc, inactivityRemainingSeconds: ack.inactivityRemainingSeconds } });
+    },
     updateSession(session: OperationalSession) {
       const current = state.session;
       if (current && !session.isEnded && session.sessionId === current.sessionId && session.epoch === current.epoch && session.version >= current.version) update({ session });

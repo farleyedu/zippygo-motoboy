@@ -1,32 +1,34 @@
 import React, { useState } from 'react';
-import { Text, View } from 'react-native';
+import { Platform, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Check, Clock3, Pause, Play, ShieldCheck, Wallet } from 'lucide-react-native';
 import { setTurnPaused } from '../services/routeApi';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
 import { useAuth } from '../src/contexts/AuthContext';
-import { useDeliveryCompletion } from '../src/contexts/DeliveryCompletionContext';
+import { END_WITH_WORK_MESSAGE, END_WITH_WORK_TITLE, useEndShift } from '../src/hooks/useEndShift';
 import { useRouteAction } from '../src/hooks/useRouteAction';
 import { AccountNotice } from '../src/ui/AccountKit';
 import { Button, Feedback, Header, Surface, type } from '../src/ui/Kit';
 import { RouteScreen } from '../src/ui/RouteKit';
 import { useZippyTheme } from '../src/ui/theme';
 import { inactivityRemainingLabel } from '../src/session/inactivity';
-import { hasOperationalWork } from '../src/session/operationalSessionStore';
 
 export default function TurnScreen() {
   const turn = useOperationalSession(), auth = useAuth(), router = useRouter(), action = useRouteAction(), { colors } = useZippyTheme();
-  const [ending, setEnding] = useState(false), [endError, setEndError] = useState(''), [confirmEnd, setConfirmEnd] = useState(false), paused = !!turn.queue?.paused;
-  const completion = useDeliveryCompletion();
-  const end = async () => { if (ending) return; setEnding(true); setEndError(''); try { completion.assertRouteMutationAllowed(); if (!(await turn.store.end('client_end'))) throw new Error(turn.store.getSnapshot().error || 'Seu turno foi mantido. Confira as pendências.'); router.replace('/'); } catch (e) { setEndError(e instanceof Error ? e.message : 'Seu turno foi mantido.'); } finally { setEnding(false); } };
+  const [confirmEnd, setConfirmEnd] = useState(false), paused = !!turn.queue?.paused;
+  const shift = useEndShift('client_end'), ending = shift.busy;
+  const end = async (confirmPendingWork: boolean) => { if (await shift.end(confirmPendingWork)) router.replace('/'); };
+  const location = Platform.OS === 'web'
+    ? 'No navegador, a localização só é enviada enquanto o ZippyGo está aberto, visível e com permissão. Com a página fechada ou em segundo plano a loja vê apenas a última posição confirmada, com o horário dela. Isso não encerra o turno.'
+    : 'A localização permanece compartilhada com a loja enquanto seu turno estiver ativo, inclusive na pausa.';
   return <RouteScreen footer={<View style={{ gap: 10 }}><Button icon={paused ? Play : Pause} loading={action.busy} disabled={action.busy || ending} onPress={() => void action.run(() => setTurnPaused(!paused))}>{paused ? 'Retomar novos chamados' : 'Pausar novos chamados'}</Button><Button secondary icon={Play} onPress={() => router.replace('/')}>Continuar no app</Button></View>}>
     <Header title="Seu turno, no seu ritmo." onBack={() => router.back()} /><View style={{ width: 82, height: 82, borderRadius: 26, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.warningSoft, marginTop: 16, marginBottom: 25 }}><Pause size={34} color={colors.warning} /></View>
     <Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 32, lineHeight: 35, letterSpacing: -1.2, color: colors.ink }}>{paused ? 'Uma pausa\ntambém faz parte.' : 'Seu turno.\nSeu próximo movimento.'}</Text><Text style={[type.body, { color: colors.muted, marginVertical: 18 }]}>Pausar interrompe novos chamados. Pedidos aceitos continuam sob sua responsabilidade.</Text>
     <Surface><Text style={[type.small, { color: colors.muted }]}>Estabelecimento</Text><Text style={[type.body, { color: colors.ink, marginBottom: 12 }]}>{auth.estabelecimentoAtual?.nome}</Text><Text style={[type.small, { color: colors.muted }]}>Situação</Text><Text style={[type.body, { color: colors.ink }]}>{paused ? 'Chamados pausados' : 'Disponível para novos chamados'}</Text></Surface>
-    <AccountNotice icon={ShieldCheck}>A localização permanece compartilhada com a loja enquanto seu turno estiver ativo, inclusive na pausa.</AccountNotice>
+    <AccountNotice icon={ShieldCheck}>{location}</AccountNotice>
     <AccountNotice icon={Clock3}>{inactivityRemainingLabel(turn.session?.inactivityExpiresAtUtc) ?? 'Se o app ficar sem uso por muito tempo, o servidor encerra o turno e os pedidos passam para a gestão da loja.'}</AccountNotice>
     <Button secondary icon={Wallet} onPress={() => router.push('/resumoTurno')}>Conferir resumo do turno</Button>
-    {!!action.error && <Feedback title="A disponibilidade não mudou" message={action.error} />}{!!endError && <Feedback title="Seu turno foi mantido" message={endError} />}
-    <View style={{ marginTop: 18 }}><Button secondary icon={Check} disabled={ending || action.busy} onPress={() => setConfirmEnd(v => !v)}>{confirmEnd ? 'Continuar o turno' : 'Encerrar meu turno'}</Button>{confirmEnd && <View style={{ marginTop: 10 }}>{!!turn.queue && (hasOperationalWork(turn.queue) || !!turn.queue.offer) && <Feedback title="Você ainda tem pedidos em andamento" message="Se o servidor aceitar o encerramento, esses pedidos ficam sob gestão do estabelecimento. Nada é apagado deste aparelho antes da confirmação dele." />}<Button icon={Check} loading={ending} onPress={() => void end()}>Confirmar encerramento</Button></View>}</View>
+    {!!action.error && <Feedback title="A disponibilidade não mudou" message={action.error} />}{!!shift.error && <Feedback title="Seu turno foi mantido" message={shift.error} />}
+    <View style={{ marginTop: 18 }}><Button secondary icon={Check} disabled={ending || action.busy} onPress={() => { if (confirmEnd) shift.cancel(); setConfirmEnd(v => !v); }}>{confirmEnd ? 'Continuar o turno' : 'Encerrar meu turno'}</Button>{(confirmEnd || turn.pendingWorkEnd) && <View style={{ marginTop: 10 }}>{shift.pendingCompletion && <Feedback title="Consulte a conclusão pendente" message="Há uma conclusão ainda não confirmada pelo servidor. Aguarde o resultado antes de encerrar." />}{shift.needsWorkConfirmation && <Feedback title={END_WITH_WORK_TITLE} message={END_WITH_WORK_MESSAGE} />}<Button icon={Check} loading={ending} disabled={ending || shift.pendingCompletion} onPress={() => void end(shift.needsWorkConfirmation)}>{shift.needsWorkConfirmation ? 'Encerrar e passar pedidos à loja' : 'Confirmar encerramento'}</Button></View>}</View>
   </RouteScreen>;
 }
