@@ -1,6 +1,8 @@
 import { apiClient } from './apiService';
 import { unwrap } from './mobileApi';
 import { getSecureItem } from '../utils/secureStorage';
+import { executionMode, isIosWeb } from './executionMode';
+import { pushGuidance, type PushGuidance } from './webPushGuidance';
 
 export type WebNotificationAccess = 'granted' | 'denied' | 'blocked' | 'unsupported';
 export function webPushSupported(): boolean {
@@ -15,6 +17,22 @@ export async function requestWebNotificationPermission(): Promise<WebNotificatio
   // A solicitação precisa ocorrer diretamente no toque, antes de chamadas à API.
   const result = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
   return result === 'granted' ? 'granted' : result === 'denied' ? 'blocked' : 'denied';
+}
+export function webPushGuidanceNow(): PushGuidance {
+  const supported = webPushSupported();
+  const permission = typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'unsupported';
+  return pushGuidance({ mode: executionMode(), ios: isIosWeb(), supported, permission });
+}
+/** O service worker abre "/?offerNotice=<id>" quando não há janela; a oferta só vale depois da consulta ao servidor. */
+export function consumeOfferNoticeParam(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const url = new URL(window.location.href), offerId = url.searchParams.get('offerNotice');
+    if (!offerId) return null;
+    url.searchParams.delete('offerNotice');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    return offerId;
+  } catch { return null; }
 }
 let registrationFlight: Promise<void> | null = null;
 export function registerWebOfferPush(sessionId: string, settings: { sound: boolean; vibration: boolean }): Promise<void> {

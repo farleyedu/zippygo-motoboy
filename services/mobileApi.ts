@@ -63,6 +63,8 @@ export type OperationalSession = {
   nextLocationSequence?: number;
   endedAtUtc?: string | null;
   endReason?: string | null;
+  // Fornecido pelo servidor quando ele conta a inatividade humana; o app só exibe, nunca calcula.
+  inactivityExpiresAtUtc?: string | null;
 };
 
 export type OperationalTokenResponse = {
@@ -376,6 +378,14 @@ export async function heartbeatOperationalSession(options: { persist?: boolean; 
     }
   }
   return data;
+}
+
+/** Registra uma interação humana efetiva. Quem chama limita a frequência; aqui é só o contrato HTTP. */
+export async function reportOperationalActivity(): Promise<OperationalSession | null> {
+  const response = await apiClient.post(`${operationalPath}/activity`, undefined, { timeout: API_CONFIG.OPERATIONAL_SYNC_TIMEOUT });
+  const data = unwrap<{ session?: OperationalSession } | OperationalSession | null>(response);
+  const session = data && 'session' in data ? data.session : data;
+  return session && 'sessionId' in session ? session : null;
 }
 
 export async function endOperationalSession(reason = 'client_end', options: { clear?: boolean } = {}): Promise<void> {

@@ -8,6 +8,7 @@ import { LogoutAction } from '../src/ui/LogoutAction';
 import { Preferences, useZippyTheme } from '../src/ui/theme';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
 import { ensureChatNotificationPermission, registerChatPush } from '../src/chat/push';
+import { webPushGuidanceNow } from '../services/webOfferPush';
 
 export default function SettingsScreen() {
   const router = useRouter(), theme = useZippyTheme(), { colors } = theme, turn = useOperationalSession();
@@ -17,7 +18,7 @@ export default function SettingsScreen() {
     setError('');
     try {
       const access = await ensureChatNotificationPermission(true);
-      if (access !== 'granted') { setError(Platform.OS === 'web' ? 'No iPhone, adicione o ZippyGo à Tela de Início e permita notificações nas configurações do aparelho.' : 'Permita as notificações do ZippyGo nas configurações do aparelho.'); return; }
+      if (access !== 'granted') { setError(Platform.OS === 'web' ? webPushGuidanceNow().message : 'Permita as notificações do ZippyGo nas configurações do aparelho.'); return; }
       await turn.store.refreshPermissions();
       if (turn.session) await registerChatPush(turn.session.sessionId, { sound: theme.sound, vibration: theme.vibration, muted: false, mentionAlerts: true });
     } catch (e) { setError(e instanceof Error ? e.message : 'Não foi possível habilitar os avisos.'); }

@@ -8,6 +8,10 @@ export type OperationalState = {
   phase: OperationalPhase; session: OperationalSession | null; queue: MotoboyQueue | null;
   permissions: OperationalPermissions | null; error: string | null;
   conflict: { sessionId: string } | null;
+  // Por que o turno acabou (ex.: inatividade); permite explicar o encerramento em vez de uma mensagem genérica.
+  endReason: string | null;
+  // Turno aberto sem GPS (navegador sem permissão, página oculta). Não é erro: a operação segue.
+  locationLimited: boolean;
 };
 export type OperationalPorts = {
   stored: () => Promise<Stored | null>;
@@ -35,6 +39,14 @@ export function operationalError(error: unknown): { message: string; status?: nu
     : rawMessage || 'Não foi possível atualizar o turno. Tente novamente.';
   return { message, status: value?.status ?? value?.response?.status, code: value?.code ?? value?.response?.data?.code, details: value?.details ?? value?.response?.data?.details };
 }
+export function isInactivityEnd(reason?: string | null): boolean {
+  return !!reason && /inactiv|idle/i.test(reason);
+}
+// O prazo e o destino dos pedidos são decididos pelo servidor; aqui só se explica o resultado.
+export const INACTIVITY_END_MESSAGE = 'Seu turno foi encerrado por inatividade (7 horas sem uso do aplicativo). Os pedidos que estavam com você ficaram sob gestão do estabelecimento; fale com a loja para saber o andamento.';
+export function endedMessage(reason: string | null | undefined, fallback: string): string {
+  return isInactivityEnd(reason) ? INACTIVITY_END_MESSAGE : fallback;
+}
 export function queueTrackingMode(queue: MotoboyQueue): 'online_idle' | 'active_route' {
   return queue.current || ['retornando', 'returning'].includes(queue.routeState) ? 'active_route' : 'online_idle';
 }
@@ -52,7 +64,7 @@ function bounded<T>(promise: Promise<T>, ms: number, message: string): Promise<T
 
 // Máquina compartilhada de sessão. Os ports permitem verificar concorrência sem GPS/API reais.
 export function createOperationalSessionStore(ports: OperationalPorts) {
-  const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null, conflict: null });
+  const initial = (): OperationalState => ({ phase: 'offline', session: null, queue: null, permissions: null, error: null, conflict: null, endReason: null, locationLimited: false });
   let state = initial(), identity: Identity | null = null, epoch = 0;
   let operation: Promise<boolean> | null = null, operationKind = '', queueOperation: Promise<boolean> | null = null, monitorMode: string | null = null;
   const listeners = new Set<() => void>();
@@ -60,10 +72,10 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
   const matches = (version: number) => version === epoch && identity !== null;
   const assertCurrent = (version: number) => { if (!matches(version)) throw new Error('O contexto mudou.'); };
 
-  async function invalidate(message: string, version = epoch) {
+  async function invalidate(message: string, version = epoch, endReason: string | null = null) {
     if (!matches(version)) return;
     ++epoch; const nextVersion = epoch;
-    update({ phase: 'expired', error: message, session: null, queue: null, conflict: null });
+    update({ phase: 'expired', error: endedMessage(endReason, message), endReason, session: null, queue: null, conflict: null, locationLimited: false });
     await ports.stopMonitor();
     if (!matches(nextVersion)) return;
     monitorMode = null;
@@ -79,7 +91,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       return;
     }
     if (failure.status === 401 || failure.code === 'SESSION_CHANGED' || failure.code === 'LINK_FORBIDDEN') {
-      await invalidate(failure.message, version);
+      await invalidate(failure.message, version, isInactivityEnd(failure.code) ? failure.code! : null);
       return;
     }
     if (failure.code === 'SESSION_CONFLICT' && failure.details?.sessionId) {
@@ -87,7 +99,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       return;
     }
     const phase = !state.session ? 'error'
-      : state.permissions && !state.permissions.ready ? 'permission-required'
+      : state.permissions && !state.permissions.ready && !ports.locationOptional ? 'permission-required'
       : failure.status && failure.status >= 400 && failure.status < 500 ? 'online'
       : 'reconnecting';
     update({ phase, error: failure.message });
@@ -144,7 +156,8 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     if (!permissions.ready) {
       await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
       if (ports.locationOptional) {
-        update({ phase: 'online', error: 'GPS indisponível. Sua entrega continua; a loja vê a última posição confirmada. Revise a permissão de localização.' });
+        // Sem GPS o turno continua: a loja vê a última posição confirmada e o aparelho tenta de novo a cada retomada.
+        update({ phase: 'online', error: null, locationLimited: true });
         return true;
       }
       update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
@@ -158,7 +171,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       if (!started) { update({ phase: 'reconnecting', error: 'O GPS ainda não iniciou. Tentaremos novamente; sua rota foi preservada.' }); return false; }
       monitorMode = mode;
     }
-    update({ phase: 'online', error: null });
+    update({ phase: 'online', error: null, locationLimited: false });
     return true;
   }
   async function restore(version: number, owner: Identity): Promise<boolean> {
@@ -188,13 +201,13 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     assertCurrent(version);
     if (session?.isEnded && session.endReason === 'heartbeat_timeout' && ports.recover)
       return recoverSaved(session.sessionId, version, owner);
-    if (!session || session.isEnded) { await invalidate('Seu turno foi encerrado. Confira a operação antes de retomar.', version); return false; }
+    if (!session || session.isEnded) { await invalidate('Seu turno foi encerrado. Confira a operação antes de retomar.', version, session?.endReason ?? null); return false; }
     if (saved.session && (session.sessionId !== saved.session.sessionId || session.epoch !== saved.session.epoch)) {
       await invalidate('Seu turno mudou. Confira a sessão atual antes de continuar.', version); return false;
     }
     const heartbeat = await ports.heartbeat(true); assertCurrent(version);
     if (heartbeat.session.isEnded || heartbeat.session.sessionId !== session.sessionId || heartbeat.session.epoch !== session.epoch) {
-      await invalidate('A sessão do turno mudou.', version); return false;
+      await invalidate('A sessão do turno mudou.', version, heartbeat.session.isEnded ? heartbeat.session.endReason ?? null : null); return false;
     }
     await ports.save({ ...heartbeat, establishmentId: owner.establishmentId, motoboy: {} }, owner); assertCurrent(version);
     update({ session: heartbeat.session });
@@ -237,9 +250,10 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
     start: () => runAfterIdle(async (version, owner) => {
       update({ phase: 'starting', error: null, conflict: null });
       const permissions = await readPermissions(); assertCurrent(version); update({ permissions });
-      if (!permissions.ready) { update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
+      // Na Web o turno começa sem GPS (a limitação é informada); no app nativo a permissão continua obrigatória.
+      if (!permissions.ready && !ports.locationOptional) { update({ phase: 'permission-required', error: permissions.locationConsentGranted === false
         ? 'Revise o uso da localização antes de iniciar o turno.'
-        : ports.locationOptional ? 'Permita a localização com o app aberto para iniciar o turno.' : 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
+        : 'A localização com o app aberto, em segundo plano e o GPS precisam estar permitidos.' }); return false; }
       if (await ports.stored()) { assertCurrent(version); return restore(version, owner); }
       assertCurrent(version);
       const attemptId = await ports.attempt(owner); assertCurrent(version);
@@ -288,7 +302,7 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       const reconcileQueue = !state.queue || state.phase === 'reconnecting';
       const heartbeat = await ports.heartbeat(); assertCurrent(version);
       if (heartbeat.session.isEnded || heartbeat.session.sessionId !== state.session.sessionId || heartbeat.session.epoch !== state.session.epoch) {
-        await invalidate('Seu turno foi encerrado ou mudou em outro aparelho.', version); return false;
+        await invalidate('Seu turno foi encerrado ou mudou em outro aparelho.', version, heartbeat.session.isEnded ? heartbeat.session.endReason ?? null : null); return false;
       }
       await ports.save({ ...heartbeat, establishmentId: owner.establishmentId, motoboy: {} }, owner); assertCurrent(version);
       if (heartbeat.session.version >= state.session.version) update({ session: heartbeat.session });
@@ -303,14 +317,17 @@ export function createOperationalSessionStore(ports: OperationalPorts) {
       if (!saved) { update(initial()); return true; }
       if (saved.userId !== identity?.userId || saved.establishmentId !== identity?.establishmentId) throw new Error('Recupere o acesso do turno salvo antes de encerrá-lo.');
       update({ phase: 'ending', error: null });
-      const queue = await ports.queue(); assertCurrent(version); update({ queue });
-      if (hasOperationalWork(queue)) throw { status: 409, code: 'MOTOBOY_HAS_PENDING_WORK', message: 'Conclua os pedidos e o retorno à loja antes de encerrar seu turno.' };
+      // O servidor decide se o turno pode acabar com pedidos em andamento; nada local é limpo antes da resposta dele.
       await ports.end(reason); assertCurrent(version);
       await ports.stopMonitor(); assertCurrent(version); monitorMode = null;
       await ports.clear(); assertCurrent(version);
       await ports.clearAttempt(); assertCurrent(version);
       update({ ...initial(), permissions: state.permissions }); return true;
     }, 'end'),
+    updateSession(session: OperationalSession) {
+      const current = state.session;
+      if (current && !session.isEnded && session.sessionId === current.sessionId && session.epoch === current.epoch && session.version >= current.version) update({ session });
+    },
     updateQueue(queue: MotoboyQueue, expectedSessionId: string) {
       if (state.session?.sessionId === expectedSessionId && (!state.queue || queue.version >= state.queue.version)) update({ queue });
     },

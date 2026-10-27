@@ -12,6 +12,7 @@ import { checklistReady, type ChecklistConfirmation } from '../delivery/checklis
 import { canConcludeOperationalOrder } from '../delivery/operationalDestination';
 import { assertOfficialOperation, bindIfoodContext, officialCompletion, officialOperationMessage, officialPaymentsMatch, preparedOfficialCode } from '../delivery/ifoodRules';
 import { deleteCompletionRecord, readCompletionRecord, writeCompletionRecord } from '../delivery/completionStorage';
+import { deleteWebDraft, readWebDraft, writeWebDraft } from '../delivery/webDraftStorage';
 
 export type CompletionDraft={userId:string;storeId:string;sessionId:string;epoch:number;phase:'draft'|'sending'|'pending'|'completed';context:CompletionContext;request:CompletionRequest;codeChecked:boolean;receipt?:DeliveryReceipt;externalOperation?:IfoodCompletionOperation};
 type Value={draft:CompletionDraft|null;busy:boolean;loading:boolean;error:string;notice:DeliveryReceipt|null;clearNotice:()=>void;assertRouteMutationAllowed:()=>void;prepare:(id:number)=>Promise<void>;discardUnsent:()=>Promise<boolean>;validateCode:(code:string)=>Promise<boolean>;preparePayment:(parts:PaymentPart[])=>Promise<void>;confirmItems:(confirmation:ChecklistConfirmation)=>Promise<boolean>;uploadProof:(base64:string)=>Promise<boolean>;submit:()=>Promise<DeliveryReceipt|null>;recover:(retry?:boolean)=>Promise<DeliveryReceipt|null>;clearError:()=>void};
@@ -28,10 +29,10 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     const write=writes.current.catch(()=>{}).then(async()=>{
       const next=typeof update==='function'?update(current.current):update;
       if(owner.current!==expectedOwner || owner.current!==next.userId) throw new Error('Seu acesso mudou. Recupere a conta desta entrega.');
-      // Web conserva rascunhos na sessão do navegador; Android usa SecureStore.
+      // Web conserva rascunhos no armazenamento durável do navegador (sobrevive ao fechar a aba/PWA); Android usa SecureStore.
       const saved = officialCompletion(next.context) && (Platform.OS === 'web' || next.phase !== 'draft')
         ? {...next,request:{...next.request,codigo:undefined}} : next;
-      if(Platform.OS==='web') sessionStorage.setItem(key(next.userId),JSON.stringify(saved));
+      if(Platform.OS==='web') writeWebDraft(key(next.userId),JSON.stringify(saved));
       else await writeCompletionRecord(secureStorage,key(next.userId),JSON.stringify(saved),createIdentifier());
       if(owner.current!==next.userId) return;
       current.current=next;setDraft(next);
@@ -43,7 +44,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     if(!user){restoredOwner.current=user;setLoading(false);return;}
     (async()=>{
       try{
-        const raw=Platform.OS==='web'?sessionStorage.getItem(key(user)):await readCompletionRecord(secureStorage,key(user));
+        const raw=Platform.OS==='web'?readWebDraft(key(user)):await readCompletionRecord(secureStorage,key(user));
         if(epoch!==generation.current) return;
         if(raw){const saved=JSON.parse(raw) as CompletionDraft;if(saved.userId!==user || !saved.request?.operationId || !saved.context?.pedidoId)throw new Error('O registro salvo precisa de revisão.');
           if(saved.phase==='sending')saved.phase='pending';
@@ -58,6 +59,17 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
       finally{if(epoch===generation.current)setLoading(false);}
     })();
   },[auth.user?.id]);
+  // Um rascunho ainda não enviado pertence ao turno em que foi criado; em outro turno ele é descartado e a conferência recomeça.
+  // Conclusões enviadas (pending/completed) nunca são descartadas aqui: dependem da consulta ao servidor.
+  useEffect(()=>{
+    const d=current.current,s=turn.session;
+    if(loading || !d || d.phase!=='draft' || !s || (d.sessionId===s.sessionId && d.epoch===s.epoch))return;
+    const write=writes.current.catch(()=>{}).then(async()=>{
+      if(current.current?.request.operationId!==d.request.operationId || current.current.phase!=='draft')return;
+      if(Platform.OS==='web') deleteWebDraft(key(d.userId)); else await deleteCompletionRecord(secureStorage,key(d.userId));
+      if(owner.current===d.userId){current.current=null;setDraft(null);}
+    });writes.current=write;void write.catch(()=>{});
+  },[loading,draft?.request.operationId,draft?.phase,turn.session?.sessionId,turn.session?.epoch]);
   const scope=(d:CompletionDraft)=>{const state=turn.store.getSnapshot(),s=state.session;return owner.current===d.userId && s?.sessionId===d.sessionId && s.epoch===d.epoch && state.queue?.estabelecimentoId===d.storeId;};
   const assertCompletionStage=(pedidoId:number)=>{
     if(!canConcludeOperationalOrder(turn.store.getSnapshot().queue,pedidoId))throw new Error('Confirme a saída da loja e a chegada ao cliente antes de conferir esta entrega.');
@@ -136,7 +148,7 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     try { if(officialCompletion(d.context))await findIfoodCompletion(d.request.operationId);else await findDeliveryReceipt(d.request.operationId); throw new Error('Há um registro desta conclusão. Consulte o resultado.'); }
     catch(e) { if(!(e instanceof MobileApiError) || e.status!==404) throw e; }
     const write=writes.current.catch(()=>{}).then(async()=>{
-      if(Platform.OS==='web') sessionStorage.removeItem(key(d.userId)); else await deleteCompletionRecord(secureStorage,key(d.userId));
+      if(Platform.OS==='web') deleteWebDraft(key(d.userId)); else await deleteCompletionRecord(secureStorage,key(d.userId));
       if(owner.current===d.userId){current.current=null;setDraft(null);}
     });writes.current=write;await write;return true;
   });
@@ -219,7 +231,11 @@ export function DeliveryCompletionProvider({children}:{children:React.ReactNode}
     timer=setTimeout(()=>void retry(),15000);
     return()=>{alive=false;clearTimeout(timer);};
   },[loading,draft?.phase==='pending',auth.user?.id,turn.session?.sessionId]);
-  useEffect(()=>{const listener=AppState.addEventListener('change',state=>{if(state==='active' && current.current?.phase==='pending')void recover(false);});return()=>listener.remove();},[turn.store]);
+  useEffect(()=>{const listener=AppState.addEventListener('change',state=>{if(state==='active' && current.current?.phase==='pending')void recover(false);});
+    // O PWA volta da suspensão sem mudar de estado do app: a rede de volta também consulta o recibo pendente (mesmo operationId, sem novo POST).
+    const online=()=>{if(current.current?.phase==='pending')void recover(false);};
+    if(Platform.OS==='web')window.addEventListener('online',online);
+    return()=>{listener.remove();if(Platform.OS==='web')window.removeEventListener('online',online);};},[turn.store]);
   useEffect(()=>registerLogoutPrecondition(()=>{
     if(owner.current && restoredOwner.current!==owner.current)throw new Error('A conferência salva ainda não pôde ser verificada. Aguarde a recuperação antes de sair da conta.');
     if(current.current && ['pending','sending'].includes(current.current.phase))throw new Error('Consulte a conclusão pendente antes de sair da conta. Seu acesso foi mantido.');

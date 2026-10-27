@@ -8,6 +8,7 @@ import { Button, Entrance, Feedback, Header, Pill, Screen, Surface, type } from 
 import { LogoutAction } from '../src/ui/LogoutAction';
 import { useZippyTheme } from '../src/ui/theme';
 import { operationalDestination } from '../src/delivery/operationalDestination';
+import { isInactivityEnd } from '../src/session/operationalSessionStore';
 
 export default function SessaoEncerradaScreen() {
   const allowed = useOperationalAccess(), turn = useOperationalSession(), router = useRouter(), { colors } = useZippyTheme();
@@ -15,14 +16,15 @@ export default function SessaoEncerradaScreen() {
     if (await turn.store.start()) router.replace(operationalDestination(turn.store.getSnapshot().queue, Platform.OS));
     else if (turn.store.getSnapshot().phase === 'permission-required') router.replace({ pathname: '/permissoes', params: { intent: 'start' } });
   };
+  const inactive = isInactivityEnd(turn.endReason);
   if (!allowed) return <Screen><Feedback title="Preparando seu acesso" loading /></Screen>;
   return <Screen footer={<Button icon={RefreshCw} loading={turn.busy} disabled={turn.busy} onPress={() => void restart()}>Iniciar novo turno</Button>}><Entrance>
-    <Header title="Seu turno foi encerrado" subtitle="Confira o motivo antes de continuar." onBack={() => router.replace('/')} />
+    <Header title="Seu turno foi encerrado" subtitle={inactive ? 'Encerrado por inatividade.' : 'Confira o motivo antes de continuar.'} onBack={() => router.replace('/')} />
     <View style={{ height: 190, alignItems: 'center', justifyContent: 'center' }}><View style={{ padding: 28, borderRadius: 30, backgroundColor: colors.warningSoft, borderWidth: 1, borderColor: colors.warning, transform: [{ rotate: '-6deg' }] }}><LockKeyhole size={39} color={colors.warning} /></View></View>
-    <Pill tone="warning">CONFIRA SUA SESSÃO</Pill>
+    <Pill tone="warning">{inactive ? 'TURNO ENCERRADO POR INATIVIDADE' : 'CONFIRA SUA SESSÃO'}</Pill>
     <Text accessibilityRole="header" style={[type.title, { fontSize: 30, lineHeight: 37, color: colors.ink, marginTop: 22 }]}>Vamos retomar de onde você parou.</Text>
     <Text style={[type.body, { color: colors.muted, marginTop: 16 }]}>{turn.error || 'O turno precisa de uma nova conferência antes de continuar.'}</Text>
-    <Surface style={{ marginTop: 24 }}><Text style={[type.body, { color: colors.ink, fontWeight: '800' }]}>A loja confirma a operação.</Text><Text style={[type.body, { color: colors.muted, marginTop: 8 }]}>Ao retomar, vamos consultar sua fila atual. Seus pedidos continuam seguindo o estado registrado no servidor.</Text></Surface>
+    <Surface style={{ marginTop: 24 }}><Text style={[type.body, { color: colors.ink, fontWeight: '800' }]}>{inactive ? 'Seus pedidos estão com a loja.' : 'A loja confirma a operação.'}</Text><Text style={[type.body, { color: colors.muted, marginTop: 8 }]}>{inactive ? 'Você continua com a conta conectada. Inicie um novo turno quando for voltar a trabalhar; o que estava na sua rota foi tratado pela gestão do estabelecimento.' : 'Ao retomar, vamos consultar sua fila atual. Seus pedidos continuam seguindo o estado registrado no servidor.'}</Text></Surface>
     <View style={{ marginTop: 20 }}><LogoutAction /></View>
   </Entrance></Screen>;
 }

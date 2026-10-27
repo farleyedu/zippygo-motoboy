@@ -2,6 +2,7 @@
   "name": "ZippyGo — Motoboy",
   "short_name": "ZippyGo",
   "lang": "pt-BR",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

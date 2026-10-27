@@ -28,7 +28,7 @@ export function LogoutAction() {
           <View style={{ gap: 16 }}>
             <LogOut size={30} color={colors.accent} />
             <Text accessibilityRole="header" style={[type.title, { color: colors.ink }]}>Até o próximo caminho.</Text>
-            <Text style={[type.body, { color: colors.muted }]}>{turn.session ? 'Vamos encerrar seu turno antes de sair. Pedidos ou transferências pendentes precisam ser resolvidos primeiro.' : 'Você voltará à tela de login e poderá entrar novamente quando quiser.'}</Text>
+            <Text style={[type.body, { color: colors.muted }]}>{turn.session ? 'Vamos encerrar seu turno antes de sair. Se houver pedidos em andamento, eles passam para a gestão do estabelecimento quando o servidor confirmar; se ele recusar, você continua logado e com o turno.' : 'Você voltará à tela de login e poderá entrar novamente quando quiser.'}</Text>
             {error ? <Feedback title="Seu acesso foi mantido" message={error} /> : null}
             <Button loading={busy} disabled={busy} onPress={() => void leave()}>{turn.session ? 'Encerrar turno e sair' : 'Sair agora'}</Button>
             <Button secondary disabled={busy} onPress={() => setVisible(false)}>Continuar no app</Button>

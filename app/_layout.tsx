@@ -102,6 +102,13 @@ function RootLayoutNav() {
     const destination = operationalPageRedirect(turn.queue, current, routeParams.id, Platform.OS);
     if (destination) router.replace(destination);
   }, [navigation?.key, auth.isLoading, completion.loading, completion.draft?.phase, turn.busy, turn.online, turn.queue, current, routeParams.id, auth.estabelecimentoAtual]);
+  // Toque na notificação web: abre a oferta só depois que a fila vinda do servidor confirmar o mesmo id e a validade.
+  useEffect(() => {
+    const offer = turn.queue?.offer;
+    if (!turn.offerNotice || !navigation?.key || !turn.online || !offer || offer.offerId !== turn.offerNotice) return;
+    turn.clearOfferNotice();
+    if (Date.parse(offer.expiresAtUtc) > Date.now()) { turn.showOffer(); router.navigate('/oferta'); }
+  }, [navigation?.key, turn.offerNotice, turn.online, turn.queue?.offer?.offerId, turn.queue?.offer?.expiresAtUtc]);
   useEffect(() => {
     if (!navigation?.key || auth.isLoading || completion.loading || !auth.user || !auth.estabelecimentoAtual || turn.busy || !turn.permissions) return;
     const gateway = ['index', 'permissoes', 'sessaoEncerrada'].includes(current);

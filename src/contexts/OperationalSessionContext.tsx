@@ -1,10 +1,10 @@
 import { routeNoticeKind } from '../delivery/routeNotice';
 import React, { createContext, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
-import { AppState, Platform } from 'react-native';
+import { AppState, Platform, View } from 'react-native';
 import { jwtDecode } from 'jwt-decode';
 import { useAuth } from './AuthContext';
 import { createOperationalSessionStore, OperationalPorts } from '../session/operationalSessionStore';
-import { clearOperationalSession, createIdentifier, endOperationalSession, getOperationalQueue, getOperationalSession, heartbeatOperationalSession, saveOperationalSession, startOperationalSession, switchOperationalSession } from '../../services/mobileApi';
+import { clearOperationalSession, createIdentifier, endOperationalSession, reportOperationalActivity, getOperationalQueue, getOperationalSession, heartbeatOperationalSession, saveOperationalSession, startOperationalSession, switchOperationalSession } from '../../services/mobileApi';
 import { readOperationalPermissions } from '../../services/operationalPermissions';
 import { registerOperationalLogoutGuard, subscribeOperationalFailures } from '../../services/sessionEvents';
 import { clearCurrentTrackingData, clearTrackingMode, flushLocationQueue } from '../../services/trackingService';
@@ -13,7 +13,8 @@ import { deleteSecureItem, getSecureItem, setSecureItem } from '../../utils/secu
 import { startOperationalRealtime } from '../../services/operationalRealtime';
 import { subscribeWebForeground } from '../../services/webForegroundLocation';
 import { getTransfers, type Transfer } from '../../services/routeApi';
-import { clearWebOfferPushContext } from '../../services/webOfferPush';
+import { clearWebOfferPushContext, consumeOfferNoticeParam } from '../../services/webOfferPush';
+import { createActivityReporter } from '../../services/sessionActivity';
 
 const ATTEMPT_KEY = 'operationalStartAttempt';
 async function stored() {
@@ -66,7 +67,7 @@ function createPorts(): OperationalPorts {
 }
 type Store = ReturnType<typeof createOperationalSessionStore>;
 type RouteNotice = { kind: 'cancelled' | 'changed'; pedidoId?: number; version: number };
-type Value = ReturnType<Store['getSnapshot']> & { store: Store; online: boolean; busy: boolean; routeNotice: RouteNotice | null; setRouteNotice: (notice: RouteNotice | null) => void; clearRouteNotice: () => void; transferNotice: Transfer | null; setTransferNotice: (notice: Transfer | null) => void; deferredOfferId: string | null; deferOffer: () => void; showOffer: () => void };
+type Value = ReturnType<Store['getSnapshot']> & { store: Store; online: boolean; busy: boolean; routeNotice: RouteNotice | null; setRouteNotice: (notice: RouteNotice | null) => void; clearRouteNotice: () => void; transferNotice: Transfer | null; setTransferNotice: (notice: Transfer | null) => void; deferredOfferId: string | null; deferOffer: () => void; showOffer: () => void; offerNotice: string | null; clearOfferNotice: () => void };
 const OperationalContext = createContext<Value | null>(null);
 
 export function OperationalSessionProvider({ children }: { children: React.ReactNode }) {
@@ -77,18 +78,21 @@ export function OperationalSessionProvider({ children }: { children: React.React
   const [routeNotice, setRouteNotice] = useState<RouteNotice | null>(null);
   const [transferNotice, setTransferNotice] = useState<Transfer | null>(null);
   const [deferredOfferId, setDeferredOfferId] = useState<string | null>(null);
+  // Oferta indicada por uma notificação web; só vale depois que a fila do servidor confirmar o mesmo offerId.
+  const [offerNotice, setOfferNotice] = useState<string | null>(null);
   useEffect(() => {
     if (Platform.OS !== 'web' || !('serviceWorker' in navigator)) return;
     const listener = async (event: MessageEvent) => {
       const data = event.data;
       if (data?.type !== 'offer-notification' || data.recipientSessionId !== store.getSnapshot().session?.sessionId || Date.parse(data.expiresAtUtc) <= Date.now()) return;
       await store.whenIdle(); await store.refreshQueue();
-      if (store.getSnapshot().session?.sessionId === data.recipientSessionId && store.getSnapshot().queue?.offer?.offerId === data.offerId) setDeferredOfferId(null);
+      if (store.getSnapshot().session?.sessionId === data.recipientSessionId && store.getSnapshot().queue?.offer?.offerId === data.offerId) { setDeferredOfferId(null); setOfferNotice(data.offerId); }
     };
     const receive = (event: MessageEvent) => { void listener(event).catch(() => {}); };
     navigator.serviceWorker.addEventListener('message', receive);
     return () => navigator.serviceWorker.removeEventListener('message', receive);
   }, [store]);
+  useEffect(() => { if (Platform.OS === 'web') { const id = consumeOfferNoticeParam(); if (id) setOfferNotice(id); } }, []);
   useEffect(() => setDeferredOfferId(null), [state.session?.sessionId, state.queue?.offer?.offerId]);
   useEffect(() => setRouteNotice(null), [state.session?.sessionId]);
   useEffect(() => setTransferNotice(null), [state.session?.sessionId]);
@@ -107,6 +111,36 @@ export function OperationalSessionProvider({ children }: { children: React.React
   const establishmentId = auth.estabelecimentoAtual && ('estabelecimentoId' in auth.estabelecimentoAtual ? auth.estabelecimentoAtual.estabelecimentoId : auth.estabelecimentoAtual.id);
   const userId = auth.user?.id;
   const queueSyncEnabled = !!state.session && ['online', 'reconnecting', 'permission-required'].includes(state.phase);
+  useEffect(() => {
+    if (!offerNotice) return;
+    if (state.phase === 'expired') { setOfferNotice(null); return; }
+    if (!state.session || !queueSyncEnabled) return;
+    let alive = true;
+    void (async () => { await store.whenIdle(); await store.refreshQueue(); })().catch(() => {}).finally(() => {
+      if (alive && store.getSnapshot().queue?.offer?.offerId !== offerNotice) setOfferNotice(null);
+    });
+    return () => { alive = false; };
+  }, [store, offerNotice, state.session?.sessionId, state.phase === 'expired', queueSyncEnabled]);
+  const activity = useMemo(() => createActivityReporter({
+    canReport: () => {
+      const snapshot = store.getSnapshot();
+      if (!snapshot.session || !['online', 'reconnecting'].includes(snapshot.phase)) return false;
+      if (Platform.OS === 'web') return document.visibilityState === 'visible' && navigator.onLine !== false;
+      return AppState.currentState === 'active';
+    },
+    send: reportOperationalActivity,
+    onSession: session => store.updateSession(session),
+  }), [store]);
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    // Só gestos reais (isTrusted); scripts, timers e eventos de rede nunca contam como atividade humana.
+    const human = (event: Event) => { if (event.isTrusted) activity.note(); };
+    const options = { capture: true, passive: true } as const;
+    document.addEventListener('pointerdown', human, options);
+    document.addEventListener('keydown', human, options);
+    return () => { document.removeEventListener('pointerdown', human, options); document.removeEventListener('keydown', human, options); };
+  }, [activity]);
+  useEffect(() => { activity.reset(); }, [activity, state.session?.sessionId]);
   useEffect(() => {
     if (auth.isLoading) return;
     store.bind(userId && establishmentId ? { userId, establishmentId } : null);
@@ -186,8 +220,10 @@ export function OperationalSessionProvider({ children }: { children: React.React
     if (!(await store.end('logout'))) throw new Error(store.getSnapshot().error || 'Não foi possível encerrar o turno. Seu acesso foi mantido.');
   }), [store]);
   // Identidade estável: só quem lê o que mudou volta a renderizar (antes cada batimento renderizava o app inteiro).
-  const value = useMemo<Value>(() => ({ ...state, store, routeNotice, setRouteNotice, clearRouteNotice: () => setRouteNotice(null), transferNotice, setTransferNotice, deferredOfferId, deferOffer: () => setDeferredOfferId(state.queue?.offer?.offerId || null), showOffer: () => setDeferredOfferId(null), online: !!state.session && !['offline', 'expired', 'ending'].includes(state.phase), busy: ['restoring', 'starting', 'ending'].includes(state.phase) }), [state, store, routeNotice, transferNotice, deferredOfferId]);
-  return <OperationalContext.Provider value={value}>{children}</OperationalContext.Provider>;
+  const value = useMemo<Value>(() => ({ ...state, store, routeNotice, setRouteNotice, clearRouteNotice: () => setRouteNotice(null), transferNotice, setTransferNotice, deferredOfferId, deferOffer: () => setDeferredOfferId(state.queue?.offer?.offerId || null), showOffer: () => setDeferredOfferId(null), offerNotice, clearOfferNotice: () => setOfferNotice(null), online: !!state.session && !['offline', 'expired', 'ending'].includes(state.phase), busy: ['restoring', 'starting', 'ending'].includes(state.phase) }), [state, store, routeNotice, transferNotice, deferredOfferId, offerNotice]);
+  // No app nativo o toque é observado na captura sem assumir o gesto: o filho continua recebendo-o normalmente.
+  const captureTouch = () => { activity.note(); return false; };
+  return <OperationalContext.Provider value={value}>{Platform.OS === 'web' ? children : <View style={{ flex: 1 }} onStartShouldSetResponderCapture={captureTouch}>{children}</View>}</OperationalContext.Provider>;
 }
 export function useOperationalSession() {
   const value = useContext(OperationalContext);
