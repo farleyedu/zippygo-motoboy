@@ -12,6 +12,7 @@ import type { MapaProps, MapCoordinate } from './mapTypes';
 import { uniqueNavigationStops } from '../src/delivery/externalRoute';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
 import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
+import { dashedMapSegments, previewCamera } from '../src/delivery/mapPreview';
 
 const coordinate = (value: MapCoordinate | undefined): value is MapCoordinate => !!value && Number.isFinite(value.lat) && Number.isFinite(value.lng) && Math.abs(value.lat) <= 90 && Math.abs(value.lng) <= 180;
 const center = (points: MapCoordinate[]) => ({ lat: points.reduce((s, p) => s + p.lat, 0) / points.length, lng: points.reduce((s, p) => s + p.lng, 0) / points.length });
@@ -57,27 +58,56 @@ function OverviewMap(props: MapaProps) {
   const turn = useOperationalSession();
   const locationAllowed = !!turn.permissions?.foreground.granted && !!turn.permissions.locationConsentGranted;
   const [controller, setController] = useState<MapViewController | null>(null), [ready, setReady] = useState(false);
+  const [layout, setLayout] = useState({ width: 0, height: 0 });
+  const pathWork = useRef(Promise.resolve());
   const location = useRef<MapCoordinate | null>(null);
   const segments = props.pathSegments || (props.path?.length ? [props.path] : []);
-  const points = [...segments.flat(), ...props.pedidos.map(p => p.coordinates).filter(coordinate)];
+  const points = [...segments.flat(), ...props.pedidos.map(p => p.coordinates), props.collectionDestination].filter(coordinate);
   const pointKey = points.map(p => p.lat + ':' + p.lng).join('|');
+  const pathKey = segments.map(segment => segment.map(p => p.lat + ':' + p.lng).join('|')).join('/');
+  const camera = props.routePreview ? previewCamera(points, layout.width, layout.height, 85, (props.navigationBottomInset || 0) + 60) : null;
   useMarkers(controller, props, ready);
   useEffect(() => {
     if (!controller || !ready || !focused) return;
     let alive = true;
     if (points.length) {
+      if (props.routePreview) {
+        const selected = props.pedidos.find(p => p.id === props.selectedPedidoId)?.coordinates;
+        if (coordinate(selected)) controller.moveCamera({ target: selected, zoom: 16, tilt: 0 });
+        else if (camera) controller.moveCamera({ ...camera, tilt: 0 });
+        return;
+      }
       const spread = Math.max(...points.map(p => p.lat)) - Math.min(...points.map(p => p.lat)) + Math.max(...points.map(p => p.lng)) - Math.min(...points.map(p => p.lng));
       controller.moveCamera({ target: center(points), zoom: spread > .2 ? 10 : spread > .05 ? 12 : 14, tilt: props.view3D ? 45 : 0 });
     } else if (!props.historical && locationAllowed) void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(p => { if (alive) { location.current = { lat: p.coords.latitude, lng: p.coords.longitude }; controller.moveCamera({ target: location.current, zoom: 15 }); } }).catch(() => {});
     return () => { alive = false; };
-  }, [controller, ready, focused, pointKey, props.view3D, locationAllowed]);
+  }, [controller, ready, focused, pointKey, props.view3D, locationAllowed, props.routePreview, props.selectedPedidoId, props.overviewToken, layout.width, layout.height, props.navigationBottomInset]);
   useEffect(() => {
     if (!controller || !ready || !props.recenterToken || !locationAllowed) return;
     let alive = true; void Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }).then(p => { if (alive) controller.moveCamera({ target: { lat: p.coords.latitude, lng: p.coords.longitude }, zoom: 16, tilt: props.view3D ? 45 : 0 }); }).catch(() => {});
     return () => { alive = false; };
   }, [controller, ready, props.recenterToken, locationAllowed]);
-  useEffect(() => { if (!controller || !ready) return; segments.forEach((points, i) => { if (points.length > 1) void controller.addPolyline({ id: 'recorded-path-' + i, points, color: '#2872e3', width: 7 }); }); return () => segments.forEach((_, i) => controller.removePolyline('recorded-path-' + i)); }, [controller, ready, pointKey]);
-  return <MapView style={StyleSheet.absoluteFill} onMapViewControllerCreated={setController} onMapReady={() => setReady(true)} mapColorScheme={dark ? MapColorScheme.DARK : MapColorScheme.LIGHT} myLocationEnabled={!props.historical && locationAllowed} myLocationButtonEnabled={false} mapToolbarEnabled={false} zoomControlsEnabled={false} onMapClick={props.onMapPress} onMarkerClick={marker => { const id = Number(marker.id.split(':')[1]); if (Number.isSafeInteger(id) && id > 0) props.onOrderPress?.(id); }} />;
+  useEffect(() => {
+    if (!controller || !ready || props.pathDashed && props.routePreview && !camera) return;
+    let alive = true;
+    const ids: string[] = [];
+    const paths = props.pathDashed ? dashedMapSegments(segments, camera?.zoom ?? 14) : segments;
+    // Serializa inclusão/remoção para uma resposta nativa atrasada não deixar traços antigos.
+    pathWork.current = pathWork.current.catch(() => {}).then(async () => {
+      for (const points of paths) {
+        if (!alive) break;
+        if (points.length < 2) continue;
+        const id = 'recorded-path-' + ids.length;
+        await controller.addPolyline({ id, points, color: '#2872e3', width: props.pathDashed ? 5 : 7 });
+        ids.push(id);
+      }
+    }).catch(() => {});
+    return () => {
+      alive = false;
+      pathWork.current = pathWork.current.then(async () => { for (const id of ids) await controller.removePolyline(id); }).catch(() => {});
+    };
+  }, [controller, ready, pathKey, props.pathDashed, props.routePreview, camera?.zoom]);
+  return <View style={StyleSheet.absoluteFill} onLayout={event => setLayout(event.nativeEvent.layout)}><MapView style={StyleSheet.absoluteFill} onMapViewControllerCreated={setController} onMapReady={() => setReady(true)} mapColorScheme={dark ? MapColorScheme.DARK : MapColorScheme.LIGHT} myLocationEnabled={!props.historical && locationAllowed} myLocationButtonEnabled={false} mapToolbarEnabled={false} zoomControlsEnabled={false} onMapClick={props.onMapPress} onMarkerClick={marker => { if (!marker.id.startsWith('order:')) return; const id = Number(marker.id.split(':')[1]); if (Number.isSafeInteger(id) && id > 0) props.onOrderPress?.(id); }} /></View>;
 }
 
 function RouteMap(props: MapaProps) {

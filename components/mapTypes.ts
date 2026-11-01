@@ -25,5 +25,6 @@ export type MapaProps = {
   onNavigationState?: (state: NavigationState) => void;
   path?: MapCoordinate[];
   pathSegments?: MapCoordinate[][];
+  pathDashed?: boolean;
   historical?: boolean;
 };

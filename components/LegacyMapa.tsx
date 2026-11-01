@@ -9,6 +9,7 @@ import { useZippyTheme } from '../src/ui/theme';
 import { mapPinSvg } from '../src/delivery/mapPin';
 import { hasLocationDisclosureConsent } from '../services/locationDisclosureConsent';
 import { useOperationalSession } from '../src/contexts/OperationalSessionContext';
+import { validMapCoordinate } from '../src/delivery/mapPreview';
 
 import { MapaProps } from './mapTypes';
 
@@ -35,13 +36,14 @@ const getPedidoCoordinate = (pedido: Pedido): { latitude: number; longitude: num
   return null;
 };
 
-export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress, view3D = false, onMapPress, pathSegments, path, historical, selectedPedidoId }: Props) {
+export default function Mapa({ pedidos, emEntrega, recenterToken, routeMode = false, mapClean = false, onOrderPress, view3D = false, onMapPress, pathSegments, path, pathDashed, historical, selectedPedidoId, routePreview, overviewToken, collectionDestination, navigationBottomInset }: Props) {
   const { dark, reducedMotion } = useZippyTheme();
   const focused = useIsFocused();
   const locationConsentGranted = useOperationalSession().permissions?.locationConsentGranted === true;
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [locationAuthorized, setLocationAuthorized] = useState(false);
   const mapRef = useRef<MapView>(null);
+  const [mapReady, setMapReady] = useState(false);
   const [trackMarkers, setTrackMarkers] = useState(true);
   const hasCenteredOnceRef = useRef(false);
   const lastRecenterTokenRef = useRef<number | undefined>(0);
@@ -75,23 +77,33 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
   }, [historical, pathSegments, path, pedidos, reducedMotion]);
   useEffect(() => { if (focused) fitHistory(); }, [focused, fitHistory]);
 
+  const fitPreview = useCallback(() => {
+    if (!routePreview) return;
+    const selected = pedidos.find(p => p.id === selectedPedidoId)?.coordinates;
+    if (validMapCoordinate(selected)) { mapRef.current?.animateCamera({ center: { latitude: selected.lat, longitude: selected.lng }, zoom: 16, pitch: 0 }, { duration: reducedMotion ? 0 : 350 }); return; }
+    const points = [...(pathSegments || (path?.length ? [path] : [])).flat(), ...pedidos.map(p => p.coordinates), collectionDestination].filter(validMapCoordinate);
+    if (points.length) mapRef.current?.fitToCoordinates(points.map(p => ({ latitude: p.lat, longitude: p.lng })), { edgePadding: { top: 85, bottom: (navigationBottomInset || 0) + 60, left: 40, right: 40 }, animated: !reducedMotion });
+  }, [routePreview, pedidos, selectedPedidoId, pathSegments, path, collectionDestination, navigationBottomInset, reducedMotion]);
+  useEffect(() => { if (focused && mapReady) fitPreview(); }, [focused, mapReady, fitPreview, overviewToken]);
+
   const handleUserLocationChange = useCallback((e: UserLocationChangeEvent) => {
     const coord = e.nativeEvent.coordinate;
     if (historical || !coord) return;
     if (typeof coord.heading === 'number' && coord.heading >= 0 && (!coord.speed || coord.speed > 1)) headingRef.current = coord.heading;
     setUserLocation({ latitude: coord.latitude, longitude: coord.longitude });
+    if (routePreview) return;
     if (routeMode) centerTo({ latitude: coord.latitude, longitude: coord.longitude });
     if (!hasCenteredOnceRef.current) {
       hasCenteredOnceRef.current = true;
       centerTo({ latitude: coord.latitude, longitude: coord.longitude });
     }
-  }, [centerTo, routeMode, historical]);
+  }, [centerTo, routeMode, historical, routePreview]);
 
   useEffect(() => {
-    if (historical) return;
+    if (historical || routePreview) return;
     if (userLocation) centerTo(userLocation);
     if (!routeMode) mapRef.current?.animateCamera({ pitch: view3D ? 48 : 0, heading: 0 }, { duration: reducedMotion ? 0 : 450 });
-  }, [routeMode, view3D, reducedMotion, centerTo, historical]);
+  }, [routeMode, view3D, reducedMotion, centerTo, historical, routePreview]);
 
   // Cada toque centraliza uma vez; atualizacoes do GPS nao prendem o mapa livre.
   useEffect(() => {
@@ -120,7 +132,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
 
   useEffect(() => {
     // Ao organizar rota (não emEntrega), enquadra todos os pedidos no mapa
-    if (!historical && !emEntrega && pedidos && pedidos.length > 0) {
+    if (!historical && !routePreview && !emEntrega && pedidos && pedidos.length > 0) {
       const coords = pedidos
         .filter((p) => p?.coordinates)
         .map(getPedidoCoordinate)
@@ -154,7 +166,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
         }, 150);
       }
     }
-  }, [pedidos, emEntrega, historical]);
+  }, [pedidos, emEntrega, historical, routePreview]);
 
   useEffect(() => {
     if (!focused || historical || !locationConsentGranted) { setLocationAuthorized(false); return; }
@@ -169,7 +181,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
           if (!alive) return;
           setUserLocation(location.coords);
           // Centraliza assim que obtemos a primeira localização
-          if (!hasCenteredOnceRef.current) {
+          if (!routePreview && !hasCenteredOnceRef.current) {
             hasCenteredOnceRef.current = true;
             centerTo(location.coords);
           }
@@ -179,7 +191,7 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
       }
     })();
     return () => { alive = false; };
-  }, [centerTo, focused, historical, locationConsentGranted]);
+  }, [centerTo, focused, historical, locationConsentGranted, routePreview]);
 
   // Memoize os marcadores para evitar re-renders desnecessários
   const markers = useMemo(() => {
@@ -230,6 +242,8 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
         { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#102037' }] },
       ] : []}
       onMapReady={async () => {
+        setMapReady(true);
+        if (routePreview) { fitPreview(); return; }
         if (historical) { fitHistory(); return; }
         try {
           if (!locationAuthorized || !(await hasLocationDisclosureConsent())) return;
@@ -253,7 +267,8 @@ const centerTo = useCallback((coords: { latitude: number; longitude: number }) =
       showsUserLocation={!historical && locationAuthorized && locationConsentGranted && focused}
       onUserLocationChange={handleUserLocationChange}
     >
-      {(pathSegments || (path?.length ? [path] : [])).filter(segment => segment.length > 1).map((segment, i) => <Polyline key={i} coordinates={segment.map(p => ({ latitude: p.lat, longitude: p.lng }))} strokeColor="#4c91f6" strokeWidth={5} />)}
+      {(pathSegments || (path?.length ? [path] : [])).filter(segment => segment.length > 1).map((segment, i) => <Polyline key={i} coordinates={segment.map(p => ({ latitude: p.lat, longitude: p.lng }))} strokeColor="#4c91f6" strokeWidth={5} lineDashPattern={pathDashed ? [8, 6] : undefined} />)}
+      {validMapCoordinate(collectionDestination) && <Marker coordinate={{ latitude: collectionDestination.lat, longitude: collectionDestination.lng }} title="Coleta no estabelecimento" pinColor="#b48a60" />}
       {markers}
     </MapView>
   );

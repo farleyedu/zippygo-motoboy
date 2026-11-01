@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Easing, Keyboard, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { Animated, BackHandler, Easing, Keyboard, Platform, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useRouter, useSegments } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check, Clock, EyeOff, LucideIcon, MapPin, Navigation, Package, Route, Store, Timer, TrendingUp, Wallet, X } from 'lucide-react-native';
@@ -15,6 +15,7 @@ import { distanceMeters } from '../delivery/externalRoute';
 import { offerTotal, stopAddress, stopEarnings } from '../delivery/offerDetails';
 import { operationalDestination } from '../delivery/operationalDestination';
 import { orderLabel } from '../delivery/ifoodRules';
+import { mapCoordinate, offerPreviewSegments, validMapCoordinate } from '../delivery/mapPreview';
 
 // O mapa da oferta não usa o motor de navegação da rota em andamento.
 export function OfferPrompt() {
@@ -44,8 +45,7 @@ export function OfferPrompt() {
     ...turn.queue, offer: null, current: turn.queue.current,
     next: [...turn.queue.next, ...offer.stops.filter(s => s.pedidoId !== turn.queue?.current?.pedidoId && !turn.queue?.next.some(n => n.pedidoId === s.pedidoId))],
   }) : [], [offer, turn.queue?.current, turn.queue?.next]);
-  const missingCoordinates = (offer?.stops.length || 0) - mapOrders.filter(p => offer?.stops.some(s => s.pedidoId === p.id) && p.coordinates).length;
-  const previewPath = useMemo(() => mapOrders.flatMap(p => p.coordinates ? [p.coordinates] : []), [mapOrders]);
+  const missingCoordinates = (offer?.stops.length || 0) - mapOrders.filter(p => offer?.stops.some(s => s.pedidoId === p.id) && validMapCoordinate(p.coordinates)).length;
   const focusedStop = offer?.stops.find(s => s.pedidoId === focusedId);
   const resolve = async (accept: boolean) => {
     const snapshot = turn.store.getSnapshot(), before = signature;
@@ -60,10 +60,14 @@ export function OfferPrompt() {
   const [store, setStore] = useState<StoreDestination | null>(null);
   useEffect(() => {
     if (!visible) return;
+    setStore(null);
     const controller = new AbortController();
-    void getStoreDestination(controller.signal).then(setStore).catch(() => {});
+    void getStoreDestination(controller.signal).then(value => { if (!controller.signal.aborted) setStore(value); }).catch(() => {});
     return () => controller.abort();
-  }, [visible, offer?.offerId]);
+  }, [visible, offer?.offerId, turn.session?.sessionId]);
+  const storeCoordinate = useMemo(() => mapCoordinate(store?.latitude, store?.longitude), [store]);
+  const previewSegments = useMemo(() => offerPreviewSegments(turn.queue, selected, storeCoordinate), [turn.queue, selected, storeCoordinate]);
+  const [overviewToken, setOverviewToken] = useState(0);
   // Distâncias em linha reta, encadeadas pela ordem da oferta: loja → parada 1 → parada 2…
   const trip = useMemo(() => {
     const point = (la?: number | null, ln?: number | null) => { const lat = Number(la), lng = Number(ln); return la != null && ln != null && Number.isFinite(lat) && Number.isFinite(lng) && (lat || lng) ? { lat, lng } : null; };
@@ -97,14 +101,31 @@ export function OfferPrompt() {
   const mapHeight = Math.max(210, Math.min(380, size.height * .36));
   // Mesmo número do pin no mapa (as paradas já aceitas vêm antes).
   const stopNumber = (id: number, fallback: number) => { const at = mapOrders.findIndex(p => p.id === id); return at >= 0 ? at + 1 : fallback + 1; };
-  return <Modal transparent visible={visible} animationType={reducedMotion ? 'none' : 'slide'} onRequestClose={canDefer ? defer : () => setConfirm(null)} statusBarTranslucent>
+  // A oferta fica na janela principal, e não num Modal: o mapa nativo anexa o fragmento pela Activity e,
+  // numa janela separada (Dialog), o container não é encontrado e o mapa nunca aparece.
+  const onBack = useRef<() => void>(() => {}); onBack.current = canDefer ? defer : () => setConfirm(null);
+  useEffect(() => {
+    if (!visible) return;
+    const subscription = BackHandler.addEventListener('hardwareBackPress', () => { onBack.current(); return true; });
+    return () => subscription.remove();
+  }, [visible]);
+  const slide = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    if (!visible) return;
+    if (reducedMotion) { slide.setValue(0); return; }
+    slide.setValue(size.height);
+    Animated.timing(slide, { toValue: 0, duration: 260, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+  }, [visible]);
+  if (!visible) return null;
+  return <Animated.View style={[StyleSheet.absoluteFill, { zIndex: 1000, elevation: 1000, transform: [{ translateY: slide }] }]}>
     <View accessibilityViewIsModal style={{ flex: 1, backgroundColor: colors.paper }}>
       <View style={{ height: mapHeight, overflow: 'hidden', backgroundColor: colors.soft }}>
-        {visible && <Mapa pedidos={mapOrders} emEntrega={false} navigationEnabled={false} routePreview path={previewPath} view3D={false} sessionKey={'offer:' + offer?.offerId} selectedPedidoId={focusedId} onOrderPress={setFocusedId} />}
+        {visible && <Mapa pedidos={mapOrders} emEntrega={false} navigationEnabled={false} routePreview pathSegments={previewSegments} pathDashed collectionDestination={storeCoordinate} overviewToken={overviewToken} view3D={false} sessionKey={'offer:' + offer?.offerId} selectedPedidoId={focusedId} onOrderPress={setFocusedId} />}
         <View pointerEvents="box-none" style={{ position: 'absolute', top: Math.max(insets.top, 12) + 4, left: 12, right: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <View style={[styles.floating, { backgroundColor: colors.card }]}><MapPin size={14} color={colors.accent} /><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.ink }}>{offer?.stops.length || 0} {(offer?.stops.length || 0) === 1 ? 'parada' : 'paradas'}</Text></View>
           {canDefer && <Pressable accessibilityRole="button" accessibilityLabel="Ocultar por enquanto" disabled={action.busy} onPress={defer} style={[styles.floating, { backgroundColor: colors.card, minHeight: 40 }]}><EyeOff size={15} color={colors.muted} /><Text style={{ fontFamily: 'Manrope', fontWeight: '700', fontSize: 12, color: colors.muted }}>Ocultar</Text></Pressable>}
         </View>
+        <Pressable accessibilityRole="button" accessibilityLabel="Ver trajeto completo" onPress={() => { setFocusedId(undefined); setOverviewToken(value => value + 1); }} style={[styles.floating, { position: 'absolute', right: 12, bottom: focusedStop || missingCoordinates > 0 ? 88 : 36, backgroundColor: colors.card, minHeight: 40 }]}><Route size={15} color={colors.accent} /><Text style={{ fontFamily: 'ManropeExtraBold', fontSize: 12, color: colors.accent }}>Ver trajeto completo</Text></Pressable>
         {(missingCoordinates > 0 || !!focusedStop) && <View pointerEvents="none" style={[styles.floating, { position: 'absolute', left: 12, right: 12, bottom: 34, backgroundColor: colors.card, borderRadius: 14 }]}><Text accessibilityLiveRegion="polite" numberOfLines={2} style={{ flex: 1, fontFamily: 'Manrope', fontSize: 12, color: focusedStop ? colors.accent : colors.warning }}>{focusedStop ? 'Pin selecionado · #' + focusedStop.pedidoId + ' · ' + stopAddress(focusedStop) : missingCoordinates + ' pedido(s) sem coordenadas no mapa. Confira o endereço abaixo.'}</Text></View>}
       </View>
       <View style={{ flex: 1, minHeight: 0, marginTop: -22, borderTopLeftRadius: 26, borderTopRightRadius: 26, backgroundColor: colors.card, overflow: 'hidden', boxShadow: '0 -8px 30px #08142633' }}>
@@ -171,7 +192,7 @@ export function OfferPrompt() {
         </View>
       </View>
     </View>
-  </Modal>;
+  </Animated.View>;
 }
 
 function Tile({ icon: Icon, label, value }: { icon: LucideIcon; label: string; value: string }) {
