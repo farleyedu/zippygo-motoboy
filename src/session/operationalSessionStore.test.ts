@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { createOperationalSessionStore, type OperationalPorts } from './operationalSessionStore';
 
 const identity = { userId: 'u1', establishmentId: 'e1' };
@@ -45,8 +46,8 @@ describe('restore do turno', () => {
 });
 
 describe('tempo limite do GPS', () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
 
   it('GPS que não responde vira reconexão e solta a operação', async () => {
     const store = boot({ monitor: () => never<boolean>() });

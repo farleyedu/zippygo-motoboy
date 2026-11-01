@@ -1,3 +1,4 @@
+import { describe, expect, it, jest } from '@jest/globals';
 import { createOperationalSessionStore, keepLatestActivity, PENDING_WORK_END_MESSAGE, type OperationalPorts } from './operationalSessionStore';
 
 const identity = { userId: 'u1', establishmentId: 'e1' };
