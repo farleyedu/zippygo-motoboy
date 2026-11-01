@@ -1,5 +1,6 @@
 import { apiClient } from './apiService';
 import { MobileApiError } from './mobileApi';
+import type { StoreConferences } from '../src/delivery/storeConference';
 
 export const payModes: Record<string, string> = { delivery: 'por entrega', distance: 'por km em linha reta', hour: 'por hora conferida', shift: 'por turno', day: 'por diária', week: 'por semana', fortnight: 'por quinzena', month: 'por mês' };
 export type PayQuote = { planId: string; mode: string; rate: number; distanceKm?: number | null; amount?: number | null };
@@ -37,4 +38,8 @@ export async function settlementAction(store: string, id: string, action: 'revie
 }
 export async function sendSupport(store: string, operationId: string, category: string, message: string): Promise<string> {
   return unwrap(await apiClient.post('/motoboys/me/work/support', { operationId, category, message }, { params: { store } }));
+}
+/** 6C6: conferência dos meus pedidos pela loja (só leitura; separada da remuneração). */
+export async function getConferences(store: string, from: string, signal?: AbortSignal): Promise<StoreConferences> {
+  return unwrap(await apiClient.get('/motoboys/me/work/conferences', { params: { store, from }, signal }));
 }

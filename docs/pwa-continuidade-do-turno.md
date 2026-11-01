@@ -43,3 +43,38 @@ O backend não tem consulta de inscrição; o app considera "registrado" apenas 
 - `npx tsc --noEmit`: sem erros no código do app; restam apenas os erros de tipos globais do Jest nos arquivos de teste (o projeto não tem `@types/jest`), já existentes antes.
 - Regressões do store/nativo: `docs/validacao-etapa2/lote3/session-tests.cjs`, `sync-tests.cjs` e `docs/google-play/location-consent-tests.cjs` — 30 casos aprovados (os processos não terminam sozinhos por um handle aberto já existente; rodar com `node <arquivo>` e interromper após o resumo).
 - **Não validado (exige aparelho real)**: Android nativo em uso (GPS em segundo plano, encerramento com pedidos), Chrome Android, Safari no iPhone e PWA instalado (Web Push de fato recebido com o app fechado), e o encerramento com pedidos contra o backend real gerando o incidente para a loja. Também não houve comparação visual com o protótipo (`docs/prototipo-motoboy`) dos novos avisos e botões das telas Turno, Resumo e Sair.
+
+## Chegada à loja e conferência (6C6)
+
+Referência da 6C6 (Zippy Gestão). O contrato do servidor está em `zippy-admin/docs/zippy-gestao/CONTRATOS.md` §9.14.
+
+### O que o app faz para a loja saber que o motoboy voltou
+
+Nada novo no aparelho. A chegada é calculada no servidor a partir das posições que o app **já envia** durante o turno
+(`services/trackingService.ts`, `components/locationSetup.ts`, `components/locationTask.ts`):
+
+- `active_route`: posição a cada ~5 s enquanto há rota.
+- `online_idle`: posição no ritmo do heartbeat, sem rota.
+
+Não há aumento de frequência nem modo de GPS extra para a chegada. O motoboy não precisa tocar em nada quando a localização é confiável;
+o botão "Cheguei à loja" continua existindo e vale **sem GPS**.
+
+### Nativo
+
+- Com a permissão "sempre" concedida (fluxo de consentimento de `services/locationDisclosureConsent.ts`), o GPS em segundo plano continua
+  enviando: a loja vê a chegada mesmo com o app fechado na mochila.
+- Só com "durante o uso", a chegada aparece quando o app está aberto (ou pelo botão manual).
+
+### PWA (navegador)
+
+- O navegador só entrega posição com a página visível (`services/webForegroundLocation.ts`). Ao abrir Maps/Waze ou bloquear a tela, o envio
+  para; o servidor marca o sinal como **antigo** e o Caixa mostra "sem GPS recente · confira à mão".
+- Ao voltar para a página, a fila de posições é reenviada; posições antigas desse lote **não** viram chegada (o servidor usa só a mais recente
+  e fresca).
+
+### O que nunca acontece
+
+- GPS ausente ou velho não encerra o turno nem bloqueia trabalho: o prazo do turno é de atividade humana, não de posição.
+- A chegada não confirma pagamento nem conferência: quem confere é o Caixa. O app só mostra "Conferido pela loja" depois que o servidor gravou
+  o lote (selo no histórico e seção "Conferência da loja" no recibo), relendo ao abrir, no aviso `rider.conference.updated` e ao reconectar.
+- O motoboy não marca conferência da loja; a tela de acerto da remuneração (`app/acerto.tsx`) é outra conta e não muda.

@@ -3,6 +3,7 @@ import { API_CONFIG } from '../config/apiConfig';
 import { logApiFailure } from './apiErrors';
 import { createOperationalQueueSync, QueueSyncScope } from './operationalQueueSync';
 import { emitChatEvent, ChatEvent } from './chatEvents';
+import { emitConferenceEvent, ConferenceEvent } from './conferenceEvents';
 
 type Ports = {
   onRouteEvent?: (event: { action?: string; pedidoId?: number; version: number }) => void;
@@ -34,7 +35,13 @@ export function startOperationalRealtime(ports: Ports): () => void {
     const scope = ports.scope();
     if (scope && payload?.estabelecimentoId?.toLowerCase() === scope.establishmentId.toLowerCase()) emitChatEvent(payload);
   });
-  connection.onreconnected(() => { retries = 0; sync.connection(true); });
+  // 6C6: lote do Caixa com pedidos meus. O hub só entrega no grupo da minha sessão; a loja e o motoboy ainda são conferidos aqui.
+  connection.on('rider.conference.updated', (payload: ConferenceEvent) => {
+    const scope = ports.scope();
+    if (scope && payload?.estabelecimentoId?.toLowerCase() === scope.establishmentId.toLowerCase() && payload.motoboyId === scope.motoboyId) emitConferenceEvent(payload);
+  });
+  // Pode ter perdido aviso desconectado: quem mostra conferência relê uma vez.
+  connection.onreconnected(() => { retries = 0; sync.connection(true); emitConferenceEvent({ reconnected: true }); });
   function retryStart() {
     if (stopped || retry !== undefined) return;
     const delay = Math.min(60000, 5000 * 2 ** Math.min(retries++, 4)) * (.8 + Math.random() * .4);
